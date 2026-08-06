@@ -309,6 +309,100 @@ public interface GameProcedures extends Actions, GameProperties, PileProperties 
 				+ gameState().getCurrentPhase());
 	}
 
+	/**
+	 * Walk the fellowship to a site, at any number of seats.
+	 *
+	 * {@link #SkipToSite} goes through SkipCurrentSite, which is written as P1
+	 * and P2 throughout -- reconcile, discard-down, and a "swap" for the shadow
+	 * player's turn -- so it stalls above two seats the way SkipToPhase did.
+	 *
+	 * The one answer that cannot be the least eventful one is the move question:
+	 * the fellowship only reaches the next site if it moves, so "another move"
+	 * is answered Yes and everything else declines. Selected by option text
+	 * rather than by index, because the options are not in a fixed order --
+	 * mulligan is {No,Yes} while move-again is {Yes,No}, so a positional answer
+	 * accepts one and declines the other.
+	 */
+	default void PassUntilSite(int siteNumber) {
+		for (int attempts = 1; attempts <= 600; attempts++) {
+			var site = GetCurrentSite();
+			if (site != null && site.getSiteNumber() >= siteNumber)
+				return;
+
+			var pending = new java.util.ArrayList<>(userFeedback().getUsersPendingDecision());
+			if (pending.isEmpty())
+				throw new RuntimeException("Nobody has a decision, and the fellowship is at site "
+						+ (site == null ? "(none)" : site.getSiteNumber()) + " rather than " + siteNumber);
+
+			java.util.Collections.sort(pending);
+			String playerId = pending.get(0);
+			var decision = userFeedback().getAwaitingDecision(playerId);
+			if (decision == null)
+				continue;
+
+			PlayerDecided(playerId, AnswerThatKeepsMoving(decision));
+		}
+		throw new RuntimeException("Could not reach site " + siteNumber
+				+ "; the fellowship stopped at "
+				+ (GetCurrentSite() == null ? "(none)" : GetCurrentSite().getSiteNumber()));
+	}
+
+	/**
+	 * Advance until a named player is asked something matching `textFragment`.
+	 *
+	 * Phase-based waiting is not precise enough for a trigger that fires at the
+	 * start of a phase: PassUntilSite walks through several regroup phases to
+	 * get where it is going, and answers the trigger's decision on the way past.
+	 * Waiting for the decision itself cannot overshoot it.
+	 */
+	default void PassUntilDecision(String playerId, String textFragment) {
+		for (int attempts = 1; attempts <= 600; attempts++) {
+			var wanted = userFeedback().getAwaitingDecision(playerId);
+			if (wanted != null && wanted.getText() != null
+					&& wanted.getText().toLowerCase().contains(textFragment.toLowerCase()))
+				return;
+
+			var pending = new java.util.ArrayList<>(userFeedback().getUsersPendingDecision());
+			if (pending.isEmpty())
+				throw new RuntimeException("Nobody has a decision, and " + playerId
+						+ " was never asked anything matching '" + textFragment + "'");
+
+			java.util.Collections.sort(pending);
+			String next = pending.get(0);
+			var decision = userFeedback().getAwaitingDecision(next);
+			if (decision == null)
+				continue;
+			PlayerDecided(next, AnswerThatKeepsMoving(decision));
+		}
+		throw new RuntimeException(playerId + " was never asked anything matching '"
+				+ textFragment + "'");
+	}
+
+	/** Decline everything except the invitation to move on. */
+	private static String AnswerThatKeepsMoving(
+			com.gempukku.lotro.logic.decisions.AwaitingDecision decision) {
+		var params = decision.getDecisionParameters();
+		String text = decision.getText() == null ? "" : decision.getText().toLowerCase();
+		switch (decision.getDecisionType()) {
+			case INTEGER:
+				return params.containsKey("min") ? params.get("min")[0] : "0";
+			case MULTIPLE_CHOICE: {
+				String[] results = params.get("results");
+				if (results == null || results.length == 0)
+					return "0";
+				String wanted = text.contains("another move") ? "yes" : "no";
+				for (int i = 0; i < results.length; i++)
+					if (results[i].trim().equalsIgnoreCase(wanted))
+						return String.valueOf(i);
+				return "0";
+			}
+			case ACTION_CHOICE:
+				return "0";
+			default:
+				return "";
+		}
+	}
+
 	default void SkipToPhaseInverted(Phase target) {
 		for(int attempts = 1; attempts <= 20; attempts++)
 		{

@@ -3,7 +3,6 @@ package com.gempukku.lotro.at;
 import com.gempukku.lotro.common.Phase;
 import com.gempukku.lotro.framework.VirtualTableScenario;
 import com.gempukku.lotro.logic.PlayOrder;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -91,12 +90,6 @@ public class MultiplayerChooseOpponentAtTest {
      * produce the same answer -- the mistake that made the original bug
      * invisible.
      */
-    @Ignore("Needs the fellowship walked to site 5, where Crashed Gate is fixed by "
-            + "its own `site: 5` field. SkipToSite is a P1/P2 helper like StartGame "
-            + "was, so it stalls above two seats; generalising it the way "
-            + "StartMultiplayerGame generalised StartGame is the remaining step. "
-            + "Until then the fix rests on reading the code and on the six "
-            + "two-player tests in Card_08_119_Tests still passing.")
     @Test
     public void theSiteControlFollowsTheOpponentWhoWasChosen() throws Exception {
         var scn = ThreeSeats();
@@ -108,19 +101,22 @@ public class MultiplayerChooseOpponentAtTest {
         String otherOpponent = opponents.get(1);
         assertNotEquals(defaultOpponent, otherOpponent);
 
-        scn.PassUntilPhase(Phase.REGROUP);
+        // Wait for the trigger itself rather than for a phase: PassUntilSite
+        // walks through regroup phases to get here and would answer the Crashed
+        // Gate choice on the way past.
+        scn.PassUntilDecision(P1, "Choose action to perform");
 
-        // Crashed Gate is a site, so it fires at the start of Regroup only when
-        // the fellowship is standing on it. Fail loudly rather than returning
-        // early: a test that quietly passes when it never reached the thing it
-        // is testing is worse than no test.
-        if (!scn.DecisionAvailable(P1, "Choose an opponent")
-                && !scn.DecisionAvailable(P1, "opponent")) {
-            fail("never reached the Crashed Gate trigger; the fellowship has to be "
-                    + "standing on it at the start of Regroup. Pending: "
-                    + scn.userFeedback().getUsersPendingDecision());
-        }
-
+        // The prompt is "Choose action to perform"; the word "opponent" is in
+        // the options, not the text. Fail loudly rather than returning early: a
+        // test that quietly passes when it never reached the thing it is testing
+        // is worse than no test.
+        // Two decisions above two players: which half of the card to take, and
+        // then which opponent. The second does not exist at two players --
+        // ChooseOpponentEffect auto-picks when there is only one -- which is
+        // exactly why this bug could hide there.
+        scn.ChooseOption(P1, "opponent");
+        assertTrue("the Free Peoples player should be asked which opponent",
+                scn.userFeedback().getAwaitingDecision(P1) != null);
         scn.ChooseOption(P1, otherOpponent);
 
         assertTrue("the chosen opponent should be asked",
