@@ -21,9 +21,16 @@
 			},
 			effect: [
 				{
+					type: ChooseOpponent
+					memorize: opponent
+				}
+				{
+					// "spot a race" names no owner, so the chosen player may
+					// name the race of any minion in play -- the selection is
+					// deliberately NOT scoped to their own minions.
 					type: chooseActiveCards
 					text: Choose a race to spare, all other will be discarded
-					player: shadow
+					player: fromMemory(opponent)
 					select: choose(minion,hasRace)
 					memorize: chosenMinion
 				}
