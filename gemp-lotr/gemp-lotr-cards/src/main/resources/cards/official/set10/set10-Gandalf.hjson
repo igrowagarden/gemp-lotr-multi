@@ -86,11 +86,17 @@
 						}
 					}
 				]
-				effect: {
-					type: discard
-					player: shadow
-					select: choose(side(shadow),condition)
-				}
+				effect: [
+					{
+						type: ChooseOpponent
+						memorize: opponent
+					}
+					{
+						type: discard
+						player: fromMemory(opponent)
+						select: choose(ownedByPlayerFromMemory(opponent),side(shadow),condition)
+					}
+				]
 			}
 		]
 		gametext: Each time you lose initiative (except during the fellowship phase), you may spot a [gandalf] companion to choose an opponent who must discard one of his or her conditions.

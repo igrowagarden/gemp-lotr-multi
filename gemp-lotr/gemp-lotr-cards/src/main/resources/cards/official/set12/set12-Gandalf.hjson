@@ -240,9 +240,8 @@
 					]
 					effects: [
 						{
-							type: discard
-							player: shadow
-							select: choose(side(shadow),condition)
+							type: ChooseOpponent
+							memorize: opponent
 						}
 						{
 							type: If
@@ -256,6 +255,18 @@
 							}
 						}
 					]
+				}
+				{
+					type: If
+					check: {
+						type: HasMemory
+						memory: opponent
+					}
+					true: {
+						type: discard
+						player: fromMemory(opponent)
+						select: choose(ownedByPlayerFromMemory(opponent),side(shadow),condition)
+					}
 				}
 			]
 		}
