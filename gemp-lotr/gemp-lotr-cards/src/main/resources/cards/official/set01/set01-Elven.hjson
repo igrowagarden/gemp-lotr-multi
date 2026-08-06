@@ -636,12 +636,18 @@
 				type: played
 				filter: your,elf
 			}
-			effect: {
-				type: discardFromHand
-				hand: shadowPlayer
-				player: shadowPlayer
-				forced: true
-			}
+			effect: [
+				{
+					type: ChooseOpponent
+					memorize: opponent
+				}
+				{
+					type: discardFromHand
+					hand: fromMemory(opponent)
+					player: fromMemory(opponent)
+					forced: true
+				}
+			]
 		}
 		gametext: Plays to your support area.<br>Each time you play an Elf, choose an opponent to discard a card from hand.
 		lore: "Keen Elven eyes see farther and more keenly than those of Men or Dwarves."
