@@ -678,6 +678,26 @@ public class FilterFactory {
                         return Filters.owner(card.getCardController());
                     };
                 });
+        // Cards owned by the player whose name was stored in memory -- the
+        // answer to a ChooseOpponent, typically.
+        //
+        // "Choose a Shadow player who must wound one of HIS OR HER minions"
+        // needs the selection scoped to that player, and nothing here could say
+        // so: `your` is the performing player, and filters are evaluated in the
+        // original action context rather than a delegate with the chosen player
+        // performing, so `your` would mean the card's own controller. At two
+        // players every minion belongs to the one Shadow player and the
+        // difference cannot be observed, which is why no card ever needed this.
+        //
+        // Distinct from PlayerResolver's ownerFromMemory(x), which is the owner
+        // of a remembered *card*; this is a remembered *player*.
+        parameterFilters.put("ownedbyplayerfrommemory",
+                (parameter, environment) -> actionContext -> {
+                    String playerId = actionContext.getValueFromMemory(parameter);
+                    if (playerId == null || playerId.isEmpty())
+                        return Filters.none;
+                    return Filters.owner(playerId);
+                });
         parameterFilters.put("printedtwilightcostfrommemory",
                 (parameter, environment) -> actionContext -> {
                     var card = actionContext.getCardFromMemory(parameter);
