@@ -709,6 +709,7 @@
 							modifier: {
 								type: skipPhase
 								phase: shadow
+								player: you
 							}
 							until: start(regroup)
 						}
