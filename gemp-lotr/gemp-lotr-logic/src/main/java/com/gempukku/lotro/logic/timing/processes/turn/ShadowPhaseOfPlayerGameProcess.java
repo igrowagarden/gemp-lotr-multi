@@ -28,7 +28,13 @@ public class ShadowPhaseOfPlayerGameProcess implements GameProcess {
         else
             afterGameProcess = new ShadowPhaseOfPlayerGameProcess(_playOrder, nextPlayer);
 
-        if (game.getModifiersQuerying().shouldSkipPhase(game, Phase.SHADOW, _shadowPlayer))
+        // _shadowPlayer is bound when this link of the chain is built, one per
+        // shadow player at the start of the Shadow phases. Skip the whole phase
+        // for anyone eliminated since then, rather than running start-of-phase and
+        // end-of-phase around a player who has left the game.
+        if (game.getGameState().getPlayerOrder().isEliminated(_shadowPlayer))
+            _followingGameProcess = afterGameProcess;
+        else if (game.getModifiersQuerying().shouldSkipPhase(game, Phase.SHADOW, _shadowPlayer))
             _followingGameProcess = afterGameProcess;
         else
             _followingGameProcess = new StartOfPhaseGameProcess(Phase.SHADOW, _shadowPlayer,

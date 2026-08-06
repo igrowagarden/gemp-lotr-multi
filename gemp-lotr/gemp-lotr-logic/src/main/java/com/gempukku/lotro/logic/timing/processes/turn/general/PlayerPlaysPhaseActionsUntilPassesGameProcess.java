@@ -21,6 +21,14 @@ public class PlayerPlaysPhaseActionsUntilPassesGameProcess implements GameProces
 
     @Override
     public void process(final LotroGame game) {
+        // _playerId is bound when this process is constructed, which for the
+        // Fellowship and Shadow phases happens before the phase runs. A player
+        // eliminated in between must not be asked to act.
+        if (game.getGameState().getPlayerOrder().isEliminated(_playerId)) {
+            playerPassed();
+            return;
+        }
+
         final List<Action> playableActions = game.getActionsEnvironment().getPhaseActions(_playerId);
 
         if (playableActions.isEmpty() && game.shouldAutoPass(_playerId, game.getGameState().getCurrentPhase())) {

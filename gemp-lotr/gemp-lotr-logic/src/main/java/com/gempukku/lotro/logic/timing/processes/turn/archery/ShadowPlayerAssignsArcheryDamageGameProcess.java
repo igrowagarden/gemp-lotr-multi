@@ -22,6 +22,10 @@ public class ShadowPlayerAssignsArcheryDamageGameProcess implements GameProcess 
 
     @Override
     public void process(LotroGame game) {
+        // Chosen earlier in the archery phase, so this player may have been
+        // eliminated between being picked and taking the wounds.
+        if (game.getGameState().getPlayerOrder().isEliminated(_playerId))
+            return;
         if (_woundsToAssign > 0) {
             Filter filter =
                     Filters.and(

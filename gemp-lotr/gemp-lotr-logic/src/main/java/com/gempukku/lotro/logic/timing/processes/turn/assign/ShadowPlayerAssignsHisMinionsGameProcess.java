@@ -34,6 +34,11 @@ public class ShadowPlayerAssignsHisMinionsGameProcess implements GameProcess {
     @Override
     public void process(final LotroGame game) {
         GameState gameState = game.getGameState();
+        // Bound when ShadowPlayersAssignTheirMinionsGameProcess built the chain,
+        // so an elimination during the assignment phase would otherwise still ask
+        // this player to assign minions.
+        if (gameState.getPlayerOrder().isEliminated(_playerId))
+            return;
         Filter minionFilter = Filters.and(CardType.MINION, Filters.owner(_playerId), Filters.in(_leftoverMinions));
 
         final Collection<PhysicalCard> minions = Filters.filterActive(game, minionFilter, Filters.assignableToSkirmish(Side.SHADOW, false, false, false));

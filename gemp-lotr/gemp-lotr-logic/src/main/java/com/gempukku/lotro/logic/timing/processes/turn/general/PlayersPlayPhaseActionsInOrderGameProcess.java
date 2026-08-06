@@ -41,6 +41,17 @@ public class PlayersPlayPhaseActionsInOrderGameProcess implements GameProcess {
                 playerId = _playOrder.getNextPlayer();
             }
 
+            // This process holds a PlayOrder SNAPSHOT taken when the phase began,
+            // so a player eliminated part-way through the phase is still in it and
+            // would be asked to act after leaving the game. Treat them as an
+            // automatic pass. Termination is unaffected: _playOrder.getPlayerCount()
+            // is the snapshot's count, so the loop still ends, it just needs the
+            // eliminated seat to pass once per round.
+            if (game.getGameState().getPlayerOrder().isEliminated(playerId)) {
+                playerPassed();
+                return;
+            }
+
             final List<Action> playableActions = game.getActionsEnvironment().getPhaseActions(playerId);
             if (playableActions.size() == 0 && game.shouldAutoPass(playerId, game.getGameState().getCurrentPhase())) {
                 playerPassed();

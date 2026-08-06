@@ -22,6 +22,14 @@ public class FellowshipPlayerChoosesToMoveOrStayGameProcess implements GameProce
     public void process(final LotroGame game) {
         final GameState gameState = game.getGameState();
         final String currentPlayerId = gameState.getCurrentPlayerId();
+        // The Ring-bearer checks call playerLost(getCurrentPlayerId(), ...), so the
+        // Free Peoples player can be eliminated part-way through their own turn --
+        // and this decision is queued against them. Don't ask someone who has left
+        // the game whether they want to move again; stay, and let the turn end.
+        if (gameState.getPlayerOrder().isEliminated(currentPlayerId)) {
+            playerStays(game);
+            return;
+        }
         if (!game.getModifiersQuerying().hasFlagActive(game, ModifierFlag.CANT_MOVE)
                 && gameState.getMoveCount() < RuleUtils.calculateMoveLimit(game)) {
             if (game.getModifiersQuerying().hasFlagActive(game, ModifierFlag.HAS_TO_MOVE_IF_POSSIBLE)) {

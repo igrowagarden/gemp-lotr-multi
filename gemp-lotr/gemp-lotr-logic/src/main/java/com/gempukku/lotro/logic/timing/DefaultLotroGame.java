@@ -287,6 +287,29 @@ public class DefaultLotroGame implements LotroGame {
                     List<String> allPlayers = new LinkedList<>(_allPlayers);
                     allPlayers.removeAll(_losers.keySet());
                     gameWon(allPlayers.getFirst(), "Last remaining player in game");
+                } else if (_gameState != null && _gameState.getPlayerOrder() != null) {
+                    // Two or more players are still in it, so the game continues
+                    // around this one. CR 5.0: "If a player loses a game and there
+                    // are at least two other players remaining, remove his player
+                    // marker..." -- the game ends only once a single player is left,
+                    // which the branch above already handles.
+                    //
+                    // Take them out of the rotation so they stop being dealt turns,
+                    // Shadow phases and decisions. Everything else is left alone on
+                    // purpose: their GameCommunicationChannel stays registered as a
+                    // GameStateListener and they stay in the mediator's
+                    // _playersPlaying, so they keep receiving the full event stream
+                    // and become an OBSERVER of the rest of the game.
+                    //
+                    // Not removing them from _playersPlaying matters: LotroGameMediator
+                    // gates getCommunicationChannel/signupUserForGame on
+                    // "_allowSpectators || _playersPlaying.contains(name)", so dropping
+                    // them there would throw PrivateInformationException at the next
+                    // poll and lock a player out of the game they were in.
+                    if (_gameState.getPlayerOrder().eliminatePlayer(playerId))
+                        _gameState.sendMessage(playerId + " is now observing; "
+                                + _gameState.getPlayerOrder().getPlayerCount()
+                                + " players remain");
                 }
             }
         }

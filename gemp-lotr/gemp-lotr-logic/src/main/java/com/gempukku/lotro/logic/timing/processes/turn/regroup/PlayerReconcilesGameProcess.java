@@ -15,6 +15,12 @@ public class PlayerReconcilesGameProcess implements GameProcess {
 
     @Override
     public void process(LotroGame game) {
+        // ShadowPlayersReconcileGameProcess builds this whole chain up front, one
+        // link per shadow player, so a player eliminated later in the phase still
+        // has a link waiting for them. Skip it rather than asking someone who has
+        // left the game to reconcile their hand.
+        if (game.getGameState().getPlayerOrder().isEliminated(_playerId))
+            return;
         game.getActionsEnvironment().addActionToStack(new PlayerReconcilesAction(game, _playerId));
     }
 
