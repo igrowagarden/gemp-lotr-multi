@@ -152,11 +152,11 @@
 						]
 						true: {
 							type: Optional
-							player: shadow
+							player: fromMemory(opponent)
 							text: Would you like to take control of a site?
 							effect: {
 								type: takeControlOfSite
-								player: shadow
+								player: fromMemory(opponent)
 							}
 						}
 					}
