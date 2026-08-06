@@ -8,6 +8,7 @@ import com.gempukku.lotro.game.PhysicalCard;
 import com.gempukku.lotro.game.state.LotroGame;
 import com.gempukku.lotro.game.state.Skirmish;
 import com.gempukku.lotro.logic.GameUtils;
+import com.gempukku.lotro.logic.PlayerOrder;
 import com.gempukku.lotro.logic.modifiers.evaluator.Evaluator;
 
 import java.util.List;
@@ -69,8 +70,30 @@ public class RuleUtils {
         return game.getModifiersQuerying().getArcheryTotal(game, Side.SHADOW, normalArcheryTotal);
     }
 
+    /**
+     * CR: "In a two- or three-player game, your move limit is two. In a game with
+     * four or more players, your move limit is equal to the number of your
+     * opponents when the game begins."
+     * <p>
+     * The base was hardcoded to 2, which is correct at two AND three players and
+     * only diverges at four or more -- so it was not a bug in any game GEMP could
+     * previously play.
+     * <p>
+     * "When the game begins" is why this counts SEATED players rather than
+     * survivors: {@link PlayerOrder#getAllSeatedPlayers()} never shrinks, so an
+     * elimination cannot quietly lower everyone's move limit mid-game.
+     */
     public static int calculateMoveLimit(LotroGame game) {
-        return game.getModifiersQuerying().getMoveLimit(game, 2);
+        return game.getModifiersQuerying().getMoveLimit(game, getBaseMoveLimit(game));
+    }
+
+    private static int getBaseMoveLimit(LotroGame game) {
+        PlayerOrder playerOrder = game.getGameState() == null
+                ? null : game.getGameState().getPlayerOrder();
+        if (playerOrder == null)
+            return 2;
+        int seated = playerOrder.getAllSeatedPlayers().size();
+        return seated <= 3 ? 2 : seated - 1;
     }
 
     public static int getFellowshipSkirmishStrength(LotroGame game) {
