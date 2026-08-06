@@ -67,6 +67,103 @@ public class VirtualTableScenario implements TestBase, TestConstants, Actions, A
         this(cardIDs, null, null, null, Multipath, null, null, null);
     }
 
+    /**
+     * A table seating more than two players.
+     *
+     * The two-player constructors cannot express the questions multiplayer
+     * raises. "Is every Shadow player offered this, and in what order?" has no
+     * meaning when there is one opponent, and any ordering bug is invisible
+     * because every order of one element is the same order. Everything below
+     * the deck map is already player-count agnostic -- DefaultLotroGame takes a
+     * Map of decks -- so this adds seats rather than changing anything.
+     *
+     * Every seat gets the same deck, so a test can put the same card in any
+     * player's hand and address seats by {@link TestConstants#P1} .. P5.
+     *
+     * @param playerCount how many seats, from 2 to 5
+     */
+    public static VirtualTableScenario MultiplayerTable(int playerCount, HashMap<String, String> cardIDs)
+            throws CardNotFoundException, DecisionResultInvalidException {
+        return new VirtualTableScenario(playerCount, cardIDs, null, null, null, Multipath);
+    }
+
+    public VirtualTableScenario(int playerCount, HashMap<String, String> cardIDs,
+                                HashMap<String, String> siteIDs, String ringBearerID, String ringID,
+                                String format) throws CardNotFoundException, DecisionResultInvalidException {
+        if (playerCount < 2 || playerCount > 5)
+            throw new IllegalArgumentException("A table seats between 2 and 5 players, not " + playerCount);
+
+        if (siteIDs == null) siteIDs = KingSites;
+        if (ringBearerID == null) ringBearerID = MDFrodo;
+        if (ringID == null) ringID = RulingRing;
+
+        List<String> seats = SeatNames(playerCount);
+        Map<String, LotroDeck> decks = new HashMap<>();
+        for (String seat : seats) {
+            LotroDeck deck = new LotroDeck(seat + "'s deck");
+            for (String id : siteIDs.values())
+                deck.addSite(id);
+            for (String id : cardIDs.values())
+                deck.addCard(id);
+            deck.setRingBearer(ringBearerID);
+            deck.setRing(ringID);
+            decks.put(seat, deck);
+        }
+
+        InitializeGameWithDecks(decks, format, null, null);
+        BidAndSeatPlayers(playerCount);
+
+        for (String seat : seats) {
+            Cards.put(seat, new HashMap<>());
+            // Undo the opening draw so a test only holds what it puts there.
+            for (var card : _gameState.getHand(seat).stream().toList())
+                MoveCardsToTopOfDeck((PhysicalCardImpl) card);
+            NameCardsInDeck(seat, cardIDs);
+            NameCardsInAdventureDeck(seat, cardIDs, siteIDs);
+        }
+    }
+
+    /** The seat names for a table of this size, in seating order. */
+    public static List<String> SeatNames(int playerCount) {
+        List<String> all = List.of(P1, P2, P3, P4, P5);
+        return all.subList(0, playerCount);
+    }
+
+    private void NameCardsInDeck(String seat, HashMap<String, String> cardIDs) {
+        if (cardIDs == null)
+            return;
+        for (var card : _game.getGameState().getDeck(seat)) {
+            cardIDs.entrySet().stream()
+                    .filter(x -> x.getValue().equals(card.getBlueprintId())
+                            && !Cards.get(seat).containsKey(x.getKey()))
+                    .map(Map.Entry::getKey)
+                    .findFirst()
+                    .ifPresent(name -> Cards.get(seat).put(name, (PhysicalCardImpl) card));
+        }
+    }
+
+    private void NameCardsInAdventureDeck(String seat, HashMap<String, String> cardIDs,
+                                          HashMap<String, String> siteIDs) {
+        if (siteIDs == null)
+            return;
+        for (var card : _game.getGameState().getAdventureDeck(seat)) {
+            String name = null;
+            if (cardIDs != null) {
+                name = cardIDs.entrySet().stream()
+                        .filter(x -> x.getValue().equals(card.getBlueprintId())
+                                && !Cards.get(seat).containsKey(x.getKey()))
+                        .map(Map.Entry::getKey).findFirst().orElse(null);
+            }
+            if (name == null) {
+                name = siteIDs.entrySet().stream()
+                        .filter(x -> x.getValue().equals(card.getBlueprintId()))
+                        .map(Map.Entry::getKey).findFirst().orElse(null);
+            }
+            if (name != null)
+                Cards.get(seat).put(name, (PhysicalCardImpl) card);
+        }
+    }
+
     public VirtualTableScenario(HashMap<String, String> cardIDs, HashMap<String, String> siteIDs, String ringBearerID, String ringID) throws CardNotFoundException, DecisionResultInvalidException {
         this(cardIDs, siteIDs, ringBearerID, ringID, Multipath, null,null, null);
     }
@@ -259,6 +356,30 @@ public class VirtualTableScenario implements TestBase, TestConstants, Actions, A
         }
         return card;
     }
+
+    /**
+     * A named card belonging to a specific seat.
+     *
+     * At two players the Free Peoples player is always P1, so GetFreepsCard is
+     * enough. Above two, seating is decided by a shuffle inside
+     * ChooseSeatingOrderGameProcess -- equal bids keep their shuffled order --
+     * so which seat holds the Free Peoples role varies between runs and a test
+     * has to ask rather than assume.
+     */
+    public PhysicalCardImpl GetCardFor(String playerId, String cardName) {
+        var seat = Cards.get(playerId);
+        if (seat == null)
+            throw new NullPointerException("No seat named '" + playerId + "' at this table.");
+        var card = seat.get(cardName);
+        if (card == null)
+            throw new NullPointerException("Card '" + cardName + "' does not exist for " + playerId + ".");
+        return card;
+    }
+
+    /** Whoever holds the Free Peoples role right now. */
+    public String FreePeoplesPlayer() {
+        return _gameState.getCurrentPlayerId();
+    }
     /**
      * Returns a card from the Shadow player's deck by its human-readable test alias.
      * @param cardName The human-readable name assigned at the top of each test class.
@@ -370,6 +491,72 @@ public class VirtualTableScenario implements TestBase, TestConstants, Actions, A
 
         // Seating choice
         FreepsDecided("0");
+    }
+
+    /**
+     * Bidding and seating for a table of any size.
+     *
+     * Driven off whoever actually has a pending decision rather than a fixed
+     * script. Bidding is simultaneous but seating is not: N-1 players choose in
+     * bid order and the last is placed silently, so the sequence depends on the
+     * bids and cannot be written down in advance for an arbitrary table.
+     *
+     * P1 bids one burden and everyone else bids nothing, which is what the
+     * two-player version does and is what makes the result deterministic: the
+     * highest bidder chooses first, takes the first seat, and is therefore the
+     * Free Peoples player on turn one. With every player bidding the same, the
+     * tie is broken arbitrarily and the table seats in a different order from
+     * run to run -- which showed up as a test that passed alone and failed in
+     * the suite.
+     */
+    public void BidAndSeatPlayers(int playerCount) {
+        if (playerCount == 2) {
+            BidAndSeatPlayers();
+            return;
+        }
+
+        // N bids, then N-1 seating choices; the last player is seated silently.
+        // At two players that is the three answers the two-player version gives,
+        // so this is the same contract generalised rather than a new one.
+        int answersExpected = (playerCount * 2) - 1;
+        for (int answered = 0; answered < answersExpected; answered++) {
+            var pending = new java.util.ArrayList<>(_userFeedback.getUsersPendingDecision());
+            if (pending.isEmpty())
+                break;
+            // Deterministic order, so a failing test fails the same way twice.
+            pending.sort(java.util.Comparator.comparingInt(SeatNames(playerCount)::indexOf));
+            String playerId = pending.get(0);
+            var decision = _userFeedback.getAwaitingDecision(playerId);
+            if (decision == null)
+                break;
+
+            String answer;
+            if (decision.getDecisionType() == com.gempukku.lotro.logic.decisions.AwaitingDecisionType.INTEGER
+                    && playerId.equals(SeatNames(playerCount).get(0))) {
+                answer = "1";   // outbid the table, so this seat chooses first
+            } else {
+                answer = LowestValidAnswer(decision);
+            }
+            PlayerDecided(playerId, answer);
+        }
+    }
+
+    /**
+     * The least eventful answer to a pregame decision: bid nothing, take the
+     * first seat offered. Answered by decision type rather than by position in a
+     * script, because the seating questions depend on what the bids were.
+     */
+    private static String LowestValidAnswer(com.gempukku.lotro.logic.decisions.AwaitingDecision decision) {
+        var params = decision.getDecisionParameters();
+        switch (decision.getDecisionType()) {
+            case INTEGER:
+                return params.containsKey("min") ? params.get("min")[0] : "0";
+            case MULTIPLE_CHOICE:
+            case ACTION_CHOICE:
+                return "0";
+            default:
+                return "";
+        }
     }
 
     /**

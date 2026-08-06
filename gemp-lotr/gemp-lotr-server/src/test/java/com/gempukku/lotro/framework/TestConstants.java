@@ -15,6 +15,20 @@ public interface TestConstants {
 	 */
 	String P2 = "Shadow Player";
 
+	/*
+	 * Seats three to five, for tests that need more than one opponent.
+	 *
+	 * A two-player table cannot express the questions multiplayer raises -- "is
+	 * every Shadow player offered this?", "in what order?" -- because there is
+	 * only ever one opponent and every ordering looks the same. These names are
+	 * deliberately not "Shadow Player 2" and so on: which seats are Shadow
+	 * depends on whose turn it is, and naming them by role would bake in the
+	 * two-player assumption this exists to test.
+	 */
+	String P3 = "Third Player";
+	String P4 = "Fourth Player";
+	String P5 = "Fifth Player";
+
 	/**
 	 * A constant used for performing floating-point numeric comparisons in test assertions.  In effect, any decimal
 	 * difference smaller than this amount will be completely ignored when determining if two floating point numbers

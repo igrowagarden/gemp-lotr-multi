@@ -258,6 +258,57 @@ public interface GameProcedures extends Actions, GameProperties, PileProperties 
 		}
     }
 
+	/**
+	 * Advance to a phase at any number of seats, by answering whoever is
+	 * actually waiting.
+	 *
+	 * {@link #SkipToPhase} is written as P1 and P2, which is exact at two
+	 * players and stalls above them: each Shadow player gets their own Shadow
+	 * phase, so at five seats three of the four are never answered and the loop
+	 * runs out of attempts. This asks the game who it is waiting on instead of
+	 * assuming, and gives the least eventful answer each time.
+	 *
+	 * Deliberately a separate method rather than a rewrite of SkipToPhase --
+	 * roughly six thousand tests depend on the two-player one behaving exactly
+	 * as it does.
+	 */
+	default void PassUntilPhase(Phase target) {
+		// Generous: five seats can need a pass per player per phase for several
+		// phases, but still bounded so a stall fails rather than hangs.
+		for (int attempts = 1; attempts <= 300; attempts++) {
+			if (gameState().getCurrentPhase() == target)
+				return;
+
+			var pending = new java.util.ArrayList<>(userFeedback().getUsersPendingDecision());
+			if (pending.isEmpty())
+				throw new RuntimeException("Nobody has a decision, and the phase is "
+						+ gameState().getCurrentPhase() + " rather than " + target);
+
+			java.util.Collections.sort(pending);
+			String playerId = pending.get(0);
+			var decision = userFeedback().getAwaitingDecision(playerId);
+			if (decision == null)
+				continue;
+
+			String answer;
+			switch (decision.getDecisionType()) {
+				case INTEGER -> {
+					var params = decision.getDecisionParameters();
+					answer = params.containsKey("min") ? params.get("min")[0] : "0";
+				}
+				// A required choice has no decline, so take the first option.
+				case ACTION_CHOICE -> answer = "0";
+				case MULTIPLE_CHOICE -> answer = "0";
+				// Everything else declines: pass the phase action, discard
+				// nothing, assign nothing.
+				default -> answer = "";
+			}
+			PlayerDecided(playerId, answer);
+		}
+		throw new RuntimeException("Could not reach " + target + "; stalled in "
+				+ gameState().getCurrentPhase());
+	}
+
 	default void SkipToPhaseInverted(Phase target) {
 		for(int attempts = 1; attempts <= 20; attempts++)
 		{
