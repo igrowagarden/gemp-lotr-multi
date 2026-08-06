@@ -35,9 +35,13 @@
 						memorize: chosenCards
 					}
 					{
+						type: ChooseOpponent
+						memorize: opponent
+					}
+					{
 						type: chooseArbitraryCards
 						text: Choose card to return to opponent's hand
-						player: shadow
+						player: fromMemory(opponent)
 						fromMemory: chosenCards
 						memorize: cardToReturn
 					}
