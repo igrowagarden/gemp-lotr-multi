@@ -295,10 +295,15 @@ public class HallServer extends AbstractServer {
      * @return If table created, otherwise <code>false</code> (if the user already is sitting at a table or playing).
      */
     public void createNewTable(String type, Player player, String deckName, String timer, String description, boolean isInviteOnly, boolean isPrivate, boolean isHidden) throws HallException {
+        createNewTable(type, player, deckName, timer, description, isInviteOnly, isPrivate, isHidden,
+                GameSettings.DEFAULT_SEAT_COUNT);
+    }
+
+    public void createNewTable(String type, Player player, String deckName, String timer, String description, boolean isInviteOnly, boolean isPrivate, boolean isHidden, int seatCount) throws HallException {
         if (_shutdown)
             throw new HallException("Server is in shutdown mode. Server will be restarted after all running games are finished.");
 
-        GameSettings gameSettings = createGameSettings(type, timer, description, isInviteOnly, isPrivate, isHidden, false);
+        GameSettings gameSettings = createGameSettings(type, timer, description, isInviteOnly, isPrivate, isHidden, false, seatCount);
 
         LotroDeck lotroDeck = validateUserAndDeck(gameSettings.format(), player, deckName, gameSettings.collectionType(), gameSettings.league());
 
@@ -318,7 +323,7 @@ public class HallServer extends AbstractServer {
         if (_shutdown)
             throw new HallException("Server is in shutdown mode. Server will be restarted after all running games are finished.");
 
-        GameSettings gameSettings = createGameSettings(type, "slow", "Solo game", false, isPrivate, false, true);
+        GameSettings gameSettings = createGameSettings(type, "slow", "Solo game", false, isPrivate, false, true, 1);
 
         LotroDeck lotroDeck = validateUserAndDeck(gameSettings.format(), player, deckName, gameSettings.collectionType(), gameSettings.league());
 
@@ -344,7 +349,7 @@ public class HallServer extends AbstractServer {
         if (_shutdown)
             throw new HallException("Server is in shutdown mode. Server will be restarted after all running games are finished.");
 
-        GameSettings gameSettings = createGameSettings(type, timer, description, isInviteOnly, isPrivate, isHidden, false);
+        GameSettings gameSettings = createGameSettings(type, timer, description, isInviteOnly, isPrivate, isHidden, false, GameSettings.DEFAULT_SEAT_COUNT);
 
         LotroDeck lotroDeck = validateUserAndDeck(gameSettings.format(), librarian, deckName, gameSettings.collectionType(), gameSettings.league());
 
@@ -360,7 +365,7 @@ public class HallServer extends AbstractServer {
         }
     }
 
-    private GameSettings createGameSettings(String type, String timer, String description, boolean isInviteOnly, boolean isPrivate, boolean isHidden, boolean isSolo) throws HallException {
+    private GameSettings createGameSettings(String type, String timer, String description, boolean isInviteOnly, boolean isPrivate, boolean isHidden, boolean isSolo, int seatCount) throws HallException {
         League league = null;
         LeagueSerieInfo leagueSerie = null;
         CollectionType collectionType = _defaultCollectionType;
@@ -397,8 +402,16 @@ public class HallServer extends AbstractServer {
         if (format == null)
             throw new HallException("This format is not supported: " + type);
 
+        // League and tournament tables still assume a single opponent -- see
+        // TableHolder.canPlayRankedGameAgainst, which reads
+        // getPlayerNames().iterator().next(). Refuse rather than silently
+        // seat five people into a ranked path that cannot score them.
+        if (league != null && seatCount != GameSettings.DEFAULT_SEAT_COUNT)
+            throw new HallException("League games are two-player only");
+
         return new GameSettings(collectionType, format, null, league, leagueSerie,
-                league != null, isPrivate, isInviteOnly, isHidden, gameTimer, description, isSolo);
+                league != null, isPrivate, isInviteOnly, isHidden, gameTimer, description, isSolo,
+                seatCount);
     }
 
     public boolean joinQueue(String queueId, Player player, String deckName) throws HallException, SQLException, IOException {

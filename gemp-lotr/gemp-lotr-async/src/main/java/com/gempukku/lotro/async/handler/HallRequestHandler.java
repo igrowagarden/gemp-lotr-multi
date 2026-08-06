@@ -154,6 +154,27 @@ public class HallRequestHandler extends LotroServerRequestHandler implements Uri
             boolean isPrivate = Boolean.parseBoolean(isPrivateVal);
             String isInviteOnlyVal = getFormParameterSafely(postDecoder, "isInviteOnly");
             boolean isInviteOnly = Boolean.parseBoolean(isInviteOnlyVal);
+            // Absent or unparseable means the historical two-seat table, so old
+            // clients keep working unchanged. Validated here rather than clamped,
+            // so a bad request gets told why instead of silently seating a
+            // different number of people than it asked for.
+            String seatCountVal = getFormParameterSafely(postDecoder, "seatCount");
+            int seatCount = GameSettings.DEFAULT_SEAT_COUNT;
+            if (seatCountVal != null && !seatCountVal.isEmpty()) {
+                try {
+                    seatCount = Integer.parseInt(seatCountVal.trim());
+                } catch (NumberFormatException exp) {
+                    responseWriter.writeXmlResponse(marshalException(
+                            new HallException("Seat count must be a number")));
+                    return;
+                }
+                if (seatCount < GameSettings.DEFAULT_SEAT_COUNT || seatCount > GameSettings.MAX_SEAT_COUNT) {
+                    responseWriter.writeXmlResponse(marshalException(new HallException(
+                            "Tables seat between " + GameSettings.DEFAULT_SEAT_COUNT
+                                    + " and " + GameSettings.MAX_SEAT_COUNT + " players")));
+                    return;
+                }
+            }
             //To prevent annoyance, super long glacial games are hidden from everyone except
             // the participants and admins.
             boolean isHidden = timer.toLowerCase().equals(GameTimer.GLACIAL_TIMER.name());
@@ -188,7 +209,7 @@ public class HallRequestHandler extends LotroServerRequestHandler implements Uri
 
 
             try {
-                _hallServer.createNewTable(format, resourceOwner, deckName, timer, desc, isInviteOnly, isPrivate, isHidden);
+                _hallServer.createNewTable(format, resourceOwner, deckName, timer, desc, isInviteOnly, isPrivate, isHidden, seatCount);
                 responseWriter.writeXmlResponse(null);
             }
             catch (HallException e) {

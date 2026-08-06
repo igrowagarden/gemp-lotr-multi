@@ -17,8 +17,17 @@ public class GameTable {
         if (gameSettings.format().getAdventure().isSolo() || gameSettings.isSolo()) {
             this.capacity = 1;
         } else {
-            this.capacity = 2;
+            // Was a hardcoded 2, which is the single gate that stopped GEMP
+            // seating more than two players: addPlayer() returns
+            // players.size() == capacity to mean "table full, start the game".
+            // Clamped here as well as at the request handler so a bad value
+            // cannot reach the seating process from any caller.
+            this.capacity = Math.max(2, Math.min(GameSettings.MAX_SEAT_COUNT, gameSettings.seatCount()));
         }
+    }
+
+    public int getCapacity() {
+        return capacity;
     }
 
     public void startGame(LotroGameMediator lotroGameMediator) {
