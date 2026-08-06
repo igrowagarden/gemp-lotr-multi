@@ -1,5 +1,6 @@
 package com.gempukku.lotro.at;
 
+import com.gempukku.lotro.common.Zone;
 import com.gempukku.lotro.framework.VirtualTableScenario;
 import com.gempukku.lotro.game.PhysicalCardImpl;
 import com.gempukku.lotro.logic.GameUtils;
@@ -68,16 +69,6 @@ public class MultiplayerWoundOwnMinionAtTest {
      * that following the choice and defaulting to getFirstShadowPlayer cannot
      * give the same answer.
      */
-    @Ignore("FLAKY, and parked rather than shipped. Passes alone, and passes with "
-            + "the other two Multiplayer*AtTest classes, but fails inside the full "
-            + "suite with expected:<1> but was:<0> -- the same failure the unscoped "
-            + "control produces. The card data is correct in both source and "
-            + "target/classes, so it is not staleness. Something else in the suite "
-            + "perturbs it and I did not find what. The fix itself is kept: in "
-            + "isolation it passes, and fails both when ChooseOpponent is removed and "
-            + "when the selection is left unscoped, so all three parts are load-"
-            + "bearing. Finding the interference is the next step -- a test that is "
-            + "green alone and red in company is worse than no test.")
     @Test
     public void theChosenOpponentWoundsTheirOwnMinion() throws Exception {
         var scn = ThreeSeats();
@@ -110,10 +101,24 @@ public class MultiplayerWoundOwnMinionAtTest {
 
         // No decision is presented to the chosen opponent: the scoped filter
         // leaves them exactly one eligible minion -- their own -- and a choice
-        // of one resolves without asking. Assert the outcome, not the prompt.
-        assertEquals("the chosen opponent's own minion took the wound",
-                1, scn.GetWoundsOn(chosensMinion));
-        assertEquals("the other opponent's minion is untouched",
+        // of one resolves without asking. So assert the outcome, not the prompt.
+        //
+        // "Took the wound" has to mean wounded OR killed by it. The two seats
+        // hold different minions and ChooseOpponent offers them in shuffled
+        // order, so the chosen one is sometimes the uruk -- vitality 1, which
+        // dies and reports 0 wounds from the discard pile -- and sometimes the
+        // orc, which survives with 1. Asserting `wounds == 1` therefore passed
+        // or failed depending on the shuffle, and looked like flakiness caused
+        // by other tests. It was this.
+        boolean chosenWasHit = scn.GetWoundsOn(chosensMinion) >= 1
+                || chosensMinion.getZone() != Zone.SHADOW_CHARACTERS;
+        assertTrue("the chosen opponent's own minion took the wound (wounds="
+                        + scn.GetWoundsOn(chosensMinion)
+                        + ", zone=" + chosensMinion.getZone() + ")",
+                chosenWasHit);
+        assertEquals("the other opponent's minion is unwounded",
                 0, scn.GetWoundsOn(defaultsMinion));
+        assertEquals("the other opponent's minion is still in play",
+                Zone.SHADOW_CHARACTERS, defaultsMinion.getZone());
     }
 }
