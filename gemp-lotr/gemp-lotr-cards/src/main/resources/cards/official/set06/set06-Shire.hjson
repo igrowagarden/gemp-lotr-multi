@@ -307,11 +307,17 @@
 					type: discard
 					select: self
 				}
-				effect: {
-					type: wound
-					player: shadow
-					select: choose(minion)
-				}
+				effect: [
+					{
+						type: ChooseOpponent
+						memorize: opponent
+					}
+					{
+						type: wound
+						player: fromMemory(opponent)
+						select: choose(ownedByPlayerFromMemory(opponent),minion)
+					}
+				]
 			}
 		]
 		gametext: <b>Regroup:</b> Discard Pippin to choose a Shadow player who must wound one of his or her minions.

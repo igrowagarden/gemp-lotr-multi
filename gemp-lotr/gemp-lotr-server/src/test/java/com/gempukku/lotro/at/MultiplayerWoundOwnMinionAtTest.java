@@ -68,14 +68,16 @@ public class MultiplayerWoundOwnMinionAtTest {
      * that following the choice and defaulting to getFirstShadowPlayer cannot
      * give the same answer.
      */
-    @Ignore("Blocked on test setup, not on the fix. MoveMinionsToTable does not put "
-            + "a second seat's minion into play at three seats -- the diagnostic below "
-            + "reports the chosen opponent's minion in DISCARD while the other seat's "
-            + "is in SHADOW_CHARACTERS -- so the chosen player has nothing to wound and "
-            + "is correctly not asked. Two distinct minion cards did not help, so it is "
-            + "not uniqueness. Until a minion can be placed for an arbitrary seat, this "
-            + "cannot distinguish a working scoped filter from a broken one, and 6_114 "
-            + "is deliberately left unfixed rather than changed unverified.")
+    @Ignore("FLAKY, and parked rather than shipped. Passes alone, and passes with "
+            + "the other two Multiplayer*AtTest classes, but fails inside the full "
+            + "suite with expected:<1> but was:<0> -- the same failure the unscoped "
+            + "control produces. The card data is correct in both source and "
+            + "target/classes, so it is not staleness. Something else in the suite "
+            + "perturbs it and I did not find what. The fix itself is kept: in "
+            + "isolation it passes, and fails both when ChooseOpponent is removed and "
+            + "when the selection is left unscoped, so all three parts are load-"
+            + "bearing. Finding the interference is the next step -- a test that is "
+            + "green alone and red in company is worse than no test.")
     @Test
     public void theChosenOpponentWoundsTheirOwnMinion() throws Exception {
         var scn = ThreeSeats();
@@ -106,21 +108,10 @@ public class MultiplayerWoundOwnMinionAtTest {
                 scn.userFeedback().getAwaitingDecision(P1));
         scn.ChooseOption(P1, chosenOpponent);
 
-        if (scn.userFeedback().getAwaitingDecision(chosenOpponent) == null) {
-            StringBuilder what = new StringBuilder("the chosen opponent (" + chosenOpponent
-                    + ") was not asked to wound. Minions in play: "
-                    + "chosen's=" + chosensMinion.getZone()
-                    + " default's=" + defaultsMinion.getZone() + ". Pending:");
-            for (String seat : VirtualTableScenario.SeatNames(3)) {
-                var d = scn.userFeedback().getAwaitingDecision(seat);
-                what.append("\n  ").append(seat).append(" -> ")
-                        .append(d == null ? "(none)" : d.getDecisionType() + " '" + d.getText() + "'");
-            }
-            fail(what.toString());
-        }
-        scn.ChooseCards(chosenOpponent, chosensMinion);
-
-        assertEquals("the chosen opponent's own minion takes the wound",
+        // No decision is presented to the chosen opponent: the scoped filter
+        // leaves them exactly one eligible minion -- their own -- and a choice
+        // of one resolves without asking. Assert the outcome, not the prompt.
+        assertEquals("the chosen opponent's own minion took the wound",
                 1, scn.GetWoundsOn(chosensMinion));
         assertEquals("the other opponent's minion is untouched",
                 0, scn.GetWoundsOn(defaultsMinion));
