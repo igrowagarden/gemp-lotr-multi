@@ -1579,13 +1579,18 @@ var GempLotrGameUI = Class.extend({
     // Seat-numbered <select>, matching the "1. name" labels the sidebar already
     // uses for each player, so the numbers mean the same thing everywhere.
     buildPlayerPicker: function (id, label, playerIds, selectedId) {
-        var html = "<div class='opponentPicker'>" + label + ": <select id='" + id + "'>";
+        return "<div class='opponentPicker'>" + label + ": <select id='" + id + "'>"
+            + this.buildPlayerOptions(playerIds, selectedId) + "</select></div>";
+    },
+
+    buildPlayerOptions: function (playerIds, selectedId) {
+        var html = "";
         for (var i = 0; i < playerIds.length; i++) {
             html += "<option value='" + playerIds[i] + "'"
                 + (playerIds[i] == selectedId ? " selected" : "") + ">"
                 + (this.getPlayerIndex(playerIds[i]) + 1) + ". " + playerIds[i] + "</option>";
         }
-        return html + "</select></div>";
+        return html;
     },
 
     // Spectators have no seat of their own, so let them adopt one. Changing it
@@ -1597,6 +1602,13 @@ var GempLotrGameUI = Class.extend({
         this.bottomPlayerId = playerId;
         this.focusedOpponentId = null;
         this.initFocusedOpponent();
+        // Who counts as an opponent just changed -- the seat being taken is no
+        // longer one and the seat being left now is -- so the options have to be
+        // rebuilt, not merely reselected. Without this the picker offers the
+        // spectator the seat they are sitting in and hides the player they were
+        // watching a moment ago.
+        $("#focusedOpponent").html(
+            this.buildPlayerOptions(this.getOpponentIds(), this.focusedOpponentId));
         this.layoutUI(true);
     },
 
