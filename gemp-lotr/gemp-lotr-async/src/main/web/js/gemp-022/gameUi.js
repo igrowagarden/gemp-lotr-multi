@@ -255,7 +255,16 @@ var GempLotrGameUI = Class.extend({
         return null;
     },
 
+    // A card can change zone without any group's bounds changing -- a minion
+    // stepping into a skirmish, say -- and the incremental path below lays out
+    // only the one group that claims it. Re-derive visibility afterwards so a
+    // card that just became visible to this viewer is actually shown.
     layoutGroupWithCard: function (cardId) {
+        this.layoutGroupWithCardOnly(cardId);
+        this.applyFocusVisibility();
+    },
+
+    layoutGroupWithCardOnly: function (cardId) {
         var cardData = $(".card:cardId(" + cardId + ")").data("card");
         if (this.advPathGroup.cardBelongs(cardData)) {
             this.advPathGroup.layoutCards();
@@ -1227,6 +1236,9 @@ var GempLotrGameUI = Class.extend({
                 "z-index": 1000
             });
         }
+
+        // Last, so it sees the positions this pass produced.
+        this.applyFocusVisibility();
     },
 
     startReplaySession: function (replayId) {
@@ -1618,6 +1630,83 @@ var GempLotrGameUI = Class.extend({
             if (this.allPlayerIds[plId] == playerId)
                 return plId;
         return -1;
+    },
+
+    // The zones whose cards the focused-opponent filters decide the fate of.
+    // Attachments and stacked cards ride along with whatever they sit on rather
+    // than being filtered themselves, so they are managed here too.
+    focusManagedZones: {
+        SUPPORT: true, FREE_CHARACTERS: true, SHADOW_CHARACTERS: true,
+        ATTACHED: true, STACKED: true, STACKED_FACE_DOWN: true
+    },
+
+    // Every group that positions a card on the main board.
+    getBoardCardGroups: function () {
+        var groups = [this.advPathGroup, this.charactersPlayer, this.charactersOpponent,
+            this.supportPlayer, this.supportOpponent, this.shadow,
+            this.skirmishFellowshipGroup, this.skirmishShadowGroup];
+        if (!this.spectatorMode && this.hand != null)
+            groups.push(this.hand);
+        for (var characterId in this.shadowAssignGroups) {
+            if (this.shadowAssignGroups.hasOwnProperty(characterId)) {
+                groups.push(this.shadowAssignGroups[characterId]);
+                groups.push(this.freePeopleAssignGroups[characterId]);
+            }
+        }
+        return groups;
+    },
+
+    // Hide the cards the board filters leave out.
+    //
+    // The server sends every player's board and the client appends all of it to
+    // #main; upstream every one of those cards was claimed by some group and so
+    // got absolutely positioned by layoutCardElem. Showing one opponent at a
+    // time breaks that assumption: a card no group claims keeps position:static,
+    // drops into normal flow at the top of #main and renders at the container's
+    // full width. At five players that is a ring-bearer covering the board.
+    //
+    // Visibility is derived from what the layout actually placed rather than
+    // from card ownership, because an attachment carries the owner of whoever
+    // played it, not of the board it sits on -- following the groups gets those
+    // right for free, and keeps a non-focused opponent's minion visible while it
+    // is in a skirmish, which is what the skirmish groups deliberately allow.
+    applyFocusVisibility: function () {
+        // With one opponent no opponent is ever unfocused, so there is nothing
+        // to hide and the two-player screen is left exactly as it was.
+        if (this.getOpponentIds().length < 2)
+            return;
+
+        var placed = {};
+        var mark = function (cardElem) {
+            var elem = $(cardElem);
+            var card = elem.data("card");
+            if (card == null || placed[card.cardId] === true)
+                return;
+            placed[card.cardId] = true;
+            var riders = (card.attachedCards || []).concat(card.stackedCards || []);
+            for (var i = 0; i < riders.length; i++)
+                mark(riders[i]);
+        };
+
+        var groups = this.getBoardCardGroups();
+        for (var g = 0; g < groups.length; g++) {
+            if (groups[g] == null)
+                continue;
+            var elems = groups[g].getCardElems();
+            for (var i = 0; i < elems.length; i++)
+                mark(elems[i]);
+        }
+
+        var that = this;
+        $("#main > .card").each(function () {
+            var elem = $(this);
+            var card = elem.data("card");
+            // Anything outside the managed zones -- play animations, the virtual
+            // cards built for actions on a card in a pile -- is left untouched.
+            if (card == null || that.focusManagedZones[card.zone] !== true)
+                return;
+            elem.css("display", placed[card.cardId] === true ? "" : "none");
+        });
     },
 
     layoutZones: function () {
