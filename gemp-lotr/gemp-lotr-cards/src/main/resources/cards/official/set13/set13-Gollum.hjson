@@ -172,8 +172,12 @@
 			}
 			effect: [
 				{
+					type: ChooseOpponent
+					memorize: opponent
+				}
+				{
 					type: choice
-					player: shadow
+					player: fromMemory(opponent)
 					texts: [
 						Discard a Shadow card from hand
 						Remove (2)
@@ -182,8 +186,8 @@
 						{
 							type: discardFromHand
 							forced: false
-							hand: shadow
-							player: shadow
+							hand: fromMemory(opponent)
+							player: fromMemory(opponent)
 							select: choose(side(shadow))
 						}
 						{
