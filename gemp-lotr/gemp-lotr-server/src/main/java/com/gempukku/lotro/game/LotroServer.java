@@ -191,11 +191,22 @@ public class LotroServer extends AbstractServer {
 
                     @Override
                     public void gameCancelled() {
-                        if (participants.length == 2) {
-                            gameRecordingInProgress.finishRecording(participants[0].getPlayerId(), "Game cancelled due to error", participants[1].getPlayerId(), "Game cancelled due to error");
-                        } else {
-                            gameRecordingInProgress.finishRecording(participants[0].getPlayerId(), "Game cancelled due to error", botPlayer.getName(), "Game cancelled due to error");
-                        }
+                        // The record names two sides, so pick the second seat as
+                        // the other one. The bot branch is for a solo game, which
+                        // is the only case with a single participant -- it used to
+                        // be reached by every table that was not exactly two
+                        // players, so cancelling a five-player game dereferenced a
+                        // null bot.
+                        String otherSide;
+                        if (participants.length > 1)
+                            otherSide = participants[1].getPlayerId();
+                        else if (botPlayer != null)
+                            otherSide = botPlayer.getName();
+                        else
+                            otherSide = participants[0].getPlayerId();
+
+                        gameRecordingInProgress.finishRecording(participants[0].getPlayerId(),
+                                "Game cancelled due to error", otherSide, "Game cancelled due to error");
                     }
                 }
             );

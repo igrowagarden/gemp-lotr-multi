@@ -76,15 +76,33 @@ public class ReplayMetadata {
         }
     }
 
+    /**
+     * The other player, where there is exactly one -- that is, at two seats.
+     *
+     * Above two seats "the opponent" is not a thing, so this returns null rather
+     * than an arbitrary player. It also no longer throws when the player list is
+     * empty: it used to call get() on an empty Optional, which turned an
+     * unparsed player list into a NoSuchElementException at the moment the game
+     * finished.
+     */
     public String GetOpponent(String player) {
-        return PlayerIDs.keySet().stream().filter(x -> !x.equals(player)).findFirst().get();
+        if (PlayerIDs.size() != 2)
+            return null;
+        return PlayerIDs.keySet().stream().filter(x -> !x.equals(player)).findFirst().orElse(null);
     }
 
-    private final Pattern gameStartPattern = Pattern.compile("Players in the game are: ([\\w~-]+), ([\\w~-]+)");
+    // Every player in the game, not the first two. The old pattern took exactly
+    // two names and used matches(), so at more seats it failed to match at all
+    // and left PlayerIDs empty -- which is what made the replay of a finished
+    // five-player game throw.
+    private final Pattern gameStartPattern = Pattern.compile("Players in the game are: ([\\w~-]+(?:, [\\w~-]+)*)");
     private final Pattern orderPattern = Pattern.compile("([\\w~-]+) has chosen to go (.*)");
     private final Pattern bidPattern = Pattern.compile("([\\w~-]+) bid (\\d+)");
     public void ParseReplay(String player, List<GameEvent> events) {
         GameStarted = false;
+        // Who announced a seat. Kept local rather than as a field because every
+        // field of this class is serialised into the stored replay metadata.
+        Set<String> announcedSeat = new HashSet<>();
 
         for(var event : events) {
             if(event.getType() == GameEvent.Type.SEND_MESSAGE) {
@@ -94,8 +112,10 @@ public class ReplayMetadata {
 
                 var regex = gameStartPattern.matcher(message);
                 if(regex.matches()) {
-                    PlayerIDs.put(regex.group(1), 1);
-                    PlayerIDs.put(regex.group(2), 2);
+                    int seat = 1;
+                    for(String name : regex.group(1).split(", ")) {
+                        PlayerIDs.put(name, seat++);
+                    }
                     continue;
                 }
 
@@ -103,12 +123,14 @@ public class ReplayMetadata {
                 if(regex.matches()) {
                     String bidder = regex.group(1);
                     String order = regex.group(2);
+                    announcedSeat.add(bidder);
                     if(order.equals("first")) {
                         WentFirst = bidder;
                     }
-                    else if(order.equals("second")) {
-                        WentFirst = GetOpponent(bidder);
-                    }
+                    // "second" no longer implies who went first. It did at two
+                    // seats, where the only other player must have gone first;
+                    // at five it names one of four, so it is left to the
+                    // by-elimination pass below.
                     continue;
                 }
 
@@ -154,6 +176,25 @@ public class ReplayMetadata {
                     }
                 }
             }
+        }
+
+        // Seating announces one message per player who *chose* a seat; the last
+        // player is seated silently and says nothing. So if nobody claimed the
+        // first seat, it belongs to the one player who never announced one.
+        //
+        // At two seats this is exactly the old inference -- one player chooses,
+        // "X has chosen to go second" leaves only the other -- and it holds at
+        // any number of seats for the same reason. Only assigned when the silent
+        // player is unique, so a replay whose messages did not parse leaves
+        // WentFirst null rather than naming someone at random.
+        if(WentFirst == null) {
+            List<String> silent = new ArrayList<>();
+            for(String candidate : PlayerIDs.keySet()) {
+                if(!announcedSeat.contains(candidate))
+                    silent.add(candidate);
+            }
+            if(silent.size() == 1)
+                WentFirst = silent.get(0);
         }
     }
 }
