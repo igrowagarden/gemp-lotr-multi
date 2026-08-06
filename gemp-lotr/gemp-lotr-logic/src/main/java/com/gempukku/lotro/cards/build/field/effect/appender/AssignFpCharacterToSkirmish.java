@@ -17,6 +17,7 @@ import com.gempukku.lotro.logic.timing.Effect;
 import org.json.simple.JSONObject;
 
 import java.util.Collection;
+import java.util.Collections;
 
 public class AssignFpCharacterToSkirmish implements EffectAppenderProducer {
     @Override
@@ -82,7 +83,10 @@ public class AssignFpCharacterToSkirmish implements EffectAppenderProducer {
 
         if (preventEffectAppenders.length > 0) {
             result.addEffectAppender(
-                    new PreventableEffectAppender(new OpponentPlayerSource(playerSource), preventText,
+                    // Still exactly one preventer: this designates the opponent
+                    // of a specific player, not a group.
+                    new PreventableEffectAppender(
+                            singlePreventer(new OpponentPlayerSource(playerSource)), preventText,
                             actionContext -> {
                                 final Collection<? extends PhysicalCard> fpChar = actionContext.getCardsFromMemory(fpCharacterMemory);
                                 final Collection<? extends PhysicalCard> minion1 = actionContext.getCardsFromMemory(minionMemory);
@@ -105,5 +109,10 @@ public class AssignFpCharacterToSkirmish implements EffectAppenderProducer {
         //What exactly was the point of this?  Pulling from other sources should be just fine.
         //I wish I knew what bug this was addressing.
         //throw new InvalidCardDefinitionException("The selectors for this effect have to be of 'choose' type or 'self'");
+    }
+
+    /** One named player, as a group of one. */
+    private static PlayersSource singlePreventer(PlayerSource player) {
+        return (actionContext) -> Collections.singletonList(player.getPlayer(actionContext));
     }
 }

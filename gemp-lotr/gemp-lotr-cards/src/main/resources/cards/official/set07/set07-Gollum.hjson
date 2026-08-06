@@ -823,7 +823,7 @@
 				effect: {
 					type: preventable
 					text: Would you like to exert a minion twice to prevent Free People player discarding a minion?
-					player: shadow
+					player: anyShadow
 					cost: {
 						type: exert
 						player: shadow

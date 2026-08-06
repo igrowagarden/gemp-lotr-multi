@@ -350,7 +350,7 @@
 			effect: {
 				type: preventable
 				text: Remove (3) to prevent giving companion Defender +1
-				player: shadowPlayer
+				player: anyShadow
 				cost: {
 					type: removeTwilight
 					amount: 3

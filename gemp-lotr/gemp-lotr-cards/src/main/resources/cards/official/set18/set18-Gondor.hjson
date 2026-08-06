@@ -638,7 +638,7 @@
 				}
 				effect: {
 					type: preventable
-					player: shadow
+					player: anyShadow
 					text: Would you like to remove 2 twilight to prevent effect of The Faithful Stone?
 					cost: {
 						type: removeTwilight

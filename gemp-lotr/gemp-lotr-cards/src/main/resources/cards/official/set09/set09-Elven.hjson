@@ -358,7 +358,7 @@
 			effect: {
 				type: preventable
 				text: Would you like to remove (1) to prevent Merry wounding a minion he is skirmishing?
-				player: shadowPlayer
+				player: anyShadow
 				cost: {
 					type: removeTwilight
 					amount: 1
@@ -513,7 +513,7 @@
 			effect: {
 				type: preventable
 				text: Would you like to remove (1) to prevent Pippin wounding a minion an Elf is skirmishing?
-				player: shadowPlayer
+				player: anyShadow
 				cost: {
 					type: removeTwilight
 					amount: 1

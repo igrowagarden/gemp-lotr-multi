@@ -22,7 +22,7 @@
 			effect: [
 				{
 					type: preventable
-					player: shadow
+					player: anyShadow
 					text: Would you like to exert a minion twice to prevent discarding a minion?
 					cost: {
 						type: exert

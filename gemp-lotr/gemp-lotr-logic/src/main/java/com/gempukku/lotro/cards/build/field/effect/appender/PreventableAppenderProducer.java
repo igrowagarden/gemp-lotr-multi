@@ -2,7 +2,7 @@ package com.gempukku.lotro.cards.build.field.effect.appender;
 
 import com.gempukku.lotro.cards.build.CardGenerationEnvironment;
 import com.gempukku.lotro.cards.build.InvalidCardDefinitionException;
-import com.gempukku.lotro.cards.build.PlayerSource;
+import com.gempukku.lotro.cards.build.PlayersSource;
 import com.gempukku.lotro.cards.build.field.FieldUtils;
 import com.gempukku.lotro.cards.build.field.effect.EffectAppender;
 import com.gempukku.lotro.cards.build.field.effect.EffectAppenderProducer;
@@ -26,7 +26,7 @@ public class PreventableAppenderProducer implements EffectAppenderProducer {
         if (player == null)
             throw new InvalidCardDefinitionException("Player is required for preventable effect");
 
-        final PlayerSource preventingPlayerSource = PlayerResolver.resolvePlayer(player);
+        final PlayersSource preventingPlayerSource = PlayerResolver.resolvePlayers(player);
         final EffectAppender[] effectAppenders = environment.getEffectAppenderFactory().getEffectAppenders(cost, effectArray, environment);
         final EffectAppender[] costAppenders = environment.getEffectAppenderFactory().getEffectAppenders(true, costArray, environment);
         final EffectAppender[] insteadAppenders = environment.getEffectAppenderFactory().getEffectAppenders(true, insteadArray, environment);

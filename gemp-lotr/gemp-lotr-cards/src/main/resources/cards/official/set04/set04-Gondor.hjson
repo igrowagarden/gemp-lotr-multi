@@ -138,7 +138,7 @@
 				effect: {
 					type: preventable
 					text: Would you like to remove (1) to prevent canceling a skirmish involving bearer?
-					player: shadow
+					player: anyShadow
 					cost: {
 						type: removeTwilight
 						amount: 1

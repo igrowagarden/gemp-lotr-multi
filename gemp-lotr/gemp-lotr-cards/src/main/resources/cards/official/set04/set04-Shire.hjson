@@ -116,7 +116,7 @@
 				}
 				effect: {
 					type: preventable
-					player: shadow
+					player: anyShadow
 					text: Would you like to remove (1) to prevent cancelling skirmish of bearer of Escape?
 					cost: {
 						type: removeTwilight
@@ -579,7 +579,7 @@
 				}
 				effect: {
 					type: preventable
-					player: shadow
+					player: anyShadow
 					text: Would you like to remove (2) to prevent Merry from being discarded?
 					cost: {
 						type: removeTwilight
@@ -764,7 +764,7 @@
 				}
 				effect: {
 					type: preventable
-					player: shadow
+					player: anyShadow
 					text: Would you like to remove (2) to prevent Pippin from discarding?
 					cost: {
 						type: removeTwilight

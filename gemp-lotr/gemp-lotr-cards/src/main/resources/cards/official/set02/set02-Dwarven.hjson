@@ -603,7 +603,7 @@
 					count: 3
 				}
 				text: Would you like to remove (3) to prevent drawing of 3 cards?
-				player: shadowPlayer
+				player: anyShadow
 				cost: {
 					type: removeTwilight
 					amount: 3

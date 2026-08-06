@@ -330,7 +330,7 @@
 			effect: [
 				{
 					type: preventable
-					player: shadow
+					player: anyShadow
 					text: Would you like to discard a minion to prevent Free Player discarding up to 2 shadow possessions?
 					cost: {
 						type: discard

@@ -331,7 +331,7 @@
 				}
 				effect: {
 					type: preventable
-					player: shadow
+					player: anyShadow
 					text: Would you like to place 3 cards from your hand on top of your deck to prevent Gandalf's effect?
 					cost: {
 						type: putCardsFromHandOnTopOfDeck

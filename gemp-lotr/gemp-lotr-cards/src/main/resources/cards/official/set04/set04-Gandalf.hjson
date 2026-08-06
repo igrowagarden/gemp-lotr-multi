@@ -432,7 +432,7 @@
 				{
 					type: preventable
 					text: Would you like to make FP player wound a minion to prevent Gandalf from not receiving wounds?
-					player: shadow
+					player: anyShadow
 					cost: {
 						type: wound
 						player: fp

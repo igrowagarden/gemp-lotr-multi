@@ -556,7 +556,7 @@
 				effect: {
 					type: preventable
 					text: Would you like to remove (1) to prevent discarding a condition
-					player: shadow
+					player: anyShadow
 					cost: {
 						type: removeTwilight
 						amount: 1
@@ -1473,7 +1473,7 @@
 				}
 				effect: {
 					type: preventable
-					player: shadow
+					player: anyShadow
 					text: Would you like to remove (2) to prevent liberating a site?
 					cost: {
 						type: removeTwilight
