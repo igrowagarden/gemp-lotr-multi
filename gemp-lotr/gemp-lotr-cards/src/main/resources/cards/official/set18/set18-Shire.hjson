@@ -31,11 +31,17 @@
 					type: discard
 					select: choose(tale)
 				}
-				effect: {
-					type: exert
-					player: shadow
-					select: choose(minion)
-				}
+				effect: [
+					{
+						type: ChooseOpponent
+						memorize: opponent
+					}
+					{
+						type: exert
+						player: fromMemory(opponent)
+						select: choose(ownedByPlayerFromMemory(opponent),minion)
+					}
+				]
 			}
 		]
 		gametext: <b>Tale</b>. To play, spot a Hobbit.<br><b>Maneuver:</b> Discard a tale from play to choose a Shadow player who must exert one of his or her minions.

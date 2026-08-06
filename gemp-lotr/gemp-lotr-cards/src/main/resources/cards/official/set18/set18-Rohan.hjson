@@ -99,11 +99,17 @@
 					type: exert
 					select: bearer
 				}
-				effect: {
-					type: exert
-					player: shadow
-					select: choose(minion)
-				}
+				effect: [
+					{
+						type: ChooseOpponent
+						memorize: opponent
+					}
+					{
+						type: exert
+						player: fromMemory(opponent)
+						select: choose(ownedByPlayerFromMemory(opponent),minion)
+					}
+				]
 			}
 		]
 		gametext: Bearer must be a [rohan] Man.<br>If bearer is mounted, he or she is strength +1.<br><b>Archery:</b> If bearer is Éomer, exert him to choose a Shadow player who must exert one of his or her minions.

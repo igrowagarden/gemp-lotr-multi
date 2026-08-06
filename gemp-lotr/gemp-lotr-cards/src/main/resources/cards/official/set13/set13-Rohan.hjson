@@ -825,11 +825,17 @@
 					type: winsSkirmish
 					filter: bearer
 				}
-				effect: {
-					type: wound
-					player: shadow
-					select: choose(minion)
-				}
+				effect: [
+					{
+						type: ChooseOpponent
+						memorize: opponent
+					}
+					{
+						type: wound
+						player: fromMemory(opponent)
+						select: choose(ownedByPlayerFromMemory(opponent),minion)
+					}
+				]
 			}
 		]
 		gametext: Bearer must be a [rohan] Man.<br>If bearer is mounted, he or she is strength +1.<br>Each time bearer wins a skirmish, you may choose a Shadow player who must wound one of his or her minions.
