@@ -8,6 +8,12 @@ var GempLotrGameUI = Class.extend({
     useOldStackingVisuals: false,
 
     bottomPlayerId: null,
+    // Which opponent's board is currently on screen. At two players this is
+    // always the single opponent and the UI is unchanged; at three or more the
+    // board groups show one opponent at a time and this selects which.
+    // The skirmish and assignment areas deliberately ignore it -- they show
+    // every player, because anything actually fighting must stay visible.
+    focusedOpponentId: null,
     replayMode: null,
     spectatorMode: null,
 
@@ -312,13 +318,13 @@ var GempLotrGameUI = Class.extend({
         var that = this;
 
         this.supportOpponent = new NormalCardGroup($("#main"), function (card) {
-            return (card.zone == "SUPPORT" && card.owner != that.bottomPlayerId && that.shadowAssignGroups[card.cardId] == null && card.skirmish == null);
+            return (card.zone == "SUPPORT" && that.isFocusedOpponent(card.owner) && that.shadowAssignGroups[card.cardId] == null && card.skirmish == null);
         });
         this.charactersOpponent = new NormalCardGroup($("#main"), function (card) {
-            return (card.zone == "FREE_CHARACTERS" && card.owner != that.bottomPlayerId && that.shadowAssignGroups[card.cardId] == null && card.skirmish == null);
+            return (card.zone == "FREE_CHARACTERS" && that.isFocusedOpponent(card.owner) && that.shadowAssignGroups[card.cardId] == null && card.skirmish == null);
         });
         this.shadow = new NormalCardGroup($("#main"), function (card) {
-            return (card.zone == "SHADOW_CHARACTERS" && card.assign == null && card.skirmish == null);
+            return (card.zone == "SHADOW_CHARACTERS" && that.isFocusedOpponent(card.owner) && card.assign == null && card.skirmish == null);
         });
         this.charactersPlayer = new NormalCardGroup($("#main"), function (card) {
             return (card.zone == "FREE_CHARACTERS" && card.owner == that.bottomPlayerId && that.shadowAssignGroups[card.cardId] == null && card.skirmish == null);
@@ -346,6 +352,20 @@ var GempLotrGameUI = Class.extend({
                 + "<div class='playerStats'><div id='deck" + i + "' class='deckSize'></div><div id='hand" + i + "' class='handSize'></div><div id='threats" + i + "' class='threatsSize'></div><div id='showStats" + i + "' class='showStats'></div><div id='discard" + i + "' class='discardSize'></div><div id='deadPile" + i + "' class='deadPileSize'></div><div id='adventureDeck" + i + "' class='adventureDeckSize'></div><div id='removedPile" + i + "' class='removedPileSize'></div></div></div>");
         }
 
+        // Opponent selector. Only rendered above two opponents -- at two players
+        // there is nothing to choose, so the panel looks exactly as it always has.
+        var opponents = this.getOpponentIds();
+        if (opponents.length > 1) {
+            // A spectator has no seat of their own, so let them pick whose side of
+            // the board is "bottom". Players always sit in their own seat.
+            if (this.spectatorMode) {
+                this.gameStateElem.append(
+                    this.buildPlayerPicker("spectatorSeat", "Seat", this.allPlayerIds, this.bottomPlayerId));
+            }
+            this.gameStateElem.append(
+                this.buildPlayerPicker("focusedOpponent", "Viewing", opponents, this.focusedOpponentId));
+        }
+
         this.gameStateElem.append("<div class='twilightPool'>0</div>");
         this.gameStateElem.append("<div class='phase'></div>");
         this.gameStateElem.append("<div id='clock-1' class='decisionClock'></div>");
@@ -355,6 +375,14 @@ var GempLotrGameUI = Class.extend({
         this.gameStateElem.append("<div id='ruleof4'>Rule of 4: <span id='ruleof4-count' /><span id='ruleof4-status' /></div>");
 
         $("#main").append(this.gameStateElem);
+
+        $("#focusedOpponent").change(function () {
+            that.focusedOpponentId = $(this).val();
+            that.layoutUI(false);
+        });
+        $("#spectatorSeat").change(function () {
+            that.setSpectatorSeat($(this).val());
+        });
 
         for (var i = 0; i < this.allPlayerIds.length; i++) {
             var showBut = $("<div class='slimButton'>+</div>").button().click(
@@ -1511,6 +1539,80 @@ var GempLotrGameUI = Class.extend({
         }
     },
 
+    // True when this card belongs on the "opponent" half of the board right now.
+    // At two players there is exactly one opponent, so this is identical to the
+    // old "not mine" test and the screen is unchanged.
+    isFocusedOpponent: function (ownerId) {
+        if (ownerId == this.bottomPlayerId)
+            return false;
+        if (this.focusedOpponentId == null)
+            return true;
+        return ownerId == this.focusedOpponentId;
+    },
+
+    // Opponents in seating order, excluding the viewer's own seat.
+    getOpponentIds: function () {
+        var result = [];
+        if (this.allPlayerIds == null)
+            return result;
+        for (var i = 0; i < this.allPlayerIds.length; i++) {
+            if (this.allPlayerIds[i] != this.bottomPlayerId)
+                result.push(this.allPlayerIds[i]);
+        }
+        return result;
+    },
+
+    // Seat-numbered <select>, matching the "1. name" labels the sidebar already
+    // uses for each player, so the numbers mean the same thing everywhere.
+    buildPlayerPicker: function (id, label, playerIds, selectedId) {
+        var html = "<div class='opponentPicker'>" + label + ": <select id='" + id + "'>";
+        for (var i = 0; i < playerIds.length; i++) {
+            html += "<option value='" + playerIds[i] + "'"
+                + (playerIds[i] == selectedId ? " selected" : "") + ">"
+                + (this.getPlayerIndex(playerIds[i]) + 1) + ". " + playerIds[i] + "</option>";
+        }
+        return html + "</select></div>";
+    },
+
+    // Spectators have no seat of their own, so let them adopt one. Changing it
+    // re-derives the focused opponent, since the old one may now be the bottom
+    // seat.
+    setSpectatorSeat: function (playerId) {
+        if (!this.spectatorMode || playerId == null || playerId == this.bottomPlayerId)
+            return;
+        this.bottomPlayerId = playerId;
+        this.focusedOpponentId = null;
+        this.initFocusedOpponent();
+        this.layoutUI(true);
+    },
+
+    // Default the selector to the first opponent so the board is never empty
+    // before the first turn event arrives.
+    initFocusedOpponent: function () {
+        var opponents = this.getOpponentIds();
+        this.focusedOpponentId = opponents.length > 0 ? opponents[0] : null;
+    },
+
+    setFocusedOpponent: function (playerId) {
+        if (playerId == null || playerId == this.focusedOpponentId)
+            return;
+        this.focusedOpponentId = playerId;
+        $("#focusedOpponent").val(playerId);
+        this.layoutUI(false);
+    },
+
+    // Follow the turn: the Free Peoples player is the board you almost always
+    // want, because their fellowship is the one under attack. Only auto-follow
+    // when the viewer is not the current player -- on your own turn there is no
+    // "opponent whose turn it is", so leave the choice where the user put it.
+    autoFollowFocusedOpponent: function () {
+        var opponents = this.getOpponentIds();
+        if (opponents.length < 2)
+            return;
+        if (this.currentPlayerId != null && this.currentPlayerId != this.bottomPlayerId)
+            this.setFocusedOpponent(this.currentPlayerId);
+    },
+
     getPlayerIndex: function (playerId) {
         for (var plId = 0; plId < this.allPlayerIds.length; plId++)
             if (this.allPlayerIds[plId] == playerId)
@@ -1552,7 +1654,12 @@ var GempLotrGameUI = Class.extend({
 
         var index = this.getPlayerIndex(this.bottomPlayerId);
         if (index == -1) {
-            this.bottomPlayerId = this.allPlayerIds[1];
+            // Spectator. Seat 0 rather than the historical allPlayerIds[1]:
+            // with two players either is equally arbitrary, but [1] is a strange
+            // default at five and seat 0 at least matches the "1." label the
+            // sidebar shows. The opponent selector then drives what they see,
+            // and setSpectatorSeat() lets them move.
+            this.bottomPlayerId = this.allPlayerIds[0];
             this.spectatorMode = true;
         } else {
             this.spectatorMode = false;
@@ -1577,6 +1684,7 @@ var GempLotrGameUI = Class.extend({
             }
         }
 
+        this.initFocusedOpponent();
         this.initializeGameUI(discardPublic);
         this.layoutUI(true);
     },
@@ -1628,7 +1736,11 @@ var GempLotrGameUI = Class.extend({
         var maps = element.getAttribute("maps");
 
         var leftPlayer;
-        var rightPlayer;
+        // Was a single `rightPlayer`. The pregame panel is a fixed two-column
+        // layout, so rather than rebuild it, the right column now stacks every
+        // opponent -- which keeps the existing DOM ids and CSS untouched and
+        // looks identical at two players.
+        var rightPlayers = [];
         
         var summaryContent = $("#pregame-general");
         var leftContent = $("#left-pregame-content");
@@ -1641,21 +1753,22 @@ var GempLotrGameUI = Class.extend({
         
         if(allPlayerIds.includes(participantId)) {
             leftPlayer = participantId;
-            allPlayerIds.forEach((x) => {
-                if(x !== participantId) {
-                    rightPlayer = x;
-                }
-            }); 
         }
         else { //spectator
             leftPlayer = allPlayerIds[0];
-            rightPlayer = allPlayerIds[1];
         }
-        
+        allPlayerIds.forEach((x) => {
+            if(x !== leftPlayer) {
+                rightPlayers.push(x);
+            }
+        });
+
         summaryContent.html(summary);
         leftTitle.html(leftPlayer);
-        
-        rightTitle.html(rightPlayer);
+
+        // One name reads as it always did; several get joined so nobody is
+        // silently dropped from the first screen of the game.
+        rightTitle.html(rightPlayers.join(", "));
         rightContent.html("");
 
         // Collect per-player pregame cards: maps and/or RTMD meta-sites
@@ -1674,9 +1787,12 @@ var GempLotrGameUI = Class.extend({
             if (playerMaps[leftPlayer]) {
                 leftCards.push({ blueprintId: playerMaps[leftPlayer], label: "Map" });
             }
-            if (playerMaps[rightPlayer]) {
-                rightCards.push({ blueprintId: playerMaps[rightPlayer], label: "Map" });
-            }
+            rightPlayers.forEach(function (op) {
+                if (playerMaps[op]) {
+                    rightCards.push({ blueprintId: playerMaps[op],
+                        label: rightPlayers.length > 1 ? op + " - Map" : "Map" });
+                }
+            });
         }
 
         // RTMD meta-sites
@@ -1716,7 +1832,7 @@ var GempLotrGameUI = Class.extend({
                 }
             };
             addMetaSiteCards(leftPlayer, leftCards);
-            addMetaSiteCards(rightPlayer, rightCards);
+            rightPlayers.forEach(function (op) { addMetaSiteCards(op, rightCards); });
         }
 
         // Render collected cards into pregame content areas

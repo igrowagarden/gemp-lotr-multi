@@ -853,7 +853,10 @@ var GempLotrCommunication = Class.extend({
             dataType:"xml"
         });
     },
-    createTable:function (format, deckName, timer, desc, isPrivate, isInviteOnly, callback, errorMap) {
+    // seatCount is optional and trails the callbacks on purpose: every existing
+    // caller (league, bot, older code) keeps working untouched, and the server
+    // treats a missing value as the historical two-seat table.
+    createTable:function (format, deckName, timer, desc, isPrivate, isInviteOnly, callback, errorMap, seatCount) {
         $.ajax({
             type:"POST",
             url:this.url + "/hall",
@@ -865,6 +868,7 @@ var GempLotrCommunication = Class.extend({
                 desc:desc,
                 isPrivate:isPrivate,
                 isInviteOnly:isInviteOnly,
+                seatCount:(seatCount == null ? 2 : seatCount),
                 participantId:getUrlParam("participantId")},
             success:this.deliveryCheck(callback),
             error:this.errorCheck(errorMap),

@@ -164,6 +164,10 @@ class CreateUnrankedTable {
 			saveToCookie("unranked-table-last-format", format);
 			saveToCookie("unranked-table-last-timer", timer);
 
+			var seatCount = parseInt($("#unranked-table-seats").val(), 10);
+			if (isNaN(seatCount)) seatCount = 2;
+			saveToCookie("unranked-table-last-seats", seatCount);
+
 			that.comm.createTable(format, deck, timer, tableDesc, isPrivate, isInviteOnly,
 					CreateTable.getResponse(that.resultDiv, (success) => {
 						
@@ -172,7 +176,8 @@ class CreateUnrankedTable {
 							that.mainHall.tableCreator.popup.dialog("close");
 						}
 					}),
-					CreateTable.getCreateErrorMap(that.resultDiv)
+					CreateTable.getCreateErrorMap(that.resultDiv),
+					seatCount
 				);
 			
 		};

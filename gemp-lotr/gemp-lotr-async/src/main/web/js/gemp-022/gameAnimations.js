@@ -668,6 +668,10 @@ var GameAnimations = Class.extend({
                 var playerIndex = that.game.getPlayerIndex(playerId);
 
                 that.game.currentPlayerId = playerId;
+                // Follow the turn with the opponent selector: the Free Peoples
+                // player's fellowship is the board under attack, so it is the one
+                // you almost always want up. No-op at two players.
+                that.game.autoFollowFocusedOpponent();
 
                 $(".player").each(function (index) {
                     if (index == playerIndex)
