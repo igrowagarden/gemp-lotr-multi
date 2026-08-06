@@ -1,9 +1,9 @@
 package com.gempukku.lotro.at;
 
-import com.gempukku.lotro.framework.VirtualTableScenario;
 import com.gempukku.lotro.common.Phase;
+import com.gempukku.lotro.framework.VirtualTableScenario;
+import com.gempukku.lotro.logic.GameUtils;
 import com.gempukku.lotro.logic.PlayOrder;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -26,9 +26,11 @@ import static org.junit.Assert.*;
  */
 public class MultiplayerPreventionAtTest {
 
-    /** The Faithful Stone (18_50): "...Any Shadow player may remove (2) to prevent this."
-     *  Chosen because its two-player prevention already has a passing test, so the
-     *  only new variable here is the number of seats. */
+    /**
+     * The Faithful Stone (18_50): "...Any Shadow player may remove (2) to prevent this."
+     * Chosen because its two-player prevention already has a passing test, so the
+     * only new variable here is the number of seats.
+     */
     private static final String STONE = "18_50";
     /** The stone's action has to spot a minion, so the table needs one in play. */
     private static final String URUK = "4_187";
@@ -38,6 +40,44 @@ public class MultiplayerPreventionAtTest {
             put("stone", STONE);
             put("uruk", URUK);
         }});
+    }
+
+    /**
+     * The Shadow players, in the order a round-the-table offer must use:
+     * counter-clockwise from the Free Peoples player, which is the order the
+     * Shadow phases themselves run in.
+     */
+    private static List<String> ShadowSeatsInOfferOrder(VirtualTableScenario scn) {
+        String fp = scn.FreePeoplesPlayer();
+        PlayOrder order = scn.game().getGameState().getPlayerOrder()
+                .getCounterClockwisePlayOrder(fp, false);
+        order.getNextPlayer();
+        List<String> shadowPlayers = new ArrayList<>();
+        String next;
+        while ((next = order.getNextPlayer()) != null && !next.equals(fp))
+            shadowPlayers.add(next);
+        return shadowPlayers;
+    }
+
+    /**
+     * The table with the stone in play and a minion to spot, advanced to the
+     * Maneuver phase with the Free Peoples player holding the action.
+     */
+    private VirtualTableScenario TableReadyToUseTheStone() throws Exception {
+        var scn = FiveSeats();
+        // P1 takes the first turn: BidAndSeatPlayers gives it the only non-zero
+        // bid, so it wins the seat choice outright.
+        var stone = scn.GetCardFor(P1, "stone");
+        scn.MoveCardsToSupportArea(stone);
+        scn.MoveMinionsToTable(scn.GetCardFor(P2, "uruk"));
+
+        scn.StartMultiplayerGame();
+        assertEquals("P1 should take the first turn", P1, scn.FreePeoplesPlayer());
+
+        scn.AddTokensToCard(stone, 3);
+        scn.PassUntilPhase(Phase.MANEUVER);
+        scn.SetTwilight(2);
+        return scn;
     }
 
     @Test
@@ -56,38 +96,17 @@ public class MultiplayerPreventionAtTest {
     }
 
     /**
-     * Seating is decided by a shuffle in ChooseSeatingOrderGameProcess -- equal
-     * bids keep their shuffled order -- so which seat holds the Free Peoples
-     * role varies run to run. What is invariant is that there is exactly one of
-     * them and four opponents. An earlier version of this test asserted P1 held
-     * the role; it passed five times alone, passed a full suite run, and then
-     * failed once the deck changed, because a different shuffle stream came out
-     * differently.
+     * The Free Peoples player is only meaningful once the first turn has begun.
+     * Read earlier, getCurrentPlayerId returns a pre-turn value that varies
+     * between runs -- which is what made an earlier version of this test pass
+     * five runs alone, pass a full suite, and then fail when the deck changed.
      */
     @Test
-    public void oneSeatIsFreePeoplesAndTheRestAreShadow() throws Exception {
+    public void theFirstSeatTakesTheFirstTurn() throws Exception {
         var scn = FiveSeats();
-        String fp = scn.FreePeoplesPlayer();
-        assertTrue(fp + " should be one of the seats",
-                VirtualTableScenario.SeatNames(5).contains(fp));
+        scn.StartMultiplayerGame();
+        assertEquals(P1, scn.FreePeoplesPlayer());
         assertEquals(4, ShadowSeatsInOfferOrder(scn).size());
-    }
-
-    /**
-     * The Shadow players, in the order a round-the-table offer must use:
-     * counter-clockwise from the Free Peoples player, which is the order the
-     * Shadow phases themselves run in.
-     */
-    private static List<String> ShadowSeatsInOfferOrder(VirtualTableScenario scn) {
-        String fp = scn.game().getGameState().getCurrentPlayerId();
-        PlayOrder order = scn.game().getGameState().getPlayerOrder()
-                .getCounterClockwisePlayOrder(fp, false);
-        order.getNextPlayer();
-        List<String> shadowPlayers = new ArrayList<>();
-        String next;
-        while ((next = order.getNextPlayer()) != null && !next.equals(fp))
-            shadowPlayers.add(next);
-        return shadowPlayers;
     }
 
     /**
@@ -95,30 +114,16 @@ public class MultiplayerPreventionAtTest {
      * must get a turn to decline before the effect resolves. Under the old
      * behaviour exactly one was asked, so this fails from the second seat on.
      */
-    @Ignore("Reaches Maneuver but the Free Peoples seat does not hold the "
-            + "decision at that moment, so the card action cannot be driven yet. "
-            + "PassUntilPhase returns as soon as the phase flips; it needs to wait "
-            + "until the intended seat is the one being asked. The harness seats "
-            + "five players correctly -- see the passing tests above -- this is the "
-            + "remaining step.")
     @Test
     public void everyShadowPlayerIsOfferedThePreventionInTurn() throws Exception {
-        var scn = FiveSeats();
+        var scn = TableReadyToUseTheStone();
         List<String> shadowSeats = ShadowSeatsInOfferOrder(scn);
         assertEquals(4, shadowSeats.size());
 
-        String fp = scn.FreePeoplesPlayer();
-        var stone = scn.GetCardFor(fp, "stone");
-        scn.MoveCardsToSupportArea(stone);
-        scn.MoveMinionsToTable(scn.GetCardFor(shadowSeats.get(0), "uruk"));
-        scn.StartGame();
-        scn.AddTokensToCard(stone, 3);
-        scn.PassUntilPhase(Phase.MANEUVER);
-        scn.SetTwilight(2);
-
+        var stone = scn.GetCardFor(P1, "stone");
         assertTrue("the Free Peoples player should be able to use the stone",
-                scn.ActionAvailable(fp, "Use " + com.gempukku.lotro.logic.GameUtils.getFullName(stone)));
-        scn.PlayerDecided(fp, scn.GetCardActionId(fp, stone));
+                scn.ActionAvailable(P1, "Use " + GameUtils.getFullName(stone)));
+        scn.PlayerDecided(P1, scn.GetCardActionId(P1, stone));
 
         for (String shadowSeat : shadowSeats) {
             assertTrue(shadowSeat + " should have been offered the prevention",
@@ -128,26 +133,13 @@ public class MultiplayerPreventionAtTest {
     }
 
     /** The first acceptance ends the offer; later seats are never asked. */
-    @Ignore("Reaches Maneuver but the Free Peoples seat does not hold the "
-            + "decision at that moment, so the card action cannot be driven yet. "
-            + "PassUntilPhase returns as soon as the phase flips; it needs to wait "
-            + "until the intended seat is the one being asked. The harness seats "
-            + "five players correctly -- see the passing tests above -- this is the "
-            + "remaining step.")
     @Test
     public void theOfferStopsAtTheFirstAcceptance() throws Exception {
-        var scn = FiveSeats();
+        var scn = TableReadyToUseTheStone();
         List<String> shadowSeats = ShadowSeatsInOfferOrder(scn);
 
-        String fp = scn.FreePeoplesPlayer();
-        var stone = scn.GetCardFor(fp, "stone");
-        scn.MoveCardsToSupportArea(stone);
-        scn.MoveMinionsToTable(scn.GetCardFor(shadowSeats.get(0), "uruk"));
-        scn.StartGame();
-        scn.AddTokensToCard(stone, 3);
-        scn.PassUntilPhase(Phase.MANEUVER);
-        scn.SetTwilight(2);
-        scn.PlayerDecided(fp, scn.GetCardActionId(fp, stone));
+        var stone = scn.GetCardFor(P1, "stone");
+        scn.PlayerDecided(P1, scn.GetCardActionId(P1, stone));
 
         assertTrue(scn.DecisionAvailable(shadowSeats.get(0), "prevent"));
         scn.ChooseOption(shadowSeats.get(0), "No");
@@ -160,5 +152,4 @@ public class MultiplayerPreventionAtTest {
             assertFalse(notAsked + " should not be asked after someone prevented",
                     scn.DecisionAvailable(notAsked, "prevent"));
     }
-
 }

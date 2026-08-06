@@ -376,9 +376,36 @@ public class VirtualTableScenario implements TestBase, TestConstants, Actions, A
         return card;
     }
 
-    /** Whoever holds the Free Peoples role right now. */
+    /**
+     * Whoever holds the Free Peoples role right now.
+     *
+     * Only meaningful once the first turn has actually begun. Before that,
+     * getCurrentPlayerId returns a pre-turn value that varies between runs and
+     * is not the player who will take the first turn -- reading it early is how
+     * a test ends up putting cards in the wrong seat's support area.
+     * {@link #StartMultiplayerGame()} gets past that point.
+     */
     public String FreePeoplesPlayer() {
         return _gameState.getCurrentPlayerId();
+    }
+
+    /**
+     * Begin a table of more than two players, leaving it at the first Fellowship
+     * phase with P1 to act.
+     *
+     * {@link #StartGame()} is two-player: it clears the starting fellowship and
+     * mulligan for P1 and P2 only, so at five seats the other three mulligans
+     * stay pending and the game never reaches Fellowship at all. Everything
+     * downstream then misreads -- the phase never advances, and the Free Peoples
+     * player still reads as the pre-turn value.
+     *
+     * P1 is always the Free Peoples player on turn one, because
+     * BidAndSeatPlayers has P1 bid one burden against everyone else's nothing:
+     * a unique highest bid, so the shuffle inside ChooseSeatingOrderGameProcess
+     * cannot displace it.
+     */
+    public void StartMultiplayerGame() {
+        PassUntilPhase(com.gempukku.lotro.common.Phase.FELLOWSHIP);
     }
     /**
      * Returns a card from the Shadow player's deck by its human-readable test alias.
