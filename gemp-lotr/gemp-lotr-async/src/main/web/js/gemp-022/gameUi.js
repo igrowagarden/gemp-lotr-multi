@@ -361,8 +361,18 @@ var GempLotrGameUI = Class.extend({
                 + "<div class='playerStats'><div id='deck" + i + "' class='deckSize'></div><div id='hand" + i + "' class='handSize'></div><div id='threats" + i + "' class='threatsSize'></div><div id='showStats" + i + "' class='showStats'></div><div id='discard" + i + "' class='discardSize'></div><div id='deadPile" + i + "' class='deadPileSize'></div><div id='adventureDeck" + i + "' class='adventureDeckSize'></div><div id='removedPile" + i + "' class='removedPileSize'></div></div></div>");
         }
 
-        // Opponent selector. Only rendered above two opponents -- at two players
-        // there is nothing to choose, so the panel looks exactly as it always has.
+        this.gameStateElem.append("<div class='twilightPool'>0</div>");
+        this.gameStateElem.append("<div class='phase'></div>");
+        this.gameStateElem.append("<div id='clock-1' class='decisionClock'></div>");
+
+        this.gameStateElem.append("<br/>");
+        this.gameStateElem.append("<div id='initiative'>Initiative: <span id='initiative-player'/></div>");
+        this.gameStateElem.append("<div id='ruleof4'>Rule of 4: <span id='ruleof4-count' /><span id='ruleof4-status' /></div>");
+
+        // Opponent selector, last in the panel so the per-turn state above it --
+        // twilight, phase, initiative -- stays where a two-player player expects
+        // to find it. Only rendered above two opponents: at two players there is
+        // nothing to choose, so the panel looks exactly as it always has.
         var opponents = this.getOpponentIds();
         if (opponents.length > 1) {
             // A spectator has no seat of their own, so let them pick whose side of
@@ -374,14 +384,6 @@ var GempLotrGameUI = Class.extend({
             this.gameStateElem.append(
                 this.buildPlayerPicker("focusedOpponent", "Viewing", opponents, this.focusedOpponentId));
         }
-
-        this.gameStateElem.append("<div class='twilightPool'>0</div>");
-        this.gameStateElem.append("<div class='phase'></div>");
-        this.gameStateElem.append("<div id='clock-1' class='decisionClock'></div>");
-        
-        this.gameStateElem.append("<br/>");
-        this.gameStateElem.append("<div id='initiative'>Initiative: <span id='initiative-player'/></div>");
-        this.gameStateElem.append("<div id='ruleof4'>Rule of 4: <span id='ruleof4-count' /><span id='ruleof4-status' /></div>");
 
         $("#main").append(this.gameStateElem);
 
