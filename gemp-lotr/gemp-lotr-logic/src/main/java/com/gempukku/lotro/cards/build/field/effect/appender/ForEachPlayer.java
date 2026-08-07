@@ -54,7 +54,13 @@ public class ForEachPlayer implements EffectAppenderProducer {
                         DelegateActionContext playerActionContext = new DelegateActionContext(actionContext, playerId,
                                 actionContext.getGame(), actionContext.getSource(), actionContext.getEffectResult(),
                                 actionContext.getEffect());
-                        effectAppender.appendEffect(cost, action, playerActionContext);
+                        // subAction, not action. This appended to the PARENT
+                        // while returning a StackActionEffect wrapping a
+                        // SubAction nothing was ever put in, so the per-player
+                        // effects landed at the end of the enclosing action
+                        // instead of here -- anything written after a
+                        // forEachPlayer ran BEFORE it.
+                        effectAppender.appendEffect(cost, subAction, playerActionContext);
                     }
                 }
                 return new StackActionEffect(subAction);
