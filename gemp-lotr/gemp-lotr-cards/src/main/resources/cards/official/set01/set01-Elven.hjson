@@ -330,9 +330,18 @@
 				select: choose(elf)
 			}
 			effect: [
+				// Three shadowPlayer tokens on one card, all meaning the same
+				// single opponent: the one whose hand was revealed must be the
+				// one who discards. The census's prose bucket missed this card
+				// entirely -- it says "an opponent" and then "that player",
+				// never the word "choose".
+				{
+					type: ChooseOpponent
+					memorize: opponent
+				}
 				{
 					type: revealHand
-					hand: shadowPlayer
+					hand: fromMemory(opponent)
 					memorize: cardsInHand
 				}
 				{
@@ -348,8 +357,8 @@
 					}
 					true: {
 						type: discardFromHand
-						hand: shadowPlayer
-						player: shadowPlayer
+						hand: fromMemory(opponent)
+						player: fromMemory(opponent)
 						forced: true
 						count: {
 							type: forEachInMemory

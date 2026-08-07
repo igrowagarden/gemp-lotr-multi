@@ -609,11 +609,20 @@
 					true: {
 						type: optional
 						text: Would you like to make an opponent place a random card from hand beneath draw deck?
-						effect: {
-							type: putCardsFromHandOnBottomOfDeck
-							player: shadow
-							select: random(1)
-						}
+						effect: [
+							// "HIS OR HER hand ... HIS OR HER draw deck" --
+							// both are per-player zones, so `player:` names
+							// them and no card filter is needed.
+							{
+								type: ChooseOpponent
+								memorize: opponent
+							}
+							{
+								type: putCardsFromHandOnBottomOfDeck
+								player: fromMemory(opponent)
+								select: random(1)
+							}
+						]
 					}
 				}
 			]

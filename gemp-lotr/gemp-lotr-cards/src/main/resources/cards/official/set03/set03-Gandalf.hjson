@@ -230,10 +230,16 @@
 				filter: name(Gandalf)
 			}
 			effect: [
+				// "AN opponent's hand", then "THAT card" -- the discard has to
+				// come out of the hand that was revealed.
+				{
+					type: ChooseOpponent
+					memorize: opponent
+				}
 				{
 					type: revealRandomCardsFromHand
 					forced: true
-					hand: shadow
+					hand: fromMemory(opponent)
 					count: 1
 					memorize: revealedCard
 				}
@@ -257,8 +263,8 @@
 							{
 								type: DiscardFromHand
 								forced: true
-								hand: shadow
-								player: shadow
+								hand: fromMemory(opponent)
+								player: fromMemory(opponent)
 								select: memory(revealedCard)
 							}
 						]

@@ -272,9 +272,16 @@
 					filter: culture(gondor),companion
 					memorize: spotCount
 				}
+				// "A Shadow player's hand ... then ITS OWNER draws a card".
+				// Every revealed card comes from the one hand, so the owner of
+				// the discarded card is that same opponent.
+				{
+					type: ChooseOpponent
+					memorize: opponent
+				}
 				{
 					type: RevealRandomCardsFromHand
-					hand: shadow
+					hand: fromMemory(opponent)
 					forced: true
 					count: {
 						type: fromMemory
@@ -283,16 +290,18 @@
 					memorize: revealedCards
 				}
 				{
+					// `player: you` stays: the card says "CHOOSE a revealed
+					// Shadow card", and it is the controller who chooses.
 					type: discardFromHand
 					forced: true
-					hand: shadow
+					hand: fromMemory(opponent)
 					player: you
 					count: 1
 					select: choose(side(shadow),memory(revealedCards))
 				}
 				{
 					type: drawCards
-					player: shadow
+					player: fromMemory(opponent)
 				}
 			]
 		}

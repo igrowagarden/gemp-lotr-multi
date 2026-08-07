@@ -509,13 +509,21 @@
 				select: choose(ranger)
 			}
 			effect: [
+				// "AN opponent", singular -- the same effect 18_57 applies to
+				// every opponent, applied to one chosen one. A hand and a draw
+				// deck are per-player zones, so `player:` names them and no
+				// card filter is needed.
+				{
+					type: ChooseOpponent
+					memorize: opponent
+				}
 				{
 					type: shuffleHandIntoDrawDeck
-					player: shadowPlayer
+					player: fromMemory(opponent)
 				}
 				{
 					type: drawCards
-					player: shadowPlayer
+					player: fromMemory(opponent)
 					count: 8
 				}
 			]

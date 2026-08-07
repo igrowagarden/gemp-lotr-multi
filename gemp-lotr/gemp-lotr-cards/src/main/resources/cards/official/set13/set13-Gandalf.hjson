@@ -461,16 +461,22 @@
 					type: addBurdens
 				}
 				effect: [
+					// "A Shadow player's hand ... HE OR SHE must choose" -- one
+					// opponent, revealed and then made to discard.
+					{
+						type: ChooseOpponent
+						memorize: opponent
+					}
 					{
 						type: revealHand
-						hand: shadow
+						hand: fromMemory(opponent)
 						memorize: revealedCards
 					}
 					{
 						type: discardFromHand
 						forced: true
-						hand: shadow
-						player: shadow
+						hand: fromMemory(opponent)
+						player: fromMemory(opponent)
 						select: choose(memory(revealedCards),minion)
 					}
 				]
