@@ -79,11 +79,16 @@
 				// invisible while `player: shadow` sent the consequence to a
 				// fixed seat regardless of who had played anything.
 				//
-				// A READING as well as a fix. At two players this stops the card
-				// responding to your own event, which it could do before. The
-				// printed text supports it and nobody would want the old
-				// behaviour, but it is a rules call rather than a refactor --
-				// flagged for the Players Council.
+				// RULED, not guessed: the card applies to all opposing Shadow
+				// players. So `anyShadow` is the whole group, and your own
+				// events are correctly excluded -- at two players that is a
+				// behaviour change from what GEMP did before, and an intended
+				// one.
+				//
+				// Note the CONSEQUENCE stays singular: "that opponent" is the
+				// one who played the event, routed by
+				// ownerFromMemory(playedEvent) below. The ruling widens WHOSE
+				// events this responds to, not how many players pay.
 				type: played
 				player: anyShadow
 				filter: event
@@ -101,14 +106,11 @@
 					// whoever had played it, so at five seats the wrong
 					// opponent paid for someone else's event.
 					//
-					// NOT FULLY RIGHT, and the remainder is an engine gap rather
-					// than a reading. The trigger above is `played, filter:
-					// event`, which fires on the controller's OWN events too, so
-					// this can now name its own controller -- a legal but
-					// pointless choice nobody would take, where before it hit a
-					// bystander. Scoping the trigger to opponents' events needs
-					// `player:` there to accept a group; PlayerResolver returns
-					// one seat, so "played by an opponent" cannot be written.
+					// Singular on purpose. The ruling that this card applies to
+					// all opposing Shadow players widened WHOSE events it
+					// responds to -- see the trigger above -- not how many
+					// players pay. Exactly one opponent pays, and it is the one
+					// who played the event.
 					type: choice
 					player: ownerFromMemory(playedEvent)
 					texts: [
