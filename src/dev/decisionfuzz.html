@@ -681,7 +681,14 @@ if (!preflight.totalCards) {
 say("");
 
 const selected = CASES.filter((c) => !only || c.type === only);
-for (const c of selected) runCase(c);
+for (const c of selected) {
+  // Printed BEFORE the case runs. The per-case report is only rendered once the
+  // whole loop finishes, so a hang produced a page with a preflight line and
+  // nothing else -- no way to tell which case stopped it. This line survives in
+  // the dumped DOM and names the culprit directly.
+  say(`<span class="dim">running: ${c.type} — ${c.name}</span>`);
+  runCase(c);
+}
 
 // -------------------------------------------------------------------- report
 let diffs = 0, expected = 0, errors = 0;
