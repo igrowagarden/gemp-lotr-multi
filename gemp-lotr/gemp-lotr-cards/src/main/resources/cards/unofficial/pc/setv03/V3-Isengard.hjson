@@ -172,10 +172,13 @@
 				source: side(Free Peoples)
 				//method omitted since we want both hinder and discard
 				effect: {
-					// LEFT AS `shadow`, and now understood rather than merely
-					// unexplained. This is a Shadow-side card so the token is
-					// wrong above two players like the rest of its group, but
-					// THE CONTROLLER IS NOT REACHABLE FROM HERE AT ALL.
+					// "Each time YOUR condition is hindered or discarded by a
+					// Free Peoples card, hinder a Free Peoples condition" -- this
+					// card is the condition, and its controller does the
+					// hindering.
+					//
+					// `you` only became correct once the engine was fixed. It
+					// used to name the Free Peoples player, because:
 					//
 					// BuiltLotroCardBlueprint.getHinderedFromPlayRequiredTrigger
 					// (and its Discarded twin) build the context as
@@ -205,10 +208,14 @@
 					// SelfRemovedFromPlayTriggerEffectProcessor does not even
 					// accept a `player:` field.
 					//
-					// FIXING THIS IS AN ENGINE CHANGE, not a card edit. See
-					// errors.log and todo.md.
+					// The four self-removed getters now build the context around
+					// THIS card -- (self.getOwner(), ..., self, result, ...) --
+					// the way every other trigger path always did, and the
+					// `source:` filter reads the remover off the effect result
+					// instead. So `you` is the condition's controller, which is
+					// what the card says.
 					type: Hinder
-					player: shadow
+					player: you
 					select: choose(side(Free Peoples), condition)
 				}
 			}

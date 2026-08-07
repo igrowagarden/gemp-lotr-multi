@@ -1333,7 +1333,15 @@ public class BuiltLotroCardBlueprint implements LotroCardBlueprint {
         if (discardedFromPlayRequiredTriggerAction == null)
             return null;
 
-        DefaultActionContext actionContext = new DefaultActionContext(result.getPerformingPlayer(), game, result.getSource(), result, null);
+        // Context built around THIS card, not around whatever removed it.
+        // Every other trigger path uses (self.getOwner(), ..., self, ...); these
+        // four used (result.getPerformingPlayer(), ..., result.getSource(), ...),
+        // so `you` and `owner` inside a self-removed trigger both named the
+        // player who did the removing. 103_38 could not say "its controller"
+        // at all. The removing card is still reachable -- the `source:` filter
+        // now reads it off the effect result -- and the result is passed in all
+        // four cases so it can.
+        DefaultActionContext actionContext = new DefaultActionContext(result.getDiscardedCard().getOwner(), game, result.getDiscardedCard(), result, null);
         if (discardedFromPlayRequiredTriggerAction.isValid(actionContext)) {
             RequiredTriggerAction action = new RequiredTriggerAction(result.getDiscardedCard());
             discardedFromPlayRequiredTriggerAction.createAction(action, actionContext);
@@ -1347,7 +1355,15 @@ public class BuiltLotroCardBlueprint implements LotroCardBlueprint {
         if (discardedFromPlayOptionalTriggerAction == null)
             return null;
 
-        DefaultActionContext actionContext = new DefaultActionContext(result.getPerformingPlayer(), game, result.getSource(), null, null);
+        // Context built around THIS card, not around whatever removed it.
+        // Every other trigger path uses (self.getOwner(), ..., self, ...); these
+        // four used (result.getPerformingPlayer(), ..., result.getSource(), ...),
+        // so `you` and `owner` inside a self-removed trigger both named the
+        // player who did the removing. 103_38 could not say "its controller"
+        // at all. The removing card is still reachable -- the `source:` filter
+        // now reads it off the effect result -- and the result is passed in all
+        // four cases so it can.
+        DefaultActionContext actionContext = new DefaultActionContext(result.getDiscardedCard().getOwner(), game, result.getDiscardedCard(), result, null);
         if (discardedFromPlayOptionalTriggerAction.isValid(actionContext)) {
             OptionalTriggerAction action = new OptionalTriggerAction(result.getDiscardedCard());
             discardedFromPlayOptionalTriggerAction.createAction(action, actionContext);
@@ -1362,7 +1378,15 @@ public class BuiltLotroCardBlueprint implements LotroCardBlueprint {
         if (hinderedFromPlayRequiredTriggerAction == null)
             return null;
 
-        DefaultActionContext actionContext = new DefaultActionContext(result.getPerformingPlayer(), game, result.getSource(), result, null);
+        // Context built around THIS card, not around whatever removed it.
+        // Every other trigger path uses (self.getOwner(), ..., self, ...); these
+        // four used (result.getPerformingPlayer(), ..., result.getSource(), ...),
+        // so `you` and `owner` inside a self-removed trigger both named the
+        // player who did the removing. 103_38 could not say "its controller"
+        // at all. The removing card is still reachable -- the `source:` filter
+        // now reads it off the effect result -- and the result is passed in all
+        // four cases so it can.
+        DefaultActionContext actionContext = new DefaultActionContext(result.getHinderedCard().getOwner(), game, result.getHinderedCard(), result, null);
         if (hinderedFromPlayRequiredTriggerAction.isValid(actionContext)) {
             RequiredTriggerAction action = new RequiredTriggerAction(result.getHinderedCard());
             hinderedFromPlayRequiredTriggerAction.createAction(action, actionContext);
@@ -1376,7 +1400,15 @@ public class BuiltLotroCardBlueprint implements LotroCardBlueprint {
         if (hinderedFromPlayOptionalTriggerAction == null)
             return null;
 
-        DefaultActionContext actionContext = new DefaultActionContext(result.getPerformingPlayer(), game, result.getSource(), null, null);
+        // Context built around THIS card, not around whatever removed it.
+        // Every other trigger path uses (self.getOwner(), ..., self, ...); these
+        // four used (result.getPerformingPlayer(), ..., result.getSource(), ...),
+        // so `you` and `owner` inside a self-removed trigger both named the
+        // player who did the removing. 103_38 could not say "its controller"
+        // at all. The removing card is still reachable -- the `source:` filter
+        // now reads it off the effect result -- and the result is passed in all
+        // four cases so it can.
+        DefaultActionContext actionContext = new DefaultActionContext(result.getHinderedCard().getOwner(), game, result.getHinderedCard(), result, null);
         if (hinderedFromPlayOptionalTriggerAction.isValid(actionContext)) {
             OptionalTriggerAction action = new OptionalTriggerAction(result.getHinderedCard());
             hinderedFromPlayOptionalTriggerAction.createAction(action, actionContext);
