@@ -26,18 +26,29 @@
 					type: exert
 					select: self
 				}
-				effect: {
-					type: repeat
-					times: {
-						type: forEachWound
-						filter: minion,inSkirmishAgainst(self)
+				effect: [
+					// Chosen once, outside the repeat: the card says "choose an
+					// opponent" and then makes that one opponent wound once per
+					// wound, not a fresh choice per wound.
+					{
+						type: ChooseOpponent
+						memorize: opponent
 					}
-					effect: {
-						type: wound
-						player: shadow
-						select: choose(minion)
+					{
+						type: repeat
+						times: {
+							type: forEachWound
+							filter: minion,inSkirmishAgainst(self)
+						}
+						effect: {
+							// "wound a minion", not "his or her minion" --
+							// deliberately unscoped, as on 11_34.
+							type: wound
+							player: fromMemory(opponent)
+							select: choose(minion)
+						}
 					}
-				}
+				]
 			}
 		]
 		gametext: <b>Skirmish:</b> Exert Éowyn to choose an opponent. That opponent must wound a minion for each wound on each minion skirmishing Éowyn.
