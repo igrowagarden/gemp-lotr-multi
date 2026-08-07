@@ -99,9 +99,16 @@
 						}
 					]
 					filter: culture(orc),orc
+					// "remove an [orc] card from YOUR discard pile" is text granted
+					// to the Orc, so "your" is whoever is playing the Orc -- not a
+					// fixed Shadow seat. `you` only reaches that player because
+					// ExtraCostToPlay now delegates the granted cost's context to
+					// card.getOwner(); before that the context was built around THIS
+					// card and no token could name the payer at all. Measured by
+					// MultiplayerGrantedCostAtTest.
 					cost: {
 						type: removeCardsInDiscardFromGame
-						player: shadow
+						player: you
 						select: choose(culture(orc))
 					}
 				}
