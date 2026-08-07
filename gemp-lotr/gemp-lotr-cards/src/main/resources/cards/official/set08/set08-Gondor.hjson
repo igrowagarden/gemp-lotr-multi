@@ -76,14 +76,31 @@
 					count: 2
 				}
 				effect: [
+					// The card names an opponent TWICE and never ties the two
+					// together: "the top card of AN OPPONENT'S draw deck", then
+					// "CHOOSE AN OPPONENT who must discard". So it is asked
+					// twice, in the order the text asks it -- which also means
+					// the second choice is made knowing what was revealed. At
+					// two players both auto-resolve to the same person, so this
+					// changes nothing there. If the Players Council rules the
+					// two must be the same opponent, delete the second
+					// ChooseOpponent and reuse the first memory.
+					{
+						type: ChooseOpponent
+						memorize: revealOpponent
+					}
 					{
 						type: revealTopCardsOfDrawDeck
-						deck: shadow
+						deck: fromMemory(revealOpponent)
 						memorize: revealedCard
 					}
 					{
+						type: ChooseOpponent
+						memorize: discardOpponent
+					}
+					{
 						type: Discard
-						player: shadow
+						player: fromMemory(discardOpponent)
 						select: choose(side(shadow),printedTwilightCostFromMemory(revealedCard))
 					}
 				]
