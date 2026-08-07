@@ -39,33 +39,22 @@
  * measures drag distances.
  */
 import { canReorder, REORDERABLE_ZONES, FIXED_ZONES } from "../model/reorder.js";
+import { createReporter, bootOracle, query } from "./harness.js";
 
-const q = new URLSearchParams(location.search);
+const q = query();
 const sabotage = q.get("sabotage");
-const out = document.getElementById("out");
-const lines = [];
-const say = (t, cls) => { lines.push(cls ? `<span class="${cls}">${t}</span>` : t);
-                          out.innerHTML = lines.join("\n"); };
-
-async function ready(frame) {
-  for (let i = 0; i < 300; i++) {
-    if (frame.contentWindow?.OLD) return frame.contentWindow.OLD;
-    await new Promise((r) => setTimeout(r, 50));
-  }
-  throw new Error("old harness never came up");
-}
-const frame = document.getElementById("old");
-const OLD = await ready(frame);
+const report = createReporter({ failWord: "DIFF" });
+const say = report.say;
 
 const VIEWER = "asdf";
 const OTHER = "qwer";
-OLD.boot({ gameId: "1", participantId: VIEWER });
-OLD.feedBatch(OLD.parseEvents(
-  `<gameState><ge type="P" participantId="${VIEWER}" ` +
-  `allParticipantIds="${VIEWER},${OTHER}" discardPublic="false"/>` +
-  `<ge type="PP" participantId="${VIEWER}" index="0"/>` +
-  `<ge type="PP" participantId="${OTHER}" index="1"/></gameState>`));
-const ui = OLD.ui;
+const { ui } = await bootOracle({
+  participantId: VIEWER,
+  board: `<gameState><ge type="P" participantId="${VIEWER}" ` +
+    `allParticipantIds="${VIEWER},${OTHER}" discardPublic="false"/>` +
+    `<ge type="PP" participantId="${VIEWER}" index="0"/>` +
+    `<ge type="PP" participantId="${OTHER}" index="1"/></gameState>`
+});
 
 /**
  * PREFLIGHT. The whole page is one call into the oracle; if that call is not
@@ -122,7 +111,7 @@ const ZONES = [...REORDERABLE_ZONES, ...FIXED_ZONES];
  */
 const KEPT = new Set(["SHADOW_CHARACTERS:own"]);
 
-let pass = 0, diff = 0, kept = 0;
+let kept = 0;
 const fired = [];
 
 for (const [label, owner] of [["own cards", VIEWER], ["a focused opponent's", OTHER]]) {
@@ -136,26 +125,22 @@ for (const [label, owner] of [["own cards", VIEWER], ["a focused opponent's", OT
     if (sabotage === "nohand" && zone === "HAND") m = false;
 
     const cell = `${zone}:${owner === VIEWER ? "own" : "opp"}`;
-    if (o === m) { pass++; say(`  ok       ${zone}: ${o ? "reorderable" : "fixed"}`, "ok"); }
+    if (o === m) report.ok(`${zone}: ${o ? "reorderable" : "fixed"}`, true);
     else if (KEPT.has(cell) && !sabotage) {
       kept++;
       say(`  DIVERGE  ${zone} (${owner === VIEWER ? "own" : "opponent"}): old ` +
           `${o ? "reorderable" : "fixed"} vs new ${m ? "reorderable" : "fixed"} ` +
           `— deliberate, one shared minion band`, "note");
     } else {
-      diff++;
       if (sabotage) fired.push(cell);
-      say(`  DIFF     ${zone} (${owner === VIEWER ? "own" : "opponent"}): old ` +
-          `${o ? "reorderable" : "fixed"} vs new ${m ? "reorderable" : "fixed"}`, "bad");
+      report.ok(`${zone} (${owner === VIEWER ? "own" : "opponent"})`, false,
+                `old ${o ? "reorderable" : "fixed"} vs new ${m ? "reorderable" : "fixed"}`);
     }
   }
 }
 
 say("");
-const total = pass + diff + kept;
-say(diff === 0 ? `RESULT: ALL PASS (${total}${kept ? `, ${kept} kept divergence` : ""})`
-                : `RESULT: ${diff} DIFF of ${total}`,
-    diff === 0 ? "ok" : "bad");
+report.result(kept ? `, ${kept} kept divergence` : "");
 if (sabotage) {
   say(`control ${sabotage} fired on: ${fired.length ? fired.join(", ") : "NOTHING"}`,
       fired.length ? "note" : "bad");
