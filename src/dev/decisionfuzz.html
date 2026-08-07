@@ -415,8 +415,12 @@ const DRIVE = {
     })
   },
   BUTTON: {
-    old: () => oldSends(() => oldClick("#arbitraryChoice .card .actionArea", 0) ||
-                              oldClick(OLD_OK, 0)),
+    // Unfiltered: the same dialog buttons `offers()` cannot see by selector are
+    // the ones a player presses. Safe for buttons here because the fallback is
+    // reached only when the filtered lookup already found nothing.
+    old: () => oldSends(() => oldClickAny("#arbitraryChoice .card .actionArea", 0) ||
+                              oldClick(OLD_OK, 0) ||
+                              oldClickAny(".ui-dialog button, #smallDialog button", 0)),
     new: () => newSends(() => {
       const btn = $new(".prompt .pbtn");
       if (!btn) return false;
@@ -591,22 +595,15 @@ function runCase(c) {
       rec.findings.push(["DIFF", `option count: old ${oldN.buttons.length} ` +
                                  `(${JSON.stringify(oldN.buttons)}) vs new ${contract.answers.length}`]);
     }
-    // What each client actually SENDS for the first option. This is the check
-    // the live differential cannot make: there, `choose()` returns the same
-    // value for `old` and `new`, so the comparison is a value against itself.
-    const o = oldClicks(".ui-dialog:visible button, #smallDialog button");
-    const n = newClicks();
-    if (o.clicked && n.clicked && o.value !== n.value) {
-      rec.findings.push(["DIFF", `first option answers as old ${JSON.stringify(o.value)} ` +
-                                 `vs new ${JSON.stringify(n.value)}`]);
-    } else if (o.clicked !== n.clicked) {
-      rec.findings.push(["DIFF", `only ${o.clicked ? "old" : "new"} client offered anything ` +
-                                 `to click (old=${o.clicked}, new=${n.clicked})`]);
-    } else if (!o.clicked && !n.clicked) {
-      rec.notes.push("neither client offered a clickable option");
-    } else {
-      rec.notes.push(`both answered ${JSON.stringify(o.value)}`);
-    }
+    // What each client SENDS is compared by the generic drive step below, the
+    // same way as every other type. This branch used to do its own clicking
+    // through `oldClicks`/`newClicks`; those were replaced by the DRIVE table
+    // and the calls were left behind, so MULTIPLE_CHOICE and ACTION_CHOICE --
+    // the only two types reaching this branch -- threw ReferenceError on the
+    // FIRST case and killed the whole run. It presented as a hang, because the
+    // per-case report is only rendered once the loop finishes, and it was
+    // written up as one. An uncaught error and a hang look identical from
+    // outside; the progress line that localised it is what separated them.
   }
 
   // ------------------------------------------------------- what each SENDS
@@ -687,7 +684,16 @@ for (const c of selected) {
   // nothing else -- no way to tell which case stopped it. This line survives in
   // the dumped DOM and names the culprit directly.
   say(`<span class="dim">running: ${c.type} — ${c.name}</span>`);
-  runCase(c);
+  // ONE BAD CASE MUST NOT KILL THE RUN. An uncaught throw here stopped the loop
+  // dead, and because the report is only rendered at the end, the page came out
+  // carrying a passing preflight and nothing else -- indistinguishable from a
+  // hang, and written up as one for a whole session. A case that explodes is a
+  // finding; it is not a reason to lose the other forty-six.
+  try {
+    runCase(c);
+  } catch (e) {
+    results.push({ case: c, notes: [], findings: [["ERROR", `case threw: ${e.message}`]] });
+  }
 }
 
 // -------------------------------------------------------------------- report

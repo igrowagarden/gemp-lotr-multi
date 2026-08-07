@@ -381,6 +381,17 @@ window.OLD = (function () {
     // Buttons in the small dialog: ACTION_CHOICE and MULTIPLE_CHOICE.
     var dialogButtons = $(".ui-dialog:visible button, #smallDialog button")
       .filter(function () { return $(this).is(":visible"); });
+    // ASK THE CLIENT FOR ITS OWN DIALOG rather than guessing at ids and
+    // visibility. `multipleChoiceDecision` has TWO renderings: a <select> above
+    // two options, and one <button> per option at two or fewer. The select is
+    // found by the explicit id it carries; the buttons are appended straight
+    // into `smallDialog`, whose DOM node has no `#smallDialog` id and is never
+    // `:visible` in a headless run. So a ten-way choice was read correctly while
+    // yes/no reported zero options -- the two commonest decisions in the game
+    // measured by whichever path they happened to take.
+    if (!dialogButtons.length && ui && ui.smallDialog) {
+      dialogButtons = ui.smallDialog.find("button");
+    }
     // Cards the client has lit up as choosable.
     //
     // BOTH the class AND the data, because that is the client's OWN gate:
