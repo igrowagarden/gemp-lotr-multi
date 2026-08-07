@@ -1763,6 +1763,22 @@ case sets `window.__pwned` in the oracle's frame and not in ours. The page
 reports it as `ORACLE` and does **not** count it as a DIFF -- it is not this
 client's defect and would otherwise make every run red for someone else's bug.
 
+**Confirmed four ways**, because "the harness made it happen" is the commonest
+way this project has been wrong, and the first claim rested on a chat-box SINK
+this project built. `src/dev/scriptprobe.html` re-runs all four:
+
+| probe | result |
+|---|---|
+| jQuery 1.6.2 parse only, never inserted | inert |
+| jQuery parsed then `.append()`ed | **EXECUTED** |
+| `ChatBoxUI.prototype.appendMessage` on a bare object | **EXECUTED** |
+| an `M` game event through the whole feed path | **EXECUTED** |
+
+Three of the four never touch the sink. The mechanism is jQuery's `.append()`
+evaluating scripts in an interpolated string, and parse-only being inert says it
+is INSERTION that does it -- which is what an upstream fix would have to
+address. So the defect belongs to the reference, not to this project's harness.
+
 **It is not an exploitable XSS by any route checked**, and that qualification is
 the point rather than a hedge:
 
@@ -1773,7 +1789,11 @@ the point rather than a hedge:
   (DbPlayerDAO.java:15,389-396).
 
 So the sink is unsafe by construction and is held safe by input handling
-elsewhere. That is worth telling the engine project as defence-in-depth, but it
+elsewhere. Note what is and is not established: **the sink is unsafe -- proven;
+an attacker can reach it -- NOT shown.** Probe 4 gets there through an `M` game
+event, which is engine-authored and was fed by hand. Every place the engine
+composes a log message has not been audited, so "unreachable" is not claimed
+either; what is claimed is that no reachable route was found. That is worth telling the engine project as defence-in-depth, but it
 is NOT worth reporting as a vulnerability, and no upstream document has been
 written for it -- see the queue.
 
