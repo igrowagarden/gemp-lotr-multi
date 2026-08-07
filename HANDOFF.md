@@ -36,8 +36,9 @@ do not re-open it without a reason.
 **Untested surfaces: PILES, the LOG, CARD INFO, ZOOM, REPLAY CONTROLS and
 CONCEDE/CANCEL are done.** Detached boards have NO reference counterpart --
 `window.open` appears nowhere in `gameUi.js` -- so there is nothing to compare;
-drag-to-reorder is a feature this client does not have yet, so it is a gap
-before it is a differential.
+drag-to-reorder DOES exist here and always has (`view/board.js`,
+`makeDraggable`, a 6px threshold and a per-band `orders` map) -- an earlier
+queue entry claiming otherwise was simply wrong.
 
 Seven surface differentials now, all with proven controls. Twelve client gaps have
 come out of them, none of which the client itself reported: it rendered
@@ -367,6 +368,7 @@ harness/
   zoomrun.sh       ZOOM differential: 6 targets x 3 states, 4 controls
   replayrun.sh     REPLAY CONTROLS differential: speed + play/pause, 3 controls
   optsrun.sh       GAME OPTIONS differential: concede + cancel, 4 controls (ROLES=)
+  reorderrun.sh    REORDER differential: which zones drag, 3 controls
   autopassmeasure.py  proves the auto-pass cookie changes what the ENGINE asks,
                    by counting no-action CARD_ACTION_CHOICEs  (--only A|B|C)
 ```

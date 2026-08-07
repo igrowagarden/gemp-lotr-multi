@@ -9,6 +9,7 @@
  */
 
 import { assignBands, checkComplete, contestedId, focusableSeats } from "../model/zones.js";
+import { canReorder } from "../model/reorder.js";
 import { displayFor, undrawn } from "../layout/bands.js";
 import { allCards, fpId, seats, handSize, threats, minionsOf, bandContext,
          clockOf, isWaitingOn, formatClock }
@@ -360,7 +361,14 @@ export function createBoard(root, store, options = {}) {
 
     for (const card of ordered(spec.id, cards)) {
       const node = drawCard(card);
-      makeDraggable(node, spec.id, row);
+      // Only where the reference allows it (model/reorder.js). Every card in
+      // every band used to get a drag handler, which put one on the adventure
+      // path and on attachments -- rows whose order MEANS something and is not
+      // the player's to rearrange.
+      if (canReorder(card.zone, { spectating: state.spectating,
+                                  own: card.owner === state.viewerId })) {
+        makeDraggable(node, spec.id, row);
+      }
 
       // Attachments ride on their host rather than standing in the row: a
       // possession is only meaningful as "this, on that". Drawn BEFORE the host
