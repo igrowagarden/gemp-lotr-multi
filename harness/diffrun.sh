@@ -13,6 +13,11 @@
 # evidence of agreement.
 set -u
 
+# Hold the shared harness lock so sync.sh will not delete the tree these
+# pages are served from mid-run. See harnesslock.sh.
+source "$(cd "$(dirname "$0")" && pwd)/harnesslock.sh"
+harness_lock diffrun
+
 COUNT="${1:-8}"
 MAX="${2:-30}"
 SABOTAGE="${3:-}"

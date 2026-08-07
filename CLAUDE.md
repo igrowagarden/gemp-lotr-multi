@@ -69,11 +69,13 @@ DOCKER=/c/Users/emers/AppData/Local/Programs/DockerDesktop/resources/bin/docker.
   broke another for hours. Gate anything type-specific behind an opt-in flag.
 - **A grep for `FAIL` or `RESULT:` matches the pages' own source.** Use
   `RESULT: ALL PASS \([0-9]+\)`.
-- **Never run `sync.sh` while a harness is running.** It does `rm -rf "$DST"/*`
-  before copying, so a run in flight fetches ES modules from a directory being
-  emptied. The pages die and produce no `RESULT` line — which `fuzzrun.sh`
-  prints as `CONTROL DID NOT FIRE`, an exact impersonation of a real regression.
-  Tell them apart by the empty `RESULT` field before the arrow.
+- **`sync.sh` now REFUSES while a harness is running** — it does `rm -rf
+  "$DST"/*` before copying, so a run in flight fetched ES modules from a
+  directory being emptied, and the dead pages printed as `CONTROL DID NOT FIRE`:
+  an exact impersonation of a real regression. `harness/harnesslock.sh` is the
+  shared lock; `SYNC_FORCE=1` overrides. If you ever see that message with no
+  lock held, tell a dead page from a live one by the empty `RESULT` field
+  before the arrow.
 - **Never pipe a harness through `tail`.** It buffers to EOF, so nothing is
   visible while it runs *and* the baseline section is lost. Redirect to a file
   and append the exit code: `bash harness/fuzzrun.sh > out.txt 2>&1; echo

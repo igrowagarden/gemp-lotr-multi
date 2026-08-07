@@ -14,6 +14,24 @@
 # which is the part a query on the entry page alone would miss.
 set -eu
 
+# REFUSE while a harness is running. The `rm -rf` below would empty the tree
+# those pages are being served from, and the resulting dead pages are reported
+# by fuzzrun.sh as `CONTROL DID NOT FIRE` -- indistinguishable at a glance from
+# a real regression, which is exactly how it wasted a run once. See
+# harnesslock.sh. `SYNC_FORCE=1` overrides, for when the lock is wrong.
+source "$(cd "$(dirname "$0")" && pwd)/harnesslock.sh"
+HOLDERS="$(harness_lock_holders)"
+if [ -n "$HOLDERS" ] && [ -z "${SYNC_FORCE:-}" ]; then
+  echo "REFUSING to sync: a harness is running and this would delete the tree" >&2
+  echo "it is serving from. Deleting it does not fail loudly -- the pages die" >&2
+  echo "and their silence reads as a control that found nothing." >&2
+  echo >&2
+  echo "$HOLDERS" >&2
+  echo >&2
+  echo "Wait for it, or SYNC_FORCE=1 bash harness/sync.sh if you are sure." >&2
+  exit 1
+fi
+
 SRC="$(cd "$(dirname "$0")/../src" && pwd)"
 DST="/c/Users/emers/gemp2/gemp-lotr/gemp-lotr-async/src/main/web/newclient"
 STAMP="$(date +%s)"

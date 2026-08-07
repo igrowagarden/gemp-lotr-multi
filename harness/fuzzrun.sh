@@ -23,6 +23,14 @@
 set -uo pipefail
 cd "$(dirname "$0")"
 
+# Hold the shared harness lock so sync.sh will not delete the tree these pages
+# are served from mid-run. See harnesslock.sh. Sourced by a path relative to
+# the CWD, not to `$0`, because the cd above has already moved us here -- and
+# `dirname "$0"` after that cd resolves to `harness/harness`, which silently
+# left this script running unlocked.
+source ./harnesslock.sh
+harness_lock fuzzrun
+
 CHROME="/c/Program Files/Google/Chrome/Application/chrome.exe"
 BASE="http://localhost:17002/gemp-lotr/newclient/dev/decisionfuzz.html"
 TMP="${TMPDIR:-/tmp}/fuzzrun.$$"

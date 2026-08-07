@@ -25,6 +25,11 @@
 # that point is still complete and still true.
 set -u
 
+# Hold the shared harness lock so sync.sh will not delete the tree these
+# pages are served from mid-run. See harnesslock.sh.
+source "$(cd "$(dirname "$0")" && pwd)/harnesslock.sh"
+harness_lock soak
+
 DECKS="${1:-2000}"
 MAX="${2:-60}"
 SEATS=5

@@ -16,6 +16,11 @@
 #   bash livediffrun.sh [games] [decisions] [mode]
 set -u
 
+# Hold the shared harness lock so sync.sh will not delete the tree these
+# pages are served from mid-run. See harnesslock.sh.
+source "$(cd "$(dirname "$0")" && pwd)/harnesslock.sh"
+harness_lock livediffrun
+
 GAMES="${1:-3}"
 MAX="${2:-60}"
 MODE="${3:-alternate}"

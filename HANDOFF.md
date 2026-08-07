@@ -324,7 +324,9 @@ gemp_gui/
 
 ```
 harness/
-  sync.sh          deploy src/ into the container's web dir, cache-busted
+  sync.sh          deploy src/ into the container's web dir, cache-busted.
+                   REFUSES while a harness holds the lock  (SYNC_FORCE=1)
+  harnesslock.sh   the shared lock that makes that refusal possible
   seat_table.sh    open a 5-seat table and fill it        (DECK_NAME=)
   play_bots.py     drive seats with the MINIMAL policy    (--delay, --play)
   randomdeck.py    a fresh legal random deck per seat, any of 7 formats
@@ -1594,8 +1596,27 @@ inventing a verdict — read the SKIP line, it names which.
    for. **Tell them apart by the empty `RESULT` field before the arrow:** a
    control that genuinely did not fire still prints `RESULT: ALL PASS (n)`,
    whereas a killed page prints nothing at all. Cost a 15-minute run and a
-   false regression report. If this happens twice, make `sync.sh` refuse while
-   a lock file exists.
+   false regression report.
+
+   **Now enforced rather than remembered.** `harness/harnesslock.sh` is a
+   SHARED lock — any number of harnesses may hold it, since only `sync.sh` is
+   dangerous — with one file per holder named by pid, so a dead holder reaps
+   itself and no counter can drift. `fuzzrun`, `diffrun`, `livediffrun` and
+   `soak` take it; `sync.sh` refuses while any holder is alive and names it.
+   `SYNC_FORCE=1` overrides.
+
+   Five cases were driven before this was believed: no lock syncs, a live
+   holder refuses, a released holder syncs again, a **SIGKILLed** holder leaves
+   a stale file that the next reader reaps rather than blocking for ever, and
+   `SYNC_FORCE=1` overrides a live one while an unforced run still refuses.
+
+   The integration test earned its keep immediately: `fuzzrun.sh` already does
+   `cd "$(dirname "$0")"`, so sourcing the lock by `$(dirname "$0")` *after*
+   that resolved to `harness/harness` and the script ran **unlocked** while
+   reporting a clean baseline. Nothing about the run looked wrong. Only
+   checking that the lock file actually existed caught it — `source
+   ./harnesslock.sh` is what it needs, and that is why the line carries a
+   comment saying so.
 10. **Do not pipe a harness through `tail`.** It buffers until EOF, so there is
    no progress while it runs and the baseline section — the half that actually
    catches regressions — is discarded. Worse, `$?` afterwards is the pipe's
