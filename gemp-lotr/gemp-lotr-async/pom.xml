@@ -51,6 +51,15 @@
             <artifactId>commonmark-ext-autolink</artifactId>
             <version>0.22.0</version>
         </dependency>
+        <!-- Same version the other modules already use. This module had no
+             tests at all, which is how a cookie value could reach
+             Phase.valueOf("") and 500 a live game. -->
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>4.13.2</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
     <build>
         <plugins>

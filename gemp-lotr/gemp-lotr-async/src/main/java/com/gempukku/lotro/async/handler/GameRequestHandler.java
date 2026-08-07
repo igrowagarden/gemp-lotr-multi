@@ -246,13 +246,8 @@ public class GameRequestHandler extends LotroServerRequestHandler implements Uri
         if (cookieHeader != null) {
             Set<Cookie> cookies = cookieDecoder.decode(cookieHeader);
             for (Cookie cookie : cookies) {
-                if (cookie.name().equals("autoPassPhases")) {
-                    final String[] phases = cookie.value().split("0");
-                    Set<Phase> result = new HashSet<>();
-                    for (String phase : phases)
-                        result.add(Phase.valueOf(phase));
-                    return result;
-                }
+                if (cookie.name().equals("autoPassPhases"))
+                    return parseAutoPassPhases(cookie.value());
             }
             for (Cookie cookie : cookies) {
                 if (cookie.name().equals("autoPass") && cookie.value().equals("false"))
@@ -260,6 +255,49 @@ public class GameRequestHandler extends LotroServerRequestHandler implements Uri
             }
         }
         return _autoPassDefault;
+    }
+
+    /**
+     * Parse the {@code autoPassPhases} cookie, ignoring anything unusable.
+     *
+     * A cookie is user-controlled input that outlives the code that wrote it, so
+     * this must not be able to fail. It previously did:
+     *
+     *   <pre>for (String phase : value.split("0")) result.add(Phase.valueOf(phase));</pre>
+     *
+     * In Java {@code "".split("0")} yields {@code [""]} rather than an empty
+     * array, so an empty cookie reached {@code Phase.valueOf("")} and threw
+     * {@link IllegalArgumentException} out of the handler -- HTTP 500 on the GET
+     * handshake and on every subsequent poll, for as long as the cookie
+     * survived. The client writes exactly that value when a player unticks all
+     * seven phases. A stale cookie naming a phase that has since been renamed
+     * throws in the same place.
+     *
+     * An EMPTY RESULT IS MEANINGFUL, and is why the empty cookie is not treated
+     * as "absent": the set is the phases to auto-pass, so no entries means
+     * auto-pass nothing, which is precisely what unticking everything asks for.
+     * Falling back to the default here would silently re-enable a setting the
+     * player just turned off.
+     *
+     * Unknown names are skipped rather than rejected so that a cookie written by
+     * a future or older client degrades to the phases both versions understand,
+     * instead of taking the game down.
+     */
+    static Set<Phase> parseAutoPassPhases(String cookieValue) {
+        Set<Phase> result = new HashSet<>();
+        if (cookieValue == null)
+            return result;
+        for (String phase : cookieValue.split("0")) {
+            if (phase.isEmpty())
+                continue;
+            try {
+                result.add(Phase.valueOf(phase));
+            } catch (IllegalArgumentException unknownPhase) {
+                // Not a phase this build knows. Ignore it; the rest of the
+                // cookie is still usable.
+            }
+        }
+        return result;
     }
 
     private class SerializationVisitor implements ParticipantCommunicationVisitor {

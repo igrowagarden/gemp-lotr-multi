@@ -762,7 +762,27 @@ var GempLotrGameUI = Class.extend({
 
             if (newAutoPassPhases.length > 0)
                 newAutoPassPhases = newAutoPassPhases.substr(1);
-            $.cookie("autoPassPhases", newAutoPassPhases, {expires: 365});
+
+            // path: "/" is REQUIRED, and without it these checkboxes did
+            // nothing at all.
+            //
+            // jquery.cookie only emits a path attribute when one is passed, so
+            // the browser applied the RFC 6265 default: the directory of the
+            // page that set it, /gemp-lotr. The API lives at
+            // /gemp-lotr-server/game/{id}, and path-matching needs the cookie
+            // path to be a prefix ending on a "/" boundary -- the next
+            // character after /gemp-lotr is "-", not "/". So the cookie was
+            // never sent, and every game silently ran on the server's default
+            // regardless of what was ticked here.
+            //
+            // Clear the legacy copy FIRST. Any user who touched this setting
+            // before has one stored at /gemp-lotr, and the reader below takes
+            // the FIRST match in document.cookie and stops -- browsers list
+            // more specific paths first, so the stale copy would shadow the one
+            // we are about to write. Passing no path deletes at that same
+            // default path, which is exactly where the old one lives.
+            $.cookie("autoPassPhases", null);
+            $.cookie("autoPassPhases", newAutoPassPhases, {expires: 365, path: "/"});
         });
 
         var playerListener = function (players) {
