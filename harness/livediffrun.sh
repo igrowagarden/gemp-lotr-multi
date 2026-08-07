@@ -117,9 +117,13 @@ det=[l for l in ls if l.startswith('by type')]
 # lines per game made 'zero engine rejections' unprovable: 128 problems were
 # reported and 24 lines survived, so anything past the third was invisible.
 cnt=[l for l in ls if l.startswith(('offer mismatches','engine rejections','phantom rejections'))]
-# The per-type control tally. Without it the `perturb` control is invisible from
+# The per-type control tally. Without it the perturb control is invisible from
 # the runner and 'every type caught' cannot be asserted -- which is the whole
-# point of that control existing.
+# point of that control existing. NO BACKTICKS ANYWHERE IN THIS BLOCK: it is
+# inside python -c \"...\", a double-quoted shell string, so a backtick is
+# command substitution. One here made the shell try to run 'perturb' once per
+# game and print an error into the middle of the results -- and this comment
+# reintroduced the very bug it describes, which is why it now uses quotes.
 cnt += [l for l in ls if l.startswith('CONTROL')]
 # Counters AND a few deduped samples. Counters alone prove HOW MANY went wrong
 # but say nothing about WHY, and a rejection cannot be reproduced from the seed,

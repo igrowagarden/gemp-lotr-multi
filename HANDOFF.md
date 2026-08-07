@@ -517,9 +517,65 @@ assumed. Measured over one game:
                      for: ACTION_CHOICE
 
 So detection is proven in the LIVE differential for six of the seven types.
-`ACTION_CHOICE` is rare enough that it did not come up; it is covered instead by
-`fuzzrun`'s `answer` control, which reaches all seven. Run more games to catch
-it live, and note the run tells you when it has not.
+
+**`ACTION_CHOICE` is the seventh, and "run more games" is not a plan with a
+bound.** It has exactly TWO call sites in the whole engine, both in
+`TurnProcedure.java`, and both need more than one required trigger at the same
+moment:
+
+    :225  required "is about to" responses   raised only when
+                                             requiredBeforeTriggers.size() > 1
+    :367  "Required responses"               raised only when _actions.size() > 1
+                                             AND !areAllActionsTheSame() --
+                                             identical triggers auto-resolve
+                                             without asking anybody
+
+So it needs **two or more DISTINCT required triggers firing on one effect**.
+That is rare by construction, not by sampling accident, and random decks cannot
+be made to produce it on demand -- the engine's own `TimingAtTest` builds a
+specific board (Gimli + Dwarven Heart + Elrond) to get one.
+
+The resolution is therefore not "keep running games": `fuzzrun` covers this type
+**deterministically** -- its `answer` control reaches all seven, every run --
+while the live differential covers it **opportunistically**. What matters is
+that a live run says which it did not prove, and `CONTROL UNSEEN` does exactly
+that. Treat it as covered, not as an open gap.
+
+**Searched for anyway, and it did not appear.** Six games across six formats
+(fotr_block, pc_fotr_block, ttt_block, towers_standard, ts_reflections,
+king_block), ~230 perturbed decisions: `CONTROL UNSEEN ... ACTION_CHOICE` on
+every one. That is the expected result given the two call sites, and it is
+recorded so nobody runs the same six games again to find out.
+
+### What that hunt DID find, which was worth more
+
+Two harness defects, neither of them about ACTION_CHOICE:
+
+1. **The old client was sending the literal string `"undefined"`.** `choose()`
+   picked from `oldOffer.options` and used `String(pick.actionId)`; an option
+   without an `actionId` -- a button rather than a card action -- made that
+   `"undefined"`, which the engine refused:
+
+       ENGINE REJECTED the old client's answer "undefined" to
+       CARD_ACTION_CHOICE — Choose action to play or Pass
+
+   on a decision whose cards were `[]`. **That is the harness sending nonsense,
+   not a client disagreeing**, and it has been inflating the rejection count --
+   the harness's strongest signal -- for as long as it has existed. Options are
+   now filtered to those carrying an actionId.
+
+   It was pre-existing and only fired on the half of decisions the old client
+   happened to answer. `sabotage=perturb` forces every answer to come from the
+   old client, which is what finally made it fire every time and be noticed. A
+   control built to prove detection ended up finding a bug in the measurer.
+
+2. **A backtick inside `python -c "..."`.** The block is a double-quoted SHELL
+   string, so a backtick is command substitution: a comment mentioning the
+   control by name made the shell try to run `perturb` once per game and print
+   an error into the middle of the results. One game came back `RESULT: NONE`
+   because of it -- a run that produced no result, which this project treats as
+   a failure and not a pass. Fixed, and the fix's own comment reintroduced the
+   bug once before it was written without backticks.
 
 Two things make the control honest. The spoiled answer is **never sent** --
 `from` is forced to `old` -- so the engine always receives a legal answer and

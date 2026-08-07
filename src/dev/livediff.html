@@ -156,7 +156,21 @@ function choose(d, oldOffer) {
   const pass = { label: "pass", old: "", new: "" };
 
   if (isActionChoice(d)) {
-    const options = oldOffer.options ?? [];
+    // Only options that actually carry an actionId. The old client's offer list
+    // can contain entries without one -- a button rather than a card action --
+    // and `String(undefined)` is the string "undefined", which went out on the
+    // wire and came back as an engine rejection reading
+    //
+    //     ENGINE REJECTED the old client's answer "undefined" to
+    //     CARD_ACTION_CHOICE — Choose action to play or Pass
+    //
+    // on a decision whose cards were []. That is the HARNESS sending nonsense,
+    // not a client disagreeing, and it has been inflating the rejection count.
+    // It was pre-existing but only fired on the half of decisions the old
+    // client happened to answer; `sabotage=perturb` forces every answer to come
+    // from the old client, which is what finally made it show up every time.
+    const options = (oldOffer.options ?? [])
+      .filter((o) => o.actionId != null && String(o.actionId) !== "");
     if (!options.length) return pass;
     // A real player passes sometimes even when something is playable.
     if (rand() < 0.25) return pass;
