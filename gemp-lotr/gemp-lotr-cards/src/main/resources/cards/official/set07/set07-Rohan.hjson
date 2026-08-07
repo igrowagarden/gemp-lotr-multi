@@ -1567,37 +1567,79 @@
 			{
 				type: activated
 				phase: regroup
-				cost: {
-					type: discardFromHand
-					forced: false
-					count: {
-						type: forEachInHand
-						hand: shadow
-					}
-				}
 				effect: [
+					// "the number of cards in AN OPPONENT's hand" -- one
+					// opponent, chosen, and above two players the choice is
+					// worth making: the Free Peoples player will name whichever
+					// opponent holds fewest.
 					{
-						type: addModifier
-						modifier: {
-							type: modifyMoveLimit
-							amount: 1
-						}
-						until: endOfTurn
+						type: ChooseOpponent
+						memorize: opponent
 					}
 					{
-						// "EACH Shadow player may take up to 4 cards into hand
-						// from HIS OR HER discard pile". See 6_44 for the shape.
-						type: forEachPlayer
-						player: eachShadow
-						effect: {
-							type: putCardsFromDiscardIntoHand
-							player: you
-							count: 0-4
+						// The discard USED to be this action's `cost:` block,
+						// and it cannot stay there. A cost is registered as a
+						// play requirement, so it is evaluated before any effect
+						// has run -- before the opponent is chosen.
+						//
+						// It does NOT fail to load, which is the part worth
+						// knowing: forEachInHand wraps itself in a
+						// SmartValueSource whose canPreEvaluate() delegates to a
+						// lambda that never consults the `hand:` token, so the
+						// build-time check passes whatever that token says. What
+						// happens instead is an IllegalArgumentException
+						// "Memory not found - opponent" the first time the
+						// regroup action list is built -- a green ValidateCards,
+						// a green suite, and a crash at a real table.
+						//
+						// `costToEffect` is GEMP's own answer to exactly this,
+						// and says so: its isPlayabilityCheckedForEffect()
+						// returns false with a comment about memory values not
+						// being populated before the action executes. The cost
+						// is checked when the SubAction runs, by which time the
+						// opponent is chosen; and if it cannot be paid,
+						// SubAction.nextEffect stops at the failed cost, so
+						// nothing below happens and the condition stays in play.
+						// That is the same all-or-nothing the `cost:` block gave.
+						//
+						// What is lost: the action is now OFFERED even when it
+						// cannot be afforded, where before the play requirement
+						// hid it. Same trade as 1_44.
+						type: costToEffect
+						cost: {
+							type: discardFromHand
+							forced: false
+							count: {
+								type: forEachInHand
+								hand: fromMemory(opponent)
+							}
 						}
-					}
-					{
-						type: discard
-						select: self
+						effect: [
+							{
+								type: addModifier
+								modifier: {
+									type: modifyMoveLimit
+									amount: 1
+								}
+								until: endOfTurn
+							}
+							{
+								// "EACH Shadow player may take up to 4 cards into
+								// hand from HIS OR HER discard pile". See 6_44
+								// for the shape.
+								type: forEachPlayer
+								player: eachShadow
+								effect: {
+									type: putCardsFromDiscardIntoHand
+									player: you
+									count: 0-4
+								}
+							}
+							{
+								type: discard
+								select: self
+							}
+						]
 					}
 				]
 			}
