@@ -104,7 +104,7 @@ for round in $(seq 1 "$GAMES"); do
   res=$(timeout 220 "$CHROME" --headless --disable-gpu \
         --user-data-dir="C:\\Users\\emers\\AppData\\Local\\Temp\\cr_live$round" \
         --window-size=1500,950 --dump-dom --virtual-time-budget=170000 \
-        "$BASE?gameId=$gid&participantId=asdf&login=asdf&password=asdf&mode=$MODE&seed=$seed&max=$MAX&for=100${SABOTAGE:+&sabotage=$SABOTAGE}${SABTYPE:+&sabtype=$SABTYPE}" \
+        "$BASE?gameId=$gid&participantId=asdf&login=asdf&password=asdf&mode=$MODE&seed=$seed&max=$MAX&for=100${SABOTAGE:+&sabotage=$SABOTAGE}${SABTYPE:+&sabtype=$SABTYPE}${FPCLASH:+&fpclash=1}" \
         2>/dev/null | python -c "
 import sys,re,html
 d=sys.stdin.read()
@@ -116,7 +116,7 @@ det=[l for l in ls if l.startswith('by type')]
 # The COUNTERS, not a sample of the lines. Keeping the first three problem
 # lines per game made 'zero engine rejections' unprovable: 128 problems were
 # reported and 24 lines survived, so anything past the third was invisible.
-cnt=[l for l in ls if l.startswith(('offer mismatches','engine rejections'))]
+cnt=[l for l in ls if l.startswith(('offer mismatches','engine rejections','phantom rejections'))]
 # The per-type control tally. Without it the `perturb` control is invisible from
 # the runner and 'every type caught' cannot be asserted -- which is the whole
 # point of that control existing.

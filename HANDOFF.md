@@ -551,12 +551,36 @@ untested detection rather than proven detection.
    accumulates evidence rather than unverified green. `fuzzrun.sh` is ~6 min and
    exits non-zero on failure.
 
-0d. **Make rejection counts trustworthy.** Decision ids are not unique -- 22 call
-   sites pass `1` -- so "a warning arrived AND the same decision id was asked
-   again" counts unrelated warnings as rejections. Match on the decision's
-   identity. ~~And add a negative control per decision type~~ -- **done**, see
-   `SABOTAGE=perturb` above; six of seven proven live, the seventh named as
-   unproven rather than assumed.
+0d. ~~**Make rejection counts trustworthy.**~~ **Done, both halves.**
+
+   Rejections now match on the decision's **identity** -- id, type, text and the
+   full parameter map -- not on its id. Ids are not unique (22 call sites pass
+   `1`), so an unrelated decision arriving as id 1 looked exactly like the one
+   just answered being re-asked, and paired with any warning in the same batch
+   that counted as a rejection. Rejections are the harness's strongest signal:
+   a run reporting them is a run someone spends a day on.
+
+   **Measured, and the honest result is that no phantom was ever observed.**
+   Three clean games across three formats (139 decisions) and a `badcard` run:
+   `phantom rejections avoided: 0` every time. So this is a correctness
+   hardening against a real hole, not a fix for observed noise -- and the
+   counter stays in so a future occurrence is visible rather than silent.
+
+   **The stricter rule does not blind the harness**, which was the risk worth
+   checking: `SABOTAGE=badcard` still reports 26 old + 26 new rejections.
+
+   And the phantom counter is **proven capable of firing**, because a counter
+   that has never moved is indistinguishable from a dead one. `FPCLASH=1`
+   spoils the fingerprint so nothing can match it; run with `badcard`, whose
+   rejections are real, and the two categories swap:
+
+   | run | rejections | phantoms |
+   |---|---|---|
+   | `SABOTAGE=badcard` | 26 old + 26 new | 0 |
+   | `SABOTAGE=badcard FPCLASH=1` | 0 | **34** |
+
+   `FPCLASH=1` is a diagnostic only. It makes a `badcard` run print CLEAN --
+   correctly, since a phantom is not a problem -- so never leave it set.
 
 1. **Play a hand yourself as a seated player.** Everything is verified by
    machine; nothing has been driven by a human through the real UI. Sit at

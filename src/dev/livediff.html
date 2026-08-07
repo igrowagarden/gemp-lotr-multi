@@ -73,7 +73,10 @@ const stats = { decisions: 0, offerMismatch: 0, answerMismatch: 0,
                 // `sabotage=perturb` bookkeeping: how many answers were spoiled
                 // per decision type, and how many of those were CAUGHT. They
                 // must match. See the note at perturb().
-                perturbed: {}, caught: {} };
+                perturbed: {}, caught: {},
+                // How often the OLD id-only rule would have reported a
+                // rejection that was not one. See the verdict block.
+                falseRejections: 0 };
 
 /**
  * ONE CONTROL PER DECISION TYPE, in a single run.
@@ -255,7 +258,16 @@ function choose(d, oldOffer) {
   return { label: "option " + i, old: i, new: i };
 }
 
-let pending = null;      // { id, from, value } awaiting the engine's verdict
+/**
+ * A decision's IDENTITY, for telling "the engine asked this again" from "a
+ * different decision turned up carrying the same id". Ids repeat; the tuple
+ * does not.
+ */
+const fingerprint = (d) => JSON.stringify([
+  String(d?.id), d?.decisionType ?? "", d?.text ?? "", d?.parameters ?? {}
+]);
+
+let pending = null;      // { id, fp, from, value } awaiting the engine's verdict
 let answeredIds = 0;
 let finished = false;
 
@@ -276,9 +288,33 @@ const transport = createTransport({
 
     // The engine's verdict on the last answer: a warning plus the same
     // decision again means it was refused.
+    //
+    // "THE SAME DECISION" IS NOT "THE SAME ID". Decision ids are not unique --
+    // 22 call sites in the engine pass `1` -- so an unrelated decision that
+    // happens to arrive as id 1 looked exactly like the one just answered being
+    // re-asked. Paired with any warning in the same batch that counted as a
+    // rejection, and rejections are the harness's strongest signal: a run
+    // reporting them is a run someone will spend a day on.
+    //
+    // So the match is on the decision's IDENTITY -- id, type, text and the full
+    // parameter map. A genuinely re-asked decision is byte-identical in all
+    // four; a different decision sharing an id will differ in at least one.
     if (pending) {
       const warned = events.some((e) => e.type === "SEND_WARNING");
-      const reasked = events.some((e) => e.decision && String(e.decision.id) === String(pending.id));
+      const arrived = events.filter((e) => e.decision).map((e) => e.decision);
+      const reaskedById = arrived.some((x) => String(x.id) === String(pending.id));
+      const reasked = arrived.some((x) => fingerprint(x) === pending.fp);
+
+      // COUNT the disagreement rather than assume the old rule was harmless.
+      // If this stays zero over a long run the id-only rule was never actually
+      // firing falsely and that is worth knowing too; if it does not, every
+      // one of these was a phantom rejection someone might have chased.
+      if (warned && reaskedById && !reasked) {
+        stats.falseRejections++;
+        say(`(id ${pending.id} came back but as a DIFFERENT decision — not a ` +
+            `rejection; the id-only rule would have called it one)`, "warn");
+      }
+
       if (warned && reasked) {
         if (pending.from === "old") stats.rejectedOld++; else stats.rejectedNew++;
         say(`ENGINE REJECTED the ${pending.from} client's answer ` +
@@ -385,8 +421,19 @@ const transport = createTransport({
     if (from === "old") stats.sentOld++; else stats.sentNew++;
     // `parameters` is carried so a rejection can print the decision's full
     // input, not just the answer that failed on it.
-    pending = { id: d.id, from, value, type: d.decisionType, text: d.text,
-                parameters: d.parameters };
+    pending = {
+      id: d.id,
+      // `?fpclash=1` is the CONTROL FOR THE PHANTOM COUNTER. It spoils the
+      // fingerprint so no re-ask can ever match it, which turns every genuine
+      // rejection into the "same id, different decision" case. Run it with
+      // `sabotage=badcard`, which produces real rejections: the rejection count
+      // must collapse to zero and the phantom count must take its place.
+      //
+      // Without it that counter has never been observed to move -- and a
+      // counter that cannot be shown to fire is indistinguishable from a dead
+      // one, which is this project's most-repeated mistake wearing a new hat.
+      fp: q.get("fpclash") ? "<<cannot match>>" : fingerprint(d),
+      from, value, type: d.decisionType, text: d.text, parameters: d.parameters };
     answeredIds++;
     transport.answer(d.id, value);
   },
@@ -425,6 +472,8 @@ function chatDone() {
   say(`by type: ${JSON.stringify(stats.byType)}`);
   say(`offer mismatches: ${stats.offerMismatch}, answer mismatches: ${stats.answerMismatch}`);
   say(`engine rejections — old: ${stats.rejectedOld}, new: ${stats.rejectedNew}`);
+  say(`phantom rejections avoided (same id, different decision): ${stats.falseRejections}`,
+      stats.falseRejections ? "warn" : undefined);
   say("CARD_SELECTION bounds: " + JSON.stringify(stats.selMin));
   const oldErrs = OLD.errors();
   if (oldErrs.length) {
