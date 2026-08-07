@@ -233,6 +233,15 @@
 					to: character
 				}
 				effect: {
+					// CORRECT AS WRITTEN -- do not sweep this one. "the FIRST
+					// Shadow player may exert a companion twice", and
+					// getFirstShadowPlayer returns precisely that. 13_188,
+					// 63_188 and 15_38 carry the same note.
+					//
+					// Separately and NOT a multiplayer issue: the text says
+					// "may" and the trigger above is `optional: false`, so GEMP
+					// makes it compulsory. That is upstream's, and predates this
+					// branch.
 					type: exert
 					player: shadow
 					select: choose(companion)

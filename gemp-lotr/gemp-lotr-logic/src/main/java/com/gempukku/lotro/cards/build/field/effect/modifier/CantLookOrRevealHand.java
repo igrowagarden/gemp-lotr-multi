@@ -16,7 +16,13 @@ public class CantLookOrRevealHand implements ModifierSourceProducer {
         final String player = FieldUtils.getString(object.get("player"), "player");
         final String hand = FieldUtils.getString(object.get("hand"), "hand");
 
-        PlayerSource playerSource = PlayerResolver.resolvePlayer(player);
+        // `player:` names a GROUP too, and the note below used to say it could
+        // not. Erland (2_21) reads "SHADOW PLAYERS may not look at or reveal
+        // cards in your hand" -- plural -- and `player: shadowPlayer` stopped
+        // exactly one of them. The claim that there is only ever one player on
+        // this side was true of the two cards that prompted the `hand:` change
+        // and false of the third card using this modifier.
+        PlayersSource playerSource = PlayerResolver.resolvePlayers(player);
         // `hand:` names a GROUP, not a seat. No Business of Ours (2_44) and its
         // errata (52_44) both read "The Free Peoples player may not look at or
         // reveal cards in ANY Shadow player's hand", and `hand: shadow`
@@ -28,8 +34,6 @@ public class CantLookOrRevealHand implements ModifierSourceProducer {
         // `anyShadow`/`eachShadow`/`eachPlayer` become newly expressible. Same
         // move ForEachPlayer and PreventableAppenderProducer already made.
         //
-        // `player:` stays a single PlayerSource: these cards restrict ONE
-        // player from looking, and there is only ever one Free Peoples player.
         PlayersSource handSource = PlayerResolver.resolvePlayers(hand);
 
         final JSONObject[] conditionArray = FieldUtils.getObjectArray(object.get("requires"), "requires");
@@ -39,7 +43,7 @@ public class CantLookOrRevealHand implements ModifierSourceProducer {
                 null, RequirementCondition.createCondition(requirements, actionContext), ModifierEffect.LOOK_OR_REVEAL_MODIFIER) {
             @Override
             public boolean canLookOrRevealCardsInHand(LotroGame game, String revealingPlayerId, String actingPlayerId) {
-                if (playerSource.getPlayer(actionContext).equals(actingPlayerId)
+                if (playerSource.getPlayers(actionContext).contains(actingPlayerId)
                         && handSource.getPlayers(actionContext).contains(revealingPlayerId))
                     return false;
                 return true;

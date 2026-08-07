@@ -39,6 +39,8 @@ public class MultiplayerCantRevealAnyHandAtTest {
     /** Spot Gandalf, reveal an opponent's hand -- the thing that must be blocked. */
     private static final String TREACHERY = "1_86";
     private static final String GANDALF = "1_72";
+    /** Erland (2_21): the same modifier with the group on the OTHER field. */
+    private static final String ERLAND = "2_21";
 
     private VirtualTableScenario ThreeSeats() throws Exception {
         return VirtualTableScenario.MultiplayerTable(3, new HashMap<>() {{
@@ -46,6 +48,7 @@ public class MultiplayerCantRevealAnyHandAtTest {
             put("uruk", URUK);
             put("treachery", TREACHERY);
             put("gandalf", GANDALF);
+            put("erland", ERLAND);
         }});
     }
 
@@ -105,5 +108,51 @@ public class MultiplayerCantRevealAnyHandAtTest {
         assertFalse("the Free Peoples player must not be able to reveal the SECOND"
                         + " opponent's hand either -- \"ANY Shadow player's hand\"",
                 modifiers.canLookOrRevealCardsInHand(scn.game(), otherShadow, fp));
+    }
+
+    /**
+     * The same modifier with the group on the other field.
+     *
+     * Erland (2_21): "SHADOW PLAYERS may not look at or reveal cards in your
+     * hand." Plural, and `player:` was a single PlayerSource -- the comment on
+     * that field said there is only ever one player on that side, which was true
+     * of the two cards that prompted the `hand:` change and false of this one.
+     * `player: shadowPlayer` stopped the first opponent and left the rest
+     * reading the hand the card exists to hide.
+     *
+     * Asserting the SECOND opponent is again the whole point: everything about
+     * the first one held before the fix.
+     */
+    @Test
+    public void neitherOpponentCanRevealTheHandErlandProtects() throws Exception {
+        var scn = ThreeSeats();
+        scn.MoveCardsToSupportArea(scn.GetCardFor(P1, "erland"));
+
+        scn.StartMultiplayerGame();
+
+        List<String> opponents = ShadowSeats(scn);
+        String firstShadow = opponents.get(0);
+        String otherShadow = opponents.get(1);
+        assertNotEquals(firstShadow, otherShadow);
+
+        String fp = scn.FreePeoplesPlayer();
+        var modifiers = scn.game().getModifiersQuerying();
+
+        // Vacuity guard, and it is a different one from the test above: Erland
+        // protects only ITS OWNER's hand, so an opponent reading the OTHER
+        // opponent's hand must still be allowed. If this went false the modifier
+        // would be restricting everybody and the two assertions below would pass
+        // for the wrong reason.
+        assertTrue("fixture is blind: Erland is protecting a hand that is not its"
+                        + " owner's, so the assertions below prove nothing",
+                modifiers.canLookOrRevealCardsInHand(scn.game(), otherShadow, firstShadow));
+
+        assertFalse("the FIRST opponent must not be able to reveal the protected"
+                        + " hand -- this held before the fix too",
+                modifiers.canLookOrRevealCardsInHand(scn.game(), fp, firstShadow));
+
+        assertFalse("the SECOND opponent must not be able to either --"
+                        + " \"SHADOW PLAYERS may not look at\"",
+                modifiers.canLookOrRevealCardsInHand(scn.game(), fp, otherShadow));
     }
 }

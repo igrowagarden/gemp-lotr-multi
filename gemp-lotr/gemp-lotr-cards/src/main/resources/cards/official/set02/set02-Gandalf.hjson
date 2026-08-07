@@ -29,7 +29,11 @@
 				type: modifier
 				modifier: {
 					type: cantLookOrRevealHand
-					player: shadowPlayer
+					// "SHADOW PLAYERS may not look at or reveal cards in your
+					// hand" -- plural. `shadowPlayer` is one seat, so at five
+					// players three opponents could still read the hand this
+					// card exists to hide. `hand: owner` was already right.
+					player: anyShadow
 					hand: owner
 				}
 			}

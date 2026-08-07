@@ -558,12 +558,19 @@
 		effects: {
 			type: event
 			requires: [
+				// "If NO OPPONENT controls a site" -- every one of them, not the
+				// first. This was Not(controlsSite player: shadow), which asked
+				// about one seat and said nothing about the other three.
+				//
+				// `opponentDoesNotControlSite` is the sentence, it was already in
+				// the vocabulary, and it was already N-player correct:
+				// getControlledSitesCountOfOpponents sums over getOpponents,
+				// which is everyone but you. 4_71 and its errata already use it.
+				// No engine change; the first draft of this fix widened
+				// ControlsSite to a PlayersSource before anyone looked at the
+				// requirement list.
 				{
-					type: Not
-					requires: {
-						type: controlsSite
-						player: shadow
-					}
+					type: opponentDoesNotControlSite
 				}
 				{
 					type: canSpot

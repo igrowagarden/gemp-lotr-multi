@@ -358,8 +358,14 @@
 						]
 						effects: [
 							{
+								// "YOU may discard a possession" -- the Sword's
+								// own controller. `owner` and not `you`, because
+								// Choice rebinds `you` to its own `player:`,
+								// which here is the chosen possession's owner;
+								// `owner` reads getSource().getOwner() and the
+								// delegate passes the source through untouched.
 								type: discard
-								player: shadow
+								player: owner
 								select: memory(chosenPossession)
 							}
 							{

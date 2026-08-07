@@ -732,6 +732,15 @@
 					memorizeLoser: losers
 				}
 				effect: {
+					// CORRECT AS WRITTEN -- do not sweep this one. "the FIRST
+					// Shadow player must exert X minions", and
+					// getFirstShadowPlayer returns precisely that. 13_188,
+					// 63_188 and 15_192 carry the same note.
+					//
+					// The selection stays unscoped on purpose: the text says "X
+					// minions", not "X of his or her minions", so the seat named
+					// may exert any minion in play. Same reading as Gandalf's
+					// Staff (11_34).
 					type: exert
 					player: shadow
 					select: choose(minion)
