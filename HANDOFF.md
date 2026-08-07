@@ -165,6 +165,8 @@ harness/
                    SEED_BASE=)
   soak.sh          hours of unattended games, with outage recovery  (OFFSET=)
   cleanhall.sh     concede abandoned games; see the restart note
+  fuzzrun.sh       DECISION-SPACE differential: all 7 types + all 3 controls,
+                   no server game needed        (TYPES=, `baseline` for no controls)
 ```
 
 `src/` is the real thing and is where all current work happens; the two
@@ -812,6 +814,18 @@ whose count resolved to nothing. The harness read `cardId`, ignored `max`,
 picked a card, and the only legal answer was the empty string. Both clients were
 refused because both were handed the same choice by the harness, which is why it
 never implicated either GUI.
+
+**AMENDED.** That was right about the harness and wrong about the conclusion
+drawn from it. Because the harness handed both clients the same answer, the
+question "what would each GUI do if it reached this decision ITSELF?" was never
+asked. `decisionfuzz.html` asks it, and the answer is that **the reference
+client picks a card and gets refused**: at `min=max=0` it sends a card id where
+`""` is the only legal answer. This client sends `""`. So the bug does implicate
+a GUI -- the old one -- and it is presumably still rejecting real players'
+answers whenever a "discard one for each X" resolves to zero. Marked
+`oracleWrong` in the catalogue, the only case carrying that verdict. Worth
+raising in `vendor/gemp-lotr`, which is the other project's tree -- coordinate
+rather than edit.
 
 Fixed in `livediff.html`: `if (!ids.length || max === 0) return pass;` before
 anything else.
@@ -1568,20 +1582,85 @@ correctly while **yes/no reported zero options** -- the commonest decision shape
 in the game, measured through the broken path. It now asks `ui.smallDialog` for
 its own buttons.
 
-### Per-type status
+### Per-type status: 47/47
 
-    ASSIGN_MINIONS  5/5     INTEGER  5/5     MULTIPLE_CHOICE  5/5
-    ARBITRARY_CARDS 6/7     CARD_SELECTION  9/13
-    ACTION_CHOICE   0/1     CARD_ACTION_CHOICE  4/11
+    CARD_SELECTION     13/13 (2 reference-wrong)   CARD_ACTION_CHOICE  11/11
+    ARBITRARY_CARDS     7/7                        ASSIGN_MINIONS       5/5
+    INTEGER             5/5                        MULTIPLE_CHOICE      5/5
+    ACTION_CHOICE       1/1
 
-Controls fire at 11 and 13 over `CARD_SELECTION`'s 13 cases.
+Every type compares OFFERS and the exact string SENT, and all nine of the
+reference's `decisionFunction` call sites are reached.
 
-`CARD_SELECTION`'s four are hand cards, which the old client does not respond to
-clicks on in this harness -- an environment limit, not a difference. The
-`ARBITRARY_CARDS` one is a marker-tagging cosmetic. **`CARD_ACTION_CHOICE` is the
-real remaining gap** and holds the last unreached answer call site (2523); the
-lead is that it calls `attachSelectionFunctions(cardIds, false)` where every type
-that submits cleanly goes through the `true` path.
+`bash harness/fuzzrun.sh` runs all of it plus every control and exits non-zero
+on a failure. **Use it rather than driving the page by hand.**
+
+### Three root causes accounted for most of the failures
+
+Almost nothing that looked like a client difference was one. Three harness
+faults, each of which faked a whole category of disagreement:
+
+1. **`ui.hand` is null.** `initializeGameUI` builds the hand group as part of
+   seating a real player and the can opener never gets that far, but several
+   paths call `this.hand.layoutCards()` unguarded. For CARD_ACTION_CHOICE the
+   throw lands AFTER `finishChoice` has torn the decision down and BEFORE
+   `decisionFunction` reaches `gameDecisionMade` -- so the decision vanished and
+   no answer was ever sent. It read as "the reference silently refuses every card
+   action" for three rounds. Stubbed with the `chatBox` Proxy trick.
+2. **This page's own click wrappers swallowed exceptions.** `catch { return
+   false }` turns "the handler exploded" into "there was nothing to click".
+   `window.onerror` never sees a synchronous throw from `.trigger("click")`, so
+   the two opposite diagnoses were indistinguishable and the wrong one was acted
+   on repeatedly. They now record what they caught.
+3. **`PlaySound` throws on a missing `<audio>`.** It fires after the answer is
+   sent, so it is harmless -- but it propagates back through `.trigger("click")`
+   into the driver, which reported three correctly answered ASSIGN_MINIONS cases
+   as errors. It was also the "2 benign errors" every case carried all session.
+
+The pattern worth carrying: **when a whole category fails identically, suspect
+the instrument.** Every one of these presented as the reference client being
+broken, and none of them were.
+
+### Three markers, and why they are not interchangeable
+
+A difference can be acceptable for three genuinely different reasons, and
+collapsing them is how a real bug becomes a design note:
+
+| marker | claim | evidence needed |
+|---|---|---|
+| `expect` | differs by intent -- PRESENTATION only | the design decision |
+| `equivalent` | different strings, engine parses both the same | a source citation |
+| `unreachable` | the engine cannot emit this shape at all | the constructor |
+| `oracleWrong` | **the reference is wrong and this client is right** | strongest available |
+
+`expect` can never excuse an ANSWERS DIFFER -- only `equivalent` or
+`unreachable` can, because the first two are claims about *presentation* and an
+answer is not presentation.
+
+**A near-miss worth remembering.** Two virtual-action cases were about to be
+marked `expect` as a presentation difference. They were not one: the answers
+already matched and the mechanism counts already agreed. Both findings were the
+harness reporting the reference's fabricated `extra<id>` DIALOG card as a BOARD
+card. Marking would have made two harness artifacts permanent and stamped them
+"differs by intent". **Verify the answers match before reaching for a marker; if
+they already match, the difference is probably in the measurement.**
+
+### A control that cannot fire, again
+
+After the 47/47 result both controls were re-run across all seven types.
+**Neither fires on INTEGER, MULTIPLE_CHOICE or ACTION_CHOICE** -- they mutate
+card-id lists, and those three compare option counts and the driven answer. Three
+of seven types had been reporting a pass that proved nothing.
+
+This is the same trap already documented above from an earlier session, and it
+recurred for a specific reason: the controls were written when the page compared
+OFFERS only, and teaching it to drive ANSWERS changed what needed covering
+without changing them. **Re-running a control is not enough -- its SCOPE has to
+be re-derived whenever the comparison changes.**
+
+`sabotage=answer` perturbs the answer itself and reaches all seven.
+`fuzzrun.sh` now records which control is expected to reach which type and fails
+the run if one is silent where it should fire, so this cannot recur quietly.
 
 ### Five edits to the shared oracle, and why each was needed
 
