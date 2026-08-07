@@ -33,12 +33,17 @@ OFFERS and the exact string each SENDS, and all nine of the reference's
 `decisionFunction` call sites are reached. The decision space is finished work;
 do not re-open it without a reason.
 
-**Untested surfaces: PILES, the LOG, CARD INFO and ZOOM are done.** Still
-untested: replay controls, drag-to-reorder, concede and detached boards.
+**Untested surfaces: PILES, the LOG, CARD INFO, ZOOM and REPLAY CONTROLS are
+done.** Still untested: drag-to-reorder, concede and detached boards.
 
-Five surface differentials now, all with proven controls. Nine client bugs have
+Six surface differentials now, all with proven controls. Ten client gaps have
 come out of them, none of which the client itself reported: it rendered
-everything without error every time, and only the oracle said what was missing. `decisionfuzz.html`
+everything without error every time, and only the oracle said what was missing.
+
+**`src/dev/oldharness.html` now has NINE consumers.** Anything added to it must
+be opt-in and default off; there are three such flags now
+(`setReadStaleDialogButtons`, `setRealChatBox`, `setReplayMode`) and every one
+of them exists because the default is right for the other pages. `decisionfuzz.html`
 is the template and `pilefuzz.html` is the worked second example: enumerate the
 space from the source, drive both clients, prove the control fires.
 
@@ -46,6 +51,7 @@ space from the source, drive both clients, prove the control fires.
     bash harness/logrun.sh     14 message shapes + ordering, 4 controls
     bash harness/inforun.sh    7 card-id kinds x live/replay, 3 controls
     bash harness/zoomrun.sh    6 hover targets x 3 states, 4 controls
+    bash harness/replayrun.sh  replay speed + play/pause, 3 controls
 
 Two client bugs came out of the first enumeration, both in one afternoon and
 neither visible without the oracle: **no draw-deck pile at all**, and **every
@@ -355,6 +361,7 @@ harness/
   logrun.sh        LOG differential: game log + chat, 4 controls (`baseline`)
   inforun.sh       CARD INFO differential: live + replay, 3 controls (MODES=)
   zoomrun.sh       ZOOM differential: 6 targets x 3 states, 4 controls
+  replayrun.sh     REPLAY CONTROLS differential: speed + play/pause, 3 controls
   autopassmeasure.py  proves the auto-pass cookie changes what the ENGINE asks,
                    by counting no-action CARD_ACTION_CHOICEs  (--only A|B|C)
 ```
@@ -1850,6 +1857,70 @@ calls `this.checkForEnd` (chat.js:382) and other siblings the sink does not
 provide, and bound to the object those are TypeErrors that kill the page. Bound
 to the proxy they fall through to the no-op, so the reference's own method runs
 without anyone having to enumerate what it happens to touch.
+
+---
+
+## The replay-controls differential
+
+`src/dev/replayfuzz.html`, driven by `harness/replayrun.sh`. No server, no
+recording needed -- the controls are tested, not the playback.
+
+    bash harness/replayrun.sh             baseline + 3 controls
+    bash harness/replayrun.sh baseline
+
+### What is comparable, and what is deliberately not
+
+The reference's replay panel is THREE buttons (gameUi.js:153-180): slower,
+faster, play/pause. **No scrubber, no step-back, no seek** --
+`playNextReplayEvent` walks `replayGameEventNextIndex` forward and only forward.
+This client has all three extras. Those are a SUPERSET, not a disagreement, and
+a differential flagging them would be reporting a design decision as a defect.
+
+So two things are compared, both of which each client has: the speed model, and
+the play/pause contract.
+
+### The gap: no speed control at all
+
+The one control the reference has and this client lacked. A replay ran at a
+fixed 220ms per event with no way to slow it down or speed it up. Added, with
+the reference's bounds.
+
+### The speed model is INVERTED, and that is what the control catches
+
+    slower:  replaySpeed = Math.min(16,     replaySpeed * 2)
+    faster:  replaySpeed = Math.max(0.0625, replaySpeed / 2)
+
+`replaySpeed` is a duration **multiplier** -- `gameAnimations.js:17` returns
+`origValue * this.replaySpeed` -- so the number going UP means the replay goes
+SLOWER, and "faster" is the one that divides. Built from the button labels
+alone it comes out backwards, **and a replay with its speed buttons swapped
+still looks like it works**. The `inverted` control exists for exactly that.
+
+The two clients pace different things: the reference scales animation
+DURATIONS, this client advances one event per interval and scales the INTERVAL.
+Same control, same bounds, same inversion, applied to what each actually paces
+on -- so the multiplier SEQUENCE is compared, not milliseconds.
+
+### Verified
+
+    baseline   ALL PASS (8)
+    noclamp    4 DIFF   -- both six-press sequences and both named limits
+    inverted   3 DIFF   -- both sequences and the inversion assertion
+    autoplay   3 DIFF   -- all three play/pause checks
+
+### It needed the second gated opt-in on the shared oracle
+
+`oldharness.html` constructed the reference with `replayMode` hardcoded
+**false** -- right for the other pages, and it meant the replay panel was never
+built, so the surface was UNMEASURABLE rather than merely untested.
+`OLD.setReplayMode(true)` is opt-in, default off, and must precede `boot()`
+because `init` reads the flag at construction. The preflight checks the three
+buttons exist for that reason: forgetting it would report the reference offering
+no replay controls, which is the opposite of the truth.
+
+Note also that `#replayButton`'s click handler is bound inside
+`processXmlReplay`, not at init, so a `<gameReplay>` document has to arrive
+before the play button does anything at all.
 
 ---
 

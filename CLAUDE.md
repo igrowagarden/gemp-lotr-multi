@@ -49,6 +49,7 @@ bash harness/pilerun.sh            # 4 viewer configs x 5 piles + 3 controls
 bash harness/logrun.sh             # game log + chat message shapes + 4 controls
 bash harness/inforun.sh            # card info: 7 id kinds x live/replay + 3 controls
 bash harness/zoomrun.sh            # zoom: 6 hover targets x 3 states + 4 controls
+bash harness/replayrun.sh          # replay speed + play/pause + 3 controls
 bash harness/diffrun.sh 12 40      # replay differential over recorded games
 bash harness/livediffrun.sh 4 70   # live, with the ENGINE judging
 ```
@@ -72,10 +73,12 @@ DOCKER=/c/Users/emers/AppData/Local/Programs/DockerDesktop/resources/bin/docker.
   `--host-resolver-rules="MAP i.lotrtcgpc.net 127.0.0.1, MAP lotrtcg2e.club 127.0.0.1, EXCLUDE localhost"`
 - **`SEED=` or `IDS=` whenever you bisect with `diffrun.sh`.** It samples random
   recordings, so two unpinned runs compare different games and prove nothing.
-- **`src/dev/oldharness.html` is shared by FIVE pages** — `decisionfuzz`,
-  `pilefuzz`, `logfuzz`, `diff` and `livediff`. An edit that suits one broke another for
-  hours. Gate anything page-specific behind an opt-in flag, as
-  `setReadStaleDialogButtons` and `setRealChatBox` are.
+- **`src/dev/oldharness.html` is shared by NINE pages** — `decisionfuzz`,
+  `pilefuzz`, `logfuzz`, `infofuzz`, `zoomfuzz`, `replayfuzz`, `scriptprobe`,
+  `diff` and `livediff`. An edit that suits one broke another for hours. Gate
+  anything page-specific behind an opt-in flag defaulting OFF, as
+  `setReadStaleDialogButtons`, `setRealChatBox` and `setReplayMode` are. After
+  editing it, re-run EVERY consumer, not just the one you were working on.
 - **A grep for `FAIL` or `RESULT:` matches the pages' own source.** Use
   `RESULT: ALL PASS \([0-9]+\)`.
 - **`sync.sh` now REFUSES while a harness is running** — it does `rm -rf

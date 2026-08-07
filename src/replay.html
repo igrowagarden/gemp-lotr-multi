@@ -27,6 +27,9 @@
 <body>
 <div id="board"></div>
 <div class="replaybar">
+  <button type="button" id="slower" title="Slower">–</button>
+  <span id="speed" title="Replay speed">×1</span>
+  <button type="button" id="faster" title="Faster">+</button>
   <button type="button" id="back" title="One event back">◀</button>
   <button type="button" id="play">Play</button>
   <button type="button" id="fwd" title="One event on">▶</button>
@@ -60,6 +63,8 @@ import { createBoard } from "./view/board.js";
 import { createPathPanel, createChatPanel } from "./view/panels.js";
 import { createZoom, createPileViewer } from "./view/piles.js";
 import { createCardInfo } from "./view/cardinfo.js";
+import { slower, faster, intervalFor, speedLabel, SPEED_DEFAULT }
+  from "./model/replayctl.js";
 import { loadImageTable } from "./model/images.js";
 
 const q = new URLSearchParams(location.search);
@@ -105,18 +110,42 @@ function seek(n) {
   atEl.textContent = `${at} / ${events.length}`;
 }
 
+// Replay speed, which this client had no control for at all. Same bounds and
+// the same inversion as the reference (model/replayctl.js) -- applied to the
+// interval rather than to animation durations, because that is what this client
+// paces on.
+let speed = SPEED_DEFAULT;
+const speedEl = document.getElementById("speed");
+
 function stop() {
   if (timer) { clearInterval(timer); timer = null; }
   playBtn.textContent = "Play";
 }
 
-playBtn.addEventListener("click", () => {
-  if (timer) return stop();
+function start() {
+  // Restart rather than adjust: setInterval's period is fixed once set, so a
+  // speed change during playback would otherwise not take effect until the run
+  // was stopped and started by hand.
+  if (timer) clearInterval(timer);
   playBtn.textContent = "Pause";
   timer = setInterval(() => {
     if (at >= events.length) return stop();
     seek(at + 1);
-  }, 220);
+  }, intervalFor(speed));
+}
+
+function setSpeed(next) {
+  speed = next;
+  speedEl.textContent = speedLabel(speed);
+  if (timer) start();
+}
+
+document.getElementById("slower").addEventListener("click", () => setSpeed(slower(speed)));
+document.getElementById("faster").addEventListener("click", () => setSpeed(faster(speed)));
+
+playBtn.addEventListener("click", () => {
+  if (timer) return stop();
+  start();
 });
 document.getElementById("fwd").addEventListener("click", () => { stop(); seek(at + 1); });
 document.getElementById("back").addEventListener("click", () => { stop(); seek(at - 1); });

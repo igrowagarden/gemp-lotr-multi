@@ -81,6 +81,7 @@ window.OLD = (function () {
   // intervening board events needs it, and it costs correctness for the others.
   var readStaleDialogButtons = false;
   var realChatBox = false;          // logfuzz.html only; see boot()
+  var replayMode = false;           // replayfuzz.html only; see boot()
 
   /**
    * A chat box that runs the reference's OWN `appendMessage` and nothing else.
@@ -144,7 +145,11 @@ window.OLD = (function () {
     document.getElementById("main").innerHTML =
       document.getElementById("main").innerHTML;   // reset between runs
 
-    ui = new GempLotrGameUI("/gemp-lotr-server", false);
+    // The second argument IS `replayMode` (gameUi.js:103). It was hardcoded
+    // false, which is right for four of the five pages -- and it meant the
+    // reference's replay controls were never constructed at all, so that whole
+    // surface was unmeasurable rather than merely untested.
+    ui = new GempLotrGameUI("/gemp-lotr-server", replayMode);
 
     // Cut every wire to the outside world. `gameDecisionMade` is the one that
     // matters -- it is where an answer would have gone -- and the rest simply
@@ -598,6 +603,14 @@ window.OLD = (function () {
      * renders nothing rather than a harness that was configured too late.
      */
     setRealChatBox: function (v) { realChatBox = !!v; },
+    /**
+     * replayfuzz.html only. MUST be called before boot(): `init` reads it at
+     * construction and `initializeGameUI` builds the replay panel from it, so
+     * setting it late leaves a client with no replay controls at all and a page
+     * that reports the reference offering none -- a harness fault wearing the
+     * costume of a finding.
+     */
+    setReplayMode: function (v) { replayMode = !!v; },
     /**
      * The reference's rendered log lines, in order, structured. logfuzz.html
      * only; null when the real chat box was never installed, so a page that
