@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>decision fuzz — shape space, both clients</title>
+<link rel="stylesheet" href="../styles/board.css">
+<style>
+  body { font-family: ui-monospace, Consolas, monospace; font-size: 12px; padding: 8px; }
+  #board { position: absolute; left: -10000px; top: 0; width: 1400px; height: 900px; }
+  iframe { position: absolute; left: -10000px; top: 900px; width: 1400px; height: 900px; border: 0; }
+  .ok { color: #6E9B7A; } .bad { color: #FF5240; } .warn { color: #C89A3C; }
+  .dim { color: #7A7269; } .head { color: #C9BCA8; font-weight: bold; }
+  pre { margin: 1px 0; white-space: pre-wrap; }
+</style></head>
+<body>
+<div id="board"></div>
+<iframe id="old" src="./oldharness.html"></iframe>
+<pre id="out">booting…</pre>
+
+<script type="module">
+/**
+ * DECISION-SPACE differential. No server, no bots, no game.
+ *
+ * WHY. The live differential samples GAME space: seat a table, run bots, take
+ * whatever decisions the shuffle happens to produce. Overnight that was 400
+ * games and 2000 decks, all clean -- and the `max=0` CARD_SELECTION bug the run
+ * was meant to confirm was never once exercised. Measuring afterwards found 59
+ * CARD_SELECTION decisions across six formats and not one with `max=0`.
+ *
+ * The reason is structural, not bad luck. The game state space is astronomical;
+ * the DECISION SHAPE space is tiny -- eleven parameter names across eight engine
+ * decision classes. Sampling games to reach shapes is buying volume where
+ * coverage was needed. This page enumerates the shapes directly instead.
+ *
+ * HOW. A decision is self-contained: `<ge type="D" decisionType=... >` with
+ * `<parameter name= value=/>` children is the entire wire form
+ * (EventSerializer.serializeDecision:160-172). Both clients already accept a
+ * `<ge>`. So a decision can simply be WRITTEN, fed to both, and their answers
+ * compared -- deterministically, in milliseconds, including shapes a real game
+ * produces once in ten thousand decisions.
+ *
+ *   decisionfuzz.html                      run every case
+ *   decisionfuzz.html?only=CARD_SELECTION  one decision type
+ *   decisionfuzz.html?sabotage=dropoffer   NEGATIVE CONTROL -- must report DIFFs
+ *   decisionfuzz.html?sabotage=phantom     NEGATIVE CONTROL -- must report DIFFs
+ *
+ * It must be served from the GEMP origin, because oldharness.html loads the old
+ * client from /gemp-lotr/js/. `harness/sync.sh` puts it there. It does NOT need
+ * a game, a table, or bots.
+ *
+ * WHAT IT CANNOT DO. It cannot say whether an answer would be ACCEPTED -- there
+ * is no engine in the loop. That remains livediffrun.sh's job. The division is
+ * deliberate: this page buys BREADTH over the shape space, the live run buys the
+ * ENGINE'S VERDICT on a narrow sample. Neither replaces the other.
+ */
+import { createStore } from "../state/store.js";
+import { createBoard } from "../view/board.js";
+import { createPicker } from "../view/picker.js";
+import { createPathPanel } from "../view/panels.js";
+import { decodeEvents } from "../net/protocol.js";
+import { contractOffers, reachableOffers } from "./probe.js";
+import { CASES, WHERE, VIEWER, baseBoard, decisionXml, byType } from "./decisionshapes.js";
+
+const q = new URLSearchParams(location.search);
+const only = q.get("only");
+const sabotage = q.get("sabotage");
+const out = document.getElementById("out");
+const lines = [];
+const say = (t, cls) => { lines.push(cls ? `<span class="${cls}">${t}</span>` : t);
+                          out.innerHTML = lines.join("\n"); };
+const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const uniqSort = (xs) => [...new Set(xs.filter((x) => x != null).map(String))].sort();
+
+async function ready(frame) {
+  for (let i = 0; i < 300; i++) {
+    if (frame.contentWindow?.OLD) return frame.contentWindow.OLD;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  throw new Error("old harness never came up");
+}
+const frame = document.getElementById("old");
+const OLD = await ready(frame);
+const $old = () => frame.contentWindow.$;
+
+// ---------------------------------------------------------------- the new client
+//
+// Built ONCE and re-fed per case rather than rebuilt. `createBoard` registers
+// document-level key handlers; constructing it forty times would stack forty
+// sets of them, and a leak that only shows up in later cases is exactly the kind
+// of harness fault that gets blamed on the client.
+const boardEl = document.getElementById("board");
+let lastAnswer = null;                      // what the new client tried to send
+const capture = { onAnswer: (id, value) => { lastAnswer = { id: String(id), value: String(value) }; } };
+const store = createStore(VIEWER);
+const board = createBoard(boardEl, store, capture);
+const picker = createPicker(boardEl, capture);
+const path = createPathPanel(boardEl, store, { ...capture, selection: board.selection });
+path.open();
+store.subscribe((s) => {
+  path.paint(s);
+  const d = s.decision;
+  if (d && d.decisionType === "ARBITRARY_CARDS" && d.forPlayer === s.viewerId) picker.show(d);
+  else picker.hide();
+});
+
+const BASE = baseBoard();
+const baseEventsNew = decodeEvents(BASE);
+
+/**
+ * Boot the old client ONCE and lay the base board down ONCE.
+ *
+ * NOT once per case. `boot()` resets by assigning `#main`'s innerHTML to
+ * itself, which after the first boot re-parses the GENERATED game UI instead of
+ * the original pregame markup -- so the second boot inherits a polluted
+ * document. Measured: 2 errors on the first case and 22 on every case after it,
+ * with the old client offering nothing at all from case two onwards. Every
+ * "DIFF" in that run was the harness breaking the oracle.
+ *
+ * Booting once is also the PROVEN path: livediff.html drives an entire live game
+ * -- thousands of decisions -- through a single boot, and `feedBatch` runs
+ * `cleanupDecision` before every event, which is what stops one decision's
+ * `data("action")` leaking into the next.
+ */
+OLD.boot({ gameId: "1", participantId: VIEWER });
+OLD.feedBatch(OLD.parseEvents(BASE));
+
+/**
+ * PREFLIGHT: prove the oracle actually has the board before trusting a word it
+ * says.
+ *
+ * An old client that never received the cards offers nothing for every case,
+ * and "old offers nothing, new offers something" reads exactly like the new
+ * client inventing options. It is the same failure as the `tr '<' '\n<'` hall
+ * diagnostic: a broken measurement that reports a plausible-looking result. A
+ * diagnostic is code, and an unverified one is not evidence.
+ */
+const preflight = OLD.diagnose([WHERE.SELF_FREE, WHERE.MINION, WHERE.ATTACHED, WHERE.SITE, WHERE.HAND]);
+const seen = preflight.askedAbout.filter((a) => a.selectorFinds > 0).map((a) => a.cardId);
+
+/**
+ * Normalise the old client's rendered offer.
+ *
+ * `offers()` reads the DOM, which is the only definition both clients can be
+ * held to: what a player can actually click IS the answer to "what are my
+ * options". It reports three shapes -- cardAction, cardSelection, button -- so
+ * ARBITRARY_CARDS and ASSIGN_MINIONS both arrive here wearing one of those. That
+ * conflation is reported, not silently reconciled.
+ */
+function normaliseOld(o) {
+  const opts = o.options ?? [];
+  return {
+    shape: o.shape,
+    cards: uniqSort(opts.map((x) => x.cardId)),
+    actions: uniqSort(opts.filter((x) => x.actionId != null).map((x) => x.actionId)),
+    buttons: opts.filter((x) => x.actionId == null && x.text != null).map((x) => x.text)
+  };
+}
+
+/**
+ * Negative controls, applied to the NEW side only, after collection.
+ *
+ * A differential that cannot fail is worthless, and this project has already
+ * built one control that could never fire and briefly read its silence as
+ * success. These mutate the comparison's input rather than the client's code, so
+ * they fire on every card-bearing case regardless of which client is right --
+ * which is what makes "clean without, dirty with" mean something.
+ */
+function applySabotage(newSide) {
+  if (sabotage === "dropoffer") {
+    newSide.contract = newSide.contract.slice(1);
+    newSide.reach = newSide.reach.slice(1);
+  } else if (sabotage === "phantom") {
+    newSide.contract = uniqSort([...newSide.contract, "424242"]);
+    newSide.reach = uniqSort([...newSide.reach, "424242"]);
+  }
+  return newSide;
+}
+
+/**
+ * How many cards the old client fabricated in its EXTRA zone.
+ *
+ * That is its mechanism for an action whose source is not on the board: it
+ * invents a card inside `cardActionDialog` rather than lighting anything. The
+ * cards carry no `actionableCard` class, so `offers()` correctly does not report
+ * them as board options -- they have to be counted separately or virtual actions
+ * look unreachable in a client that handles them perfectly well.
+ */
+function oldExtraCards() {
+  try {
+    const $ = $old();
+    let n = 0;
+    $(".card").each(function () {
+      const d = $(this).data("card");
+      if (d && d.zone === "EXTRA") n++;
+    });
+    return n;
+  } catch { return 0; }
+}
+
+/**
+ * ============================ DRIVING BOTH CLIENTS ============================
+ *
+ * Comparing what each client OFFERS catches "the player cannot reach the
+ * answer". It does NOT catch "the player reaches it and we encode it wrong" --
+ * and three of the seven types answer with something other than the card ids
+ * picked, so encoding is where the interesting bugs live.
+ *
+ * Only two of the old client's NINE `decisionFunction` call sites were ever
+ * reached by this page: the two inside `multipleChoiceDecision`. The other
+ * seven handlers rendered, were read, and were never driven to send anything.
+ * These drivers close that: each one makes the SAME choice on both sides
+ * through the real UI, then compares the string each client hands the server.
+ *
+ * The old side is clicked through `.actionArea`, not the card. gameUi.js:827
+ * gates on `tar.hasClass("actionArea")`, so a click delivered to `.card`
+ * itself is ignored -- the answer would look unreachable when it is merely
+ * being asked for in the wrong place.
+ */
+const OLD_CARD = ".selectableCard .actionArea, .actionableCard .actionArea";
+const OLD_OK = ".alertButtons button, .ui-dialog:visible button, #smallDialog button";
+
+/**
+ * Press the old client's DONE, by id, never by position.
+ *
+ * `processButtons` (gameUi.js:2815) appends "Reset choice" BEFORE "Done"
+ * whenever anything is selected, so clicking the first button in `alertButtons`
+ * clears the selection instead of submitting it -- and the run then reports
+ * "the old client sent nothing" for every case needing more than one card. The
+ * single-card cases passed only because `selectedCardIds.length == max` triggers
+ * auto-accept and never needs the button at all. Both `cardSelectionDecision`
+ * and `assignMinionsDecision` name theirs `#Done`.
+ */
+function oldFinish() {
+  // `#Done` unfiltered (it lives in `alertButtons`, which may lack layout), but
+  // the OK fallback stays `:visible`-filtered. Clicking dialog buttons blind
+  // reached buttons belonging to dialogs that were never open and hung the run
+  // for MULTIPLE_CHOICE and ACTION_CHOICE -- a page that dumps its preflight and
+  // then nothing. Unfiltered clicking is safe for CARDS, whose gate is a class;
+  // it is not safe for BUTTONS, whose whole meaning is that they are on screen.
+  return oldClickAny("#Done", 0) || oldClick(OLD_OK, 0);
+}
+
+/** Click in the old client's document, by selector and index. */
+function oldClick(selector, index = 0) {
+  try { return OLD.click(selector, index).clicked; } catch { return false; }
+}
+
+/** Click without the `:visible` filter -- for cards inside a jQuery dialog. */
+function oldClickAny(selector, index = 0) {
+  try { return OLD.clickAny(selector, index).clicked; } catch { return false; }
+}
+
+/** Everything the old client sent during `fn`, as strings. */
+function oldSends(fn) {
+  const before = OLD.sent().length;
+  let acted = false;
+  try { acted = fn() !== false; } catch (e) { return { clicked: false, value: null, error: e.message }; }
+  const sent = OLD.sent().slice(before);
+  return { clicked: acted, value: sent.length ? sent[sent.length - 1].value : null };
+}
+
+/** Everything the new client would have sent during `fn`. */
+function newSends(fn) {
+  lastAnswer = null;
+  let acted = false;
+  try { acted = fn() !== false; } catch (e) { return { clicked: false, value: null, error: e.message }; }
+  return { clicked: acted, value: lastAnswer ? lastAnswer.value : null };
+}
+
+const $new = (sel) => boardEl.querySelector(sel);
+const $$new = (sel) => [...boardEl.querySelectorAll(sel)];
+/** The new client's confirm/accept control, whatever the shape calls it. */
+const newConfirm = () => $new(".prompt .pbtn.primary") ?? $new(".pickgrid ~ * .pbtn.primary")
+                      ?? [...document.querySelectorAll(".flyout .pbtn.primary")][0];
+
+/**
+ * One driver per shape. Each returns what that client would send.
+ *
+ * The CHOICE has to be the same on both sides or the comparison is noise, so
+ * every driver takes the first eligible thing in document order and both sides
+ * are pointed at the same card id where one exists.
+ */
+const DRIVE = {
+  INTEGER: {
+    // Set the same number on both, then press each client's own accept.
+    old: (want) => oldSends(() => {
+      const $ = $old();
+      if (!$("#integerDecision").length) return false;
+      $("#integerDecision").val(String(want));
+      return oldClick(OLD_OK, 0);
+    }),
+    new: (want) => newSends(() => {
+      const input = $new(".prompt .pnum");
+      const btn = $new(".prompt .pbtn.primary");
+      if (!input || !btn) return false;
+      input.value = String(want);
+      btn.click();
+      return true;
+    })
+  },
+  CARD_ACTION_CHOICE: {
+    // One action on a card resolves on the click; several open a menu, so the
+    // menu's first entry is taken. Both clients are pointed at the same card.
+    old: (want, ids = []) => oldSends(() => {
+      // Board card first, by id so both clients answer the same question; then
+      // whatever confirmation the shape needs. `cardActionChoiceDecision`
+      // accumulates into `selectedActionIds` and submits through Done
+      // (gameUi.js:2523), exactly like a card selection -- it does not resolve
+      // on the click alone.
+      let hit = false;
+      for (const id of ids) if (oldClickAny(`.card:cardId(${id}) .actionArea`, 0)) { hit = true; break; }
+      if (!hit) hit = oldClickAny("#arbitraryChoice .card .actionArea", 0);
+      if (!hit) return false;
+      oldClick(".cardActionMenu a, .contextMenu a", 0);
+      oldFinish();
+      return true;
+    }),
+    new: () => newSends(() => {
+      const card = $new(".card.is-eligible");
+      if (!card) return false;
+      card.click();
+      const menu = document.querySelector(".actionmenu button, .actionmenu a");
+      if (menu) menu.click();
+      return true;
+    })
+  },
+  CARD_SELECTION: {
+    // Touch specific cards BY ID, then confirm.
+    //
+    // Not "the first eligible one each client happens to draw". The two clients
+    // lay the board out differently, so first-in-DOM-order is a different card
+    // on each side and the comparison comes back "old sent 101, new sent 110" --
+    // a disagreement invented entirely by the harness. Both sides are pointed at
+    // the same ids, and `min` is honoured because it is a real constraint at
+    // both ends: the reference enables its Done only at `length >= min`.
+    old: (want = 1, ids = []) => oldSends(() => {
+      let n = 0;
+      for (const id of ids.slice(0, want)) {
+        if (oldClick(`.card:cardId(${id}) .actionArea`, 0)) n++;
+      }
+      if (!n) return false;
+      oldFinish();
+      return true;
+    }),
+    new: (want = 1, ids = []) => newSends(() => {
+      // `.card` OR `.site`. A site is drawn in the path flyout and is not a
+      // `.card` node at all, so a card-only selector reported "the new client
+      // could not be driven to answer" for a site it had lit correctly -- the
+      // harness reproducing, against itself, the exact bug it had just found.
+      const cards = ids.slice(0, want)
+        .map((id) => $new(`.card.is-eligible[data-card-id="${id}"], .site.is-eligible[data-card-id="${id}"]`))
+        .filter(Boolean);
+      if (!cards.length) return false;
+      cards.forEach((c) => c.click());
+      const btn = $new(".prompt .pbtn.primary");
+      if (btn) btn.click();
+      return true;
+    })
+  },
+  ARBITRARY_CARDS: {
+    // The picker is a window of cards the client was never sent. Ids are
+    // already `temp<i>` and the answer is those same strings comma-joined.
+    old: (want = 1, ids = [], c0 = {}) => oldSends(() => {
+      // SHOWN IS NOT SELECTABLE. `selectable` is a parallel true/false array,
+      // and clicking index 0 regardless picked a card the decision forbids --
+      // the old client rightly ignored it and the run read as "old sent
+      // nothing". Take the indices the decision actually permits.
+      const sel = (c0.params?.selectable ?? []).map(String);
+      const idx = (c0.params?.cardId ?? []).map((_, i) => i)
+        .filter((i) => sel.length === 0 || sel[i] === "true");
+      let n = 0;
+      for (const i of idx.slice(0, want)) if (oldClickAny("#arbitraryChoice .card .actionArea", i)) n++;
+      if (!n) return false;
+      oldFinish();
+      return true;
+    }),
+    new: (want = 1) => newSends(() => {
+      const cards = $$new(".pickgrid .card.is-pickable").slice(0, want);
+      const picked = cards.length ? cards : [...document.querySelectorAll(".pickgrid .card.is-pickable")].slice(0, want);
+      if (!picked.length) return false;
+      picked.forEach((c) => c.click());
+      const btn = newConfirm();
+      if (btn) btn.click();
+      return true;
+    })
+  },
+  ASSIGN_MINIONS: {
+    // Groups, not ids: `fp minion minion,fp minion`. Pair the first minion with
+    // the first companion on both sides, then confirm.
+    // BY ID, minion first then companion -- the order both clients' flows expect.
+    // Clicking "whatever is lit first" paired different cards on each side and
+    // made the sent groups differ from run to run, which is how a driver turns
+    // itself into a random number generator.
+    old: (want, ids = [], c0 = {}) => oldSends(() => {
+      const m = (c0.params?.minions ?? [])[0];
+      const f = (c0.params?.freeCharacters ?? [])[0];
+      if (m == null || f == null) return false;
+      if (!oldClickAny(`.card:cardId(${m}) .actionArea`, 0)) return false;
+      oldClickAny(`.card:cardId(${f}) .actionArea`, 0);
+      oldFinish();
+      return true;
+    }),
+    new: (want, ids = [], c0 = {}) => newSends(() => {
+      const m = (c0.params?.minions ?? [])[0];
+      const f = (c0.params?.freeCharacters ?? [])[0];
+      const mn = m != null && $new(`.card.is-eligible[data-card-id="${m}"]`);
+      const fn = f != null && $new(`.card.is-eligible[data-card-id="${f}"]`);
+      if (!mn || !fn) return false;
+      mn.click();
+      // The board repaints on each pick, so the companion must be looked up
+      // again -- the node captured a moment ago is detached and clicking it
+      // does nothing at all, silently.
+      const fn2 = $new(`.card.is-eligible[data-card-id="${f}"]`) ?? fn;
+      fn2.click();
+      const btn = $new(".prompt .pbtn.primary");
+      if (btn) btn.click();
+      return true;
+    })
+  },
+  BUTTON: {
+    old: () => oldSends(() => oldClick("#arbitraryChoice .card .actionArea", 0) ||
+                              oldClick(OLD_OK, 0)),
+    new: () => newSends(() => {
+      const btn = $new(".prompt .pbtn");
+      if (!btn) return false;
+      btn.click();
+      return true;
+    })
+  }
+};
+
+/**
+ * A number inside the decision's own bounds, so INTEGER is answered with
+ * something legal rather than with whatever the box happened to hold. Both
+ * clients are given the SAME number: the point is to compare the encoding, and
+ * the initial value is compared separately.
+ */
+function pickNumber(c) {
+  const lo = parseInt(c.params.min?.[0] ?? "0", 10);
+  const hasMax = c.params.max?.[0] != null;
+  const hi = hasMax ? parseInt(c.params.max[0], 10) : lo + 1;
+  return hi >= lo ? Math.min(lo + 1, hi) : lo;
+}
+
+// ------------------------------------------------------------------- one case
+const results = [];
+
+function runCase(c) {
+  const dxml = decisionXml({ id: "1", type: c.type, text: c.name, params: c.params });
+  const rec = { case: c, findings: [], notes: [] };
+
+  // --- old side. The board is already down; feed only the decision. `feedBatch`
+  // runs `cleanupDecision` before every event and re-renders the decision last,
+  // which is what keeps one case's `data("action")` out of the next.
+  let oldN;
+  const errsBefore = OLD.errors().length;
+  try {
+    OLD.feedBatch(OLD.parseEvents(dxml));
+    oldN = normaliseOld(OLD.offers());
+  } catch (e) {
+    rec.findings.push(["ERROR", `old client threw: ${e.message}`]);
+    results.push(rec);
+    return;
+  }
+
+  // --- new side
+  let d, contract, reach;
+  try {
+    store.dispatchAll(baseEventsNew);
+    store.dispatchAll(decodeEvents(dxml));
+    d = store.getState().decision;
+    if (!d) {
+      rec.findings.push(["ERROR", "new client holds no decision after being fed one"]);
+      results.push(rec);
+      return;
+    }
+    contract = contractOffers(d);
+    reach = reachableOffers(boardEl, d);
+  } catch (e) {
+    rec.findings.push(["ERROR", `new client threw: ${e.message}`]);
+    results.push(rec);
+    return;
+  }
+
+  const newSide = applySabotage({
+    contract: uniqSort(contract.answers ?? []),
+    reach: uniqSort(reach.ids ?? []),
+    virtual: reach.virtual ?? []
+  });
+  rec.old = oldN;
+  rec.new = newSide;
+
+  // ---------------------------------------------------------- the comparisons
+  if (c.type === "CARD_ACTION_CHOICE") {
+    // Split by MECHANISM before comparing. A virtual action -- blueprintId
+    // anything other than "inPlay" -- has no board node in either client, and
+    // the two present it differently ON PURPOSE: the old client fabricates a
+    // card in an EXTRA zone inside a dialog, the new one offers a prompt-strip
+    // button. Comparing those by card id says they disagree when they agree.
+    const acts = c.params.actionId ?? [];
+    const cids = c.params.cardId ?? [];
+    const bps = c.params.blueprintId ?? [];
+    const isBoard = (i) => (bps[i] ?? "inPlay") === "inPlay";
+    const wantVirtual = acts.filter((_, i) => !isBoard(i)).length;
+
+    // Apples to apples: which BOARD actions can the player actually take. The
+    // old side is what it lit; the new side is the declared actions whose card
+    // the new client actually drew somewhere reachable. Comparing old's lit
+    // actions against new's raw CONTRACT instead compares "what is reachable"
+    // with "what the decision declares" -- two different questions, and the
+    // source of a whole column of noise in the first run of this page.
+    const newReachActions = uniqSort(
+      acts.filter((_, i) => isBoard(i) && newSide.reach.includes(String(cids[i]))));
+    if (!eq(oldN.actions, newReachActions)) {
+      rec.findings.push(["DIFF", `reachable board actions: old ${JSON.stringify(oldN.actions)} ` +
+                                 `vs new ${JSON.stringify(newReachActions)}`]);
+    }
+
+    if (wantVirtual) {
+      const oldVirtual = oldExtraCards();
+      const newVirtual = (newSide.virtual ?? []).length;
+      rec.notes.push(`virtual actions: ${wantVirtual} declared — old made ${oldVirtual} ` +
+                     `dialog card(s), new made ${newVirtual} prompt button(s)`);
+      if (!oldVirtual !== !newVirtual) {
+        rec.findings.push(["DIFF", `a virtual action is reachable in only one client ` +
+                                   `(old ${oldVirtual}, new ${newVirtual})`]);
+      }
+    }
+
+    // Reachability: a card the OLD client lit that the new one draws nowhere is
+    // the "answer is right but the player cannot get to it" bug -- twice real.
+    const unreachable = oldN.cards.filter((x) => !newSide.reach.includes(x));
+    if (unreachable.length) {
+      rec.findings.push(["DIFF", `UNREACHABLE in new client: ${unreachable.join(",")}`]);
+    }
+    const extra = newSide.reach.filter((x) => !oldN.cards.includes(x));
+    if (extra.length) {
+      rec.findings.push(["DIFF", `new client lights cards the old does not: ${extra.join(",")}`]);
+    }
+    // Print the old client's OWN view of the cards in question rather than
+    // reasoning from the symptom. `hasActionData` separates "the handler never
+    // found this card" from "it found it and something wiped the data after",
+    // and `actionableCards` says whether anything at all is lit right now.
+    if (rec.findings.length) {
+      const asked = uniqSort([...(c.params.cardId ?? []), ...oldN.cards]);
+      const dg = OLD.diagnose(asked);
+      rec.notes.push(`old sees ${dg.totalCards} cards, ${dg.actionableCards} actionable; ` +
+        dg.askedAbout.map((a) => `${a.cardId}:${a.selectorFinds ? "found" : "MISSING"}` +
+                                 `/act=${a.hasActionData}`).join(" "));
+    }
+
+  } else if (c.type === "CARD_SELECTION" || c.type === "ASSIGN_MINIONS") {
+    // Both are answered by touching cards on the board, so the comparable thing
+    // is which cards each client lit.
+    if (!eq(oldN.cards, newSide.reach)) {
+      rec.findings.push(["DIFF", `lit cards: old ${JSON.stringify(oldN.cards)} ` +
+                                 `vs new ${JSON.stringify(newSide.reach)}`]);
+    }
+
+  } else if (c.type === "ARBITRARY_CARDS") {
+    // The old client renders these in its own dialog, so `offers()` reports them
+    // as cardSelection or as buttons. Compare COUNTS of what is choosable and
+    // say plainly that the shapes are not directly comparable.
+    rec.notes.push(`old reported shape=${oldN.shape}; picker shapes are not ` +
+                   `directly comparable, counts are`);
+    const oldCount = oldN.cards.length || oldN.buttons.length;
+    if (oldCount !== newSide.reach.length) {
+      rec.findings.push(["DIFF", `selectable count: old ${oldCount} vs new ${newSide.reach.length} ` +
+                                 `(new: ${JSON.stringify(newSide.reach)})`]);
+    }
+
+  } else if (c.type === "INTEGER") {
+    // THE defaultValue CHECK. gameUi.js:2079-2081 pre-fills the box from
+    // `defaultValue` when the engine supplies one; the new client sets
+    // `input.value = String(lo)` unconditionally (view/board.js:489). The live
+    // differential structurally cannot see this, because its INTEGER answers are
+    // computed once and assigned to BOTH sides.
+    const oldVal = (() => {
+      try { const v = $old()("#integerDecision").val(); return v == null ? null : String(v); }
+      catch { return null; }
+    })();
+    const newInput = boardEl.querySelector(".prompt .pnum");
+    const newVal = newInput ? String(newInput.value) : null;
+    rec.notes.push(`initial value — old ${JSON.stringify(oldVal)}, new ${JSON.stringify(newVal)}`);
+    if (oldVal != null && newVal != null && oldVal !== newVal) {
+      rec.findings.push(["DIFF", `initial number differs: old ${oldVal} vs new ${newVal}`]);
+    } else if (oldVal == null && newVal != null) {
+      rec.notes.push("old client rendered no integer box to read");
+    }
+
+  } else {
+    // MULTIPLE_CHOICE / ACTION_CHOICE: buttons, answered with an INDEX.
+    if (oldN.buttons.length !== (contract.answers ?? []).length) {
+      rec.findings.push(["DIFF", `option count: old ${oldN.buttons.length} ` +
+                                 `(${JSON.stringify(oldN.buttons)}) vs new ${contract.answers.length}`]);
+    }
+    // What each client actually SENDS for the first option. This is the check
+    // the live differential cannot make: there, `choose()` returns the same
+    // value for `old` and `new`, so the comparison is a value against itself.
+    const o = oldClicks(".ui-dialog:visible button, #smallDialog button");
+    const n = newClicks();
+    if (o.clicked && n.clicked && o.value !== n.value) {
+      rec.findings.push(["DIFF", `first option answers as old ${JSON.stringify(o.value)} ` +
+                                 `vs new ${JSON.stringify(n.value)}`]);
+    } else if (o.clicked !== n.clicked) {
+      rec.findings.push(["DIFF", `only ${o.clicked ? "old" : "new"} client offered anything ` +
+                                 `to click (old=${o.clicked}, new=${n.clicked})`]);
+    } else if (!o.clicked && !n.clicked) {
+      rec.notes.push("neither client offered a clickable option");
+    } else {
+      rec.notes.push(`both answered ${JSON.stringify(o.value)}`);
+    }
+  }
+
+  // ------------------------------------------------------- what each SENDS
+  //
+  // Run for every type, after the offer comparison, because an offer check
+  // cannot see an encoding bug: `CARD_ACTION_CHOICE` answers with an action
+  // INDEX and `ASSIGN_MINIONS` with groups, and a client can light exactly the
+  // right cards while encoding either one wrongly. Seven of the old client's
+  // nine answer call sites were never reached before this ran.
+  //
+  // Reported, not silently tolerated, when only one side manages to answer:
+  // "the old client sent and we did not" is the strongest signal this page can
+  // produce, and it is invisible to a comparison of what is merely offered.
+  const drive = DRIVE[c.type] ?? DRIVE.BUTTON;
+  const want = Math.max(1, parseInt(c.params.min?.[0] ?? "1", 10) || 1);
+  // The SAME targets for both clients. Card-bearing types are driven by id so
+  // neither side gets to pick its own favourite card (see CARD_SELECTION above).
+  const targets = (c.params.cardId ?? []).map(String);
+  const arg = c.type === "INTEGER" ? pickNumber(c) : want;
+  // What the old client actually has to click, measured at drive time. Three
+  // theories about "the old client sent nothing" have already been wrong; this
+  // says whether the Done button exists, whether jQuery considers it visible
+  // (OLD.click filters `:visible`), and how many cards are selectable.
+  const before = (() => {
+    try {
+      const $ = $old();
+      return `done=${$("#Done").length}/vis=${$("#Done").filter(":visible").length} ` +
+             `sel=${$(".selectableCard").length} chosen=${$(".selectedCard").length} ` +
+             `btns=${$(".alertButtons button").length}`;
+    } catch (e) { return "probe failed: " + e.message; }
+  })();
+  const oSend = drive.old(arg, targets, c);
+  const nSend = drive.new(arg, targets, c);
+  rec.notes.push(`old before drive: ${before}`);
+  rec.notes.push(`sent — old ${JSON.stringify(oSend.value)}, new ${JSON.stringify(nSend.value)}` +
+                 (oSend.error || nSend.error ? ` (old:${oSend.error ?? "-"} new:${nSend.error ?? "-"})` : ""));
+  if (oSend.clicked && nSend.clicked && oSend.value !== nSend.value) {
+    rec.findings.push(["DIFF", `ANSWERS DIFFER: old sent ${JSON.stringify(oSend.value)}, ` +
+                               `new sent ${JSON.stringify(nSend.value)}`]);
+  } else if (oSend.clicked !== nSend.clicked) {
+    rec.findings.push(["DIFF", `only the ${oSend.clicked ? "OLD" : "NEW"} client could be ` +
+                               `driven to answer (old=${oSend.clicked}, new=${nSend.clicked})`]);
+  }
+
+  // Errors THIS case caused, not the running total -- the old client throws a
+  // couple of benign ones at boot (a missing audio element) and an absolute
+  // count buries a new fault under them.
+  const errs = OLD.errors().slice(errsBefore);
+  if (errs.length) rec.notes.push(`old client errors this case: ${errs.length} — ${errs.slice(-1)[0]}`);
+  results.push(rec);
+}
+
+// ----------------------------------------------------------------------- run
+say(`<span class="head">decision-space differential</span>` +
+    (sabotage ? `  <span class="warn">SABOTAGE=${sabotage} — this run MUST report DIFFs</span>` : ""));
+say(`base board: 101,102 free · 105 support · 110,111 minions · 120 contested · ` +
+    `130 attached→101 · 140,141 hand · 150 site · 999 absent`);
+say(`preflight: old client holds ${preflight.totalCards} cards; ` +
+    `finds ${JSON.stringify(seen)} of the five placements`,
+    seen.length === 5 ? "ok" : "bad");
+
+if (!preflight.totalCards) {
+  say("", "bad");
+  say("ABORTING: the old client received no board, so it can offer nothing for " +
+      "any case and every DIFF below would be this harness breaking its own " +
+      "oracle rather than a client disagreement.", "bad");
+  say(`old client errors: ${JSON.stringify(OLD.errors().slice(0, 5))}`, "bad");
+  say("RESULT: PREFLIGHT FAILED", "bad");
+  document.title = "fuzz-done";
+  throw new Error("preflight failed");
+}
+say("");
+
+const selected = CASES.filter((c) => !only || c.type === only);
+for (const c of selected) runCase(c);
+
+// -------------------------------------------------------------------- report
+let diffs = 0, expected = 0, errors = 0;
+const groups = {};
+for (const r of results) (groups[r.case.type] ||= []).push(r);
+
+for (const [type, rs] of Object.entries(groups)) {
+  say("");
+  say(`<span class="head">${type}</span> <span class="dim">(${rs.length} cases)</span>`);
+  for (const r of rs) {
+    const isErr = r.findings.some(([k]) => k === "ERROR");
+    const bad = r.findings.length > 0;
+    // `expect` covers presentation only. An ANSWERS DIFFER finding is about what
+    // reaches the server and can never be excused by a design note -- otherwise
+    // "assignment is drawn differently" would quietly cover "assignment is
+    // ENCODED differently", which is exactly what it was doing.
+    const encoding = r.findings.some(([, m]) => String(m).startsWith("ANSWERS DIFFER"));
+    // An encoding difference is excusable ONLY by `equivalent`, which asserts
+    // the engine was consulted and parses both answers to the same thing.
+    const marked = bad && (encoding ? r.case.equivalent : r.case.expect);
+    if (isErr) errors++; else if (marked) expected++; else if (bad) diffs++;
+
+    const tag = isErr ? "ERR " : marked ? "KNOWN" : bad ? "DIFF" : "PASS";
+    const cls = isErr ? "bad" : marked ? "warn" : bad ? "bad" : "ok";
+    say(`  <span class="${cls}">${tag}</span>  ${r.case.name}`);
+    for (const [, msg] of r.findings) say(`         <span class="${cls}">${msg}</span>`);
+    for (const n of r.notes) say(`         <span class="dim">${n}</span>`);
+    if (bad && r.case.note) say(`         <span class="dim">why it matters: ${r.case.note}</span>`);
+  }
+}
+
+// Coverage, stated as a denominator rather than a boast. "0 mismatches" means
+// nothing without the count of shapes it was measured over.
+say("");
+say(`<span class="head">coverage</span>`);
+for (const [type, cs] of Object.entries(byType())) {
+  const ran = (groups[type] ?? []).length;
+  say(`  ${type.padEnd(20)} ${String(ran).padStart(2)} of ${cs.length} cases run`);
+}
+
+say("");
+const verdict = diffs || errors
+  ? `RESULT: ${diffs} DIFF, ${errors} ERROR of ${results.length} cases (${expected} known)`
+  : `RESULT: ALL PASS (${results.length})`;
+say(verdict, diffs || errors ? "bad" : "ok");
+if (sabotage && !diffs) {
+  say(`CONTROL FAILED TO FIRE — sabotage=${sabotage} produced no DIFF. The ` +
+      `comparison is silenced and a clean run proves nothing.`, "bad");
+}
+document.title = "fuzz-done";
+</script>
+</body></html>

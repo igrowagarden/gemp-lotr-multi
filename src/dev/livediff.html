@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>live differential</title>
+<link rel="stylesheet" href="../styles/board.css">
+<style>
+  body { font-family: ui-monospace, Consolas, monospace; font-size: 12px; padding: 8px; }
+  #board { position: absolute; left: -10000px; top: 0; width: 1400px; height: 900px; }
+  iframe { position: absolute; left: -10000px; top: 0; width: 1400px; height: 900px; border: 0; }
+  .ok { color: #6E9B7A; } .bad { color: #FF5240; } .warn { color: #C89A3C; }
+  pre { margin: 2px 0; white-space: pre-wrap; }
+</style></head>
+<body>
+<div id="board"></div>
+<iframe id="old" src="./oldharness.html"></iframe>
+<pre id="out">connecting…</pre>
+
+<script type="module">
+/**
+ * Two-way differential with the ENGINE in the loop.
+ *
+ * `diff.html` replays a finished game and compares what each client OFFERS.
+ * That cannot say whether an answer would have been accepted -- a recording's
+ * later events already assume the answer that was really given, so nothing can
+ * be sent and nothing can be judged.
+ *
+ * Here the game is live, this page holds a real seat, and every decision is
+ * answered for real. That makes the engine the judge, and it has a precise way
+ * of saying "wrong": an invalid answer is not an HTTP error, it comes back as a
+ * SEND_WARNING event and THE SAME DECISION ASKED AGAIN
+ * (LotroGameMediator.java:434-437). So a rejection is directly observable.
+ *
+ * Each decision is therefore checked three ways:
+ *
+ *   offers   do both clients light up the same options?
+ *   answers  for the SAME chosen option, do they produce the same string?
+ *   engine   is the string actually accepted?
+ *
+ * `mode=alternate` (the default) sends the old client's answer on even
+ * decisions and the new client's on odd ones, so the engine validates BOTH
+ * clients rather than only the oracle. Sending only the old client's answers
+ * would keep the game legal while never testing the new client's output at all.
+ *
+ *   livediff.html?gameId=17&participantId=asdf&login=asdf&password=asdf
+ *                &mode=alternate&seed=7&max=60
+ */
+import { createStore } from "../state/store.js";
+import { createTransport } from "../net/transport.js";
+import { createBoard } from "../view/board.js";
+import { createPicker } from "../view/picker.js";
+import { createPathPanel } from "../view/panels.js";
+import { cardActions, isActionChoice } from "../model/actions.js";
+import { assignable, isAssignment, encodeAssignments } from "../model/assign.js";
+import { pickable, boundsOf } from "../view/picker.js";
+import { contractOffers, reachableOffers } from "./probe.js";
+
+const q = new URLSearchParams(location.search);
+const out = document.getElementById("out");
+const lines = [];
+const say = (t, cls) => { lines.push(cls ? `<span class="${cls}">${t}</span>` : t);
+                          out.innerHTML = lines.join("\n"); };
+const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+// Deterministic "random" so a disagreeing run can be replayed exactly.
+let seed = parseInt(q.get("seed") ?? "1", 10) >>> 0;
+const rand = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+
+const gameId = q.get("gameId");
+const participantId = q.get("participantId");
+const mode = q.get("mode") ?? "alternate";
+const maxDecisions = parseInt(q.get("max") ?? "60", 10);
+
+const stats = { decisions: 0, offerMismatch: 0, answerMismatch: 0,
+                rejectedOld: 0, rejectedNew: 0, sentOld: 0, sentNew: 0, byType: {}, selMin: {} };
+
+async function ready(frame) {
+  for (let i = 0; i < 300; i++) {
+    if (frame.contentWindow?.OLD) return frame.contentWindow.OLD;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  throw new Error("old harness never came up");
+}
+
+if (q.get("login")) {
+  await fetch("/gemp-lotr-server/login", {
+    method: "POST", credentials: "same-origin",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ login: q.get("login"), password: q.get("password") ?? "" })
+  });
+}
+
+const OLD = await ready(document.getElementById("old"));
+OLD.boot({ gameId, participantId });
+
+const boardEl = document.getElementById("board");
+const store = createStore(participantId);
+const board = createBoard(boardEl, store, { onAnswer: () => {} });
+const picker = createPicker(boardEl, { onAnswer: () => {} });
+const path = createPathPanel(boardEl, store, { onAnswer: () => {} });
+path.open();
+store.subscribe((s) => {
+  path.paint(s);
+  const d = s.decision;
+  if (d && d.decisionType === "ARBITRARY_CARDS" && d.forPlayer === s.viewerId) picker.show(d);
+  else picker.hide();
+});
+
+/**
+ * Pick ONE option and express it as each client would.
+ *
+ * Passing is a first-class choice, not a fallback. "Play Shadow action or Pass"
+ * frequently offers nothing playable, and the only legal answer is then the
+ * empty string -- the engine rejects anything else, as it rightly did when this
+ * harness first synthesised "undefined" from an empty option list.
+ */
+function choose(d, oldOffer) {
+  const pass = { label: "pass", old: "", new: "" };
+
+  if (isActionChoice(d)) {
+    const options = oldOffer.options ?? [];
+    if (!options.length) return pass;
+    // A real player passes sometimes even when something is playable.
+    if (rand() < 0.25) return pass;
+    const pick = options[Math.floor(rand() * options.length)];
+    const acts = cardActions(d);
+    const all = [...acts.byCard.values()].flat().concat(acts.virtual);
+    const hit = all.find((a) => String(a.actionId) === String(pick.actionId));
+    return { label: pick.text ?? ("action " + pick.actionId),
+             old: String(pick.actionId),
+             new: hit ? String(hit.actionId) : "<<not offered>>" };
+  }
+
+  if (d.decisionType === "CARD_SELECTION") {
+    const min = parseInt(d.parameters?.min?.[0] ?? "0", 10);
+    const ids = (d.parameters?.cardId ?? []).map(String);
+    const max = Math.min(parseInt(d.parameters?.max?.[0] ?? String(ids.length), 10),
+                         ids.length);
+
+    // `max=0` MEANS ZERO CARDS, EVEN THOUGH CARDS ARE STILL OFFERED.
+    //
+    // This is the bug that produced every unexplained engine rejection. The
+    // engine asks "Choose cards from hand to discard" with
+    // `{min:["0"], max:["0"], cardId:["250"]}` -- a discard whose count resolved
+    // to nothing. It still lists the card, so a harness that reads `cardId` and
+    // ignores `max` picks one, and the only legal answer was the empty string.
+    //
+    // It hid for a long time because the gate below passes on `min===0` only
+    // 40% of the time, so the same decision is answered correctly six times in
+    // ten. That is what made it look bursty and unreproducible -- 13 to 36
+    // rejections in one game, none in the next twenty.
+    //
+    // Do NOT conclude from a sample that `max` is always 1. That conclusion was
+    // drawn here from four decisions in a single game, and it was wrong; it sent
+    // a whole fix in the wrong direction.
+    if (!ids.length || max === 0) return pass;
+    if (min === 0 && rand() < 0.4) return pass;
+
+    // AT LEAST `min` CARDS, COMMA-JOINED. The reference client submits
+    // `"" + selectedCardIds` on a JS array (gameUi.js:2805) and only enables
+    // Done at `length >= min` (:2823), so the wire format is a comma-separated
+    // list and the count is a real constraint at both ends.
+    // Negative control for the ENGINE half of the harness, the way
+    // `sabotage=actionids` is one for the OFFER half. A run with
+    // `?sabotage=badcard` MUST report engine rejections and MUST print the
+    // engine's own message beside them -- otherwise "zero rejections" only
+    // means the reporting is broken.
+    //
+    // It sends a card id that was never offered. An earlier control tried
+    // sending FEWER cards than `min`, which could never fire: measuring the
+    // bounds showed `max=1` on every CARD_SELECTION this game asks, so one card
+    // is always the whole answer and there is no undercount to make.
+    if (q.get("sabotage") === "badcard") {
+      return { label: "bad card", old: "999999", new: "999999" };
+    }
+    const want = Math.max(1, Math.min(max, min || 1));
+    stats.selMin[`min=${min} max=${d.parameters?.max?.[0] ?? "-"}`] =
+      (stats.selMin[`min=${min} max=${d.parameters?.max?.[0] ?? "-"}`] ?? 0) + 1;
+    const pool = ids.slice();
+    const picked = [];
+    while (picked.length < want && pool.length) {
+      picked.push(pool.splice(Math.floor(rand() * pool.length), 1)[0]);
+    }
+    const pick = picked.join(",");
+    // Both clients answer a board selection with the card ids themselves.
+    const oldIds = (oldOffer.options ?? []).map((o) => String(o.cardId));
+    const unoffered = oldIds.length && picked.some((p) => !oldIds.includes(p));
+    return { label: "cards " + pick, old: pick,
+             new: unoffered ? "<<not offered>>" : pick };
+  }
+
+  if (d.decisionType === "ARBITRARY_CARDS") {
+    const cards = pickable(d).filter((c) => c.selectable);
+    const { min } = boundsOf(d);
+    if (!cards.length || min === 0) return pass;
+    const pick = cards[Math.floor(rand() * cards.length)].id;
+    return { label: "temp " + pick, old: pick, new: pick };
+  }
+
+  if (isAssignment(d)) {
+    const a = assignable(d);
+    if (!a.freeCharacters.length || !a.minions.length || rand() < 0.3) return pass;
+    const value = encodeAssignments(
+      new Map([[a.freeCharacters[0], new Set([a.minions[0]])]]));
+    return { label: "assign", old: value, new: value };
+  }
+
+  // INTEGER / MULTIPLE_CHOICE / ACTION_CHOICE all answer with an index, and the
+  // decision itself says how many there are -- more reliable than counting
+  // whatever buttons happen to be visible in the old client's dialog.
+  const p = d.parameters ?? {};
+  const count = (p.results ?? p.actionText ?? p.text ?? p.min ?? []).length || 1;
+  if (d.decisionType === "INTEGER") {
+    const lo = parseInt(p.min?.[0] ?? "0", 10);
+    const hi = parseInt(p.max?.[0] ?? String(lo), 10);
+    const v = String(lo + Math.floor(rand() * Math.max(1, hi - lo + 1)));
+    return { label: "integer " + v, old: v, new: v };
+  }
+  const i = String(Math.floor(rand() * count));
+  return { label: "option " + i, old: i, new: i };
+}
+
+let pending = null;      // { id, from, value } awaiting the engine's verdict
+let answeredIds = 0;
+let finished = false;
+
+const transport = createTransport({
+  gameId,
+  participantId,
+  // The old client gets the SAME bytes, decoded its own way.
+  onRaw: (xml) => {
+    try {
+      OLD.feedBatch(OLD.parseEvents(xml));
+    } catch (e) {
+      say("old harness threw feeding events: " + e.message, "warn");
+    }
+  },
+  onEvents: (events) => {
+    store.dispatchAll(events);
+    const s = store.getState();
+
+    // The engine's verdict on the last answer: a warning plus the same
+    // decision again means it was refused.
+    if (pending) {
+      const warned = events.some((e) => e.type === "SEND_WARNING");
+      const reasked = events.some((e) => e.decision && String(e.decision.id) === String(pending.id));
+      if (warned && reasked) {
+        if (pending.from === "old") stats.rejectedOld++; else stats.rejectedNew++;
+        say(`ENGINE REJECTED the ${pending.from} client's answer ` +
+            `"${pending.value}" to ${pending.type} — ${pending.text}`, "bad");
+
+        // EVERYTHING NEEDED TO DIAGNOSE IT, HERE, NOW.
+        //
+        // A rejection cannot be reproduced by re-running: the engine shuffles
+        // both decks server-side and the bots play their own hands, so the same
+        // seed gives a different game. Chasing one by re-running cost five
+        // king_block games that all came back clean.
+        //
+        // So the failure has to carry its own evidence. A decision is
+        // self-contained -- its type, its full parameter map and what the
+        // engine said back are the whole input to the answer -- so printing
+        // them turns an unreproducible event into a permanent artifact. The
+        // replay id is printed too: the game is on disk either way, and
+        // `diff.html?replayId=...` re-feeds it to both clients deterministically
+        // for as long as the recording exists.
+        const warnings = events.filter((e) => e.type === "SEND_WARNING")
+                               .map((e) => e.message ?? e.participantId ?? "")
+                               .filter(Boolean);
+        say("  engine said: " + (warnings.join(" | ") || "(no message)"), "bad");
+        say("  decision " + pending.id + " " + pending.type +
+            " params " + JSON.stringify(pending.parameters ?? {}), "bad");
+      }
+      pending = null;
+    }
+
+    if (s.ended) { finished = true; finish(); return; }
+    const d = s.decision;
+    if (!d || d.forPlayer !== participantId) return;
+
+    // Only compare on a batch that actually CARRIED a decision.
+    //
+    // The new client keeps `state.decision` until another replaces it, so it
+    // still reports one on batches that contain none. The old client does not:
+    // `cleanupDecision` runs before every event, so a batch with no decision in
+    // it legitimately leaves the old client showing nothing. Comparing then is
+    // comparing a live decision against a client that has correctly cleared it
+    // -- which is the whole of the "old offers nothing" discrepancy.
+    if (!events.some((e) => e.decision)) return;
+    if (answeredIds >= maxDecisions) { finish(); return; }
+
+    // Both clients, same question.
+    const oldOffer = OLD.offers();
+    const contract = contractOffers(d);
+    const reach = reachableOffers(boardEl, d);
+    stats.decisions++;
+    stats.byType[d.decisionType] = (stats.byType[d.decisionType] ?? 0) + 1;
+
+    // Negative control, as in diff.html: `?sabotage=actionids` re-introduces
+    // the real bug this client shipped with. A run with it MUST report
+    // mismatches -- otherwise the gating above has silenced the comparison and
+    // "zero mismatches" would mean nothing at all.
+    if (q.get("sabotage") === "actionids" && isActionChoice(d)) {
+      contract.answers = (contract.detail ?? []).map((x) => String(x.cardId)).sort();
+    }
+
+    if (isActionChoice(d)) {
+      const oldAnswers = oldOffer.options.map((o) => String(o.actionId)).sort();
+      if (!eq(oldAnswers, contract.answers)) {
+        stats.offerMismatch++;
+        say(`OFFERS DIFFER ${d.decisionType}: old ${JSON.stringify(oldAnswers)} ` +
+            `vs new ${JSON.stringify(contract.answers)} — ${d.text}`, "bad");
+        // Print the state rather than reason from the symptom: whether the old
+        // client simply has no DOM node for the card is the whole question.
+        if (stats.offerMismatch <= 6) {
+          const ids = d.parameters?.cardId ?? [];
+          say(`      decision id=${d.id} cards=${JSON.stringify(ids)} ` +
+              `blueprints=${JSON.stringify(d.parameters?.blueprintId ?? [])}`, "warn");
+          say(`      old: ${JSON.stringify(OLD.diagnose(ids))}`, "warn");
+        }
+      }
+      const oldCards = [...new Set(oldOffer.options.map((o) => o.cardId).filter(Boolean))];
+      const missing = oldCards.filter((c) => !reach.ids.includes(c));
+      if (missing.length && !contract.detail?.some((x) => x.virtual)) {
+        stats.offerMismatch++;
+        say(`UNREACHABLE in new client: cards ${missing.join(",")} — ${d.text}`, "bad");
+      }
+    }
+
+    // One option, expressed as each client would express it.
+    const pick = choose(d, oldOffer);
+    const oldValue = pick.old, newValue = pick.new;
+
+    if (oldValue !== newValue) {
+      stats.answerMismatch++;
+      say(`ANSWERS DIFFER ${d.decisionType} (${pick.label}): ` +
+          `old "${oldValue}" vs new "${newValue}" — ${d.text}`, "bad");
+    }
+
+    // Alternate whose answer is actually sent, so the engine judges both.
+    const from = mode === "old" ? "old" : mode === "new" ? "new"
+               : (answeredIds % 2 === 0 ? "old" : "new");
+    const value = from === "old" ? oldValue : newValue;
+    if (from === "old") stats.sentOld++; else stats.sentNew++;
+    // `parameters` is carried so a rejection can print the decision's full
+    // input, not just the answer that failed on it.
+    pending = { id: d.id, from, value, type: d.decisionType, text: d.text,
+                parameters: d.parameters };
+    answeredIds++;
+    transport.answer(d.id, value);
+  },
+  onStatus: (status, err) => {
+    if (status === "failed" || status === "conflict") {
+      say(`transport ${status}: ${err?.message ?? ""}`, "bad");
+    }
+  }
+});
+
+say(`live differential — game ${gameId} as ${participantId}, mode=${mode}, seed=${q.get("seed") ?? 1}`);
+transport.start();
+
+// Bounded run: a live game can stall waiting on other seats, so stop on time.
+const runFor = parseInt(q.get("for") ?? "150", 10);
+/**
+ * Report and stop.
+ *
+ * Called the moment the work is done -- the decision budget is spent or the
+ * game has ended -- and only as a fallback on the timer. It used to live inside
+ * the timeout alone, so a run that had answered everything it needed after
+ * twenty seconds still sat idle for the rest of the window, and a batch of 50
+ * games paid that wait 50 times over.
+ */
+let reported = false;
+function finish() {
+  if (reported) return;
+  reported = true;
+  transport.stop();
+  chatDone();
+}
+
+function chatDone() {
+  say("");
+  say(`decisions answered: ${answeredIds} (${stats.sentOld} by old, ${stats.sentNew} by new)`);
+  say(`by type: ${JSON.stringify(stats.byType)}`);
+  say(`offer mismatches: ${stats.offerMismatch}, answer mismatches: ${stats.answerMismatch}`);
+  say(`engine rejections — old: ${stats.rejectedOld}, new: ${stats.rejectedNew}`);
+  say("CARD_SELECTION bounds: " + JSON.stringify(stats.selMin));
+  const oldErrs = OLD.errors();
+  if (oldErrs.length) {
+    say(`old client errors: ${oldErrs.length}`, "warn");
+    for (const e of oldErrs.slice(0, 4)) say("      " + e, "warn");
+  }
+  const bad = stats.offerMismatch + stats.answerMismatch + stats.rejectedOld + stats.rejectedNew;
+  say(bad ? `RESULT: ${bad} PROBLEM of ${answeredIds}` : `RESULT: CLEAN over ${answeredIds} decisions`,
+      bad ? "bad" : "ok");
+  document.title = "livediff-done";
+}
+
+// The timer is now only a backstop, for a game that stalls waiting on another
+// seat. Finishing early is the normal path.
+setTimeout(finish, runFor * 1000);
+</script>
+</body></html>

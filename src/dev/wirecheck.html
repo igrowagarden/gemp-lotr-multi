@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>wire check — decoder vs a real capture</title>
+<style>
+  body { font-family: ui-monospace, Consolas, monospace; font-size: 13px;
+         background: #0D0B0A; color: #E8E0D4; padding: 20px; }
+  .pass { color: #6E9B7A; } .fail { color: #FF5240; }
+  h2 { font-size: 13px; color: #C89A3C; margin: 16px 0 6px; }
+  table { border-collapse: collapse; margin: 6px 0 14px; }
+  td { padding: 1px 14px 1px 0; color: #A79A88; }
+  #result { font-size: 16px; margin-top: 18px; }
+</style>
+</head>
+<body>
+<div id="out"></div>
+<div id="result">RUNNING</div>
+
+<script type="module">
+/**
+ * Runs the decoder and reducer over XML captured from a real five-player game
+ * on our own GEMP instance, rather than over XML we wrote ourselves.
+ *
+ * This is the check that found `charStats="356=4|2|RF10"` -- a companion's
+ * resistance carries its signet as a letter, and reading it as a plain number
+ * produced NaN. Nothing written by hand would have contained it.
+ *
+ * Re-capture with:
+ *   curl -s "http://localhost:17002/gemp-lotr-server/game/1?participantId=asdf" \
+ *     --cookie "loggedUser=<cookie>" > src/dev/live_capture.xml
+ */
+import { decodeEvents, EVENT_TYPES } from "../net/protocol.js";
+import { initialState, reduceAll, allCards, fpId, seats, cardStats, wounds }
+  from "../state/reduce.js";
+import { assignBands, checkComplete } from "../model/zones.js";
+
+const out = document.getElementById("out");
+let pass = 0, fail = 0;
+const ok = (label, cond, detail) => {
+  const d = document.createElement("div");
+  d.className = cond ? "pass" : "fail";
+  d.textContent = (cond ? "PASS  " : "FAIL  ") + label + (cond || !detail ? "" : "  -> " + detail);
+  out.appendChild(d);
+  cond ? pass++ : fail++;
+};
+const group = (t) => { const h = document.createElement("h2"); h.textContent = t; out.appendChild(h); };
+const table = (rows) => {
+  const t = document.createElement("table");
+  for (const [k, v] of rows) {
+    const tr = t.insertRow();
+    tr.insertCell().textContent = k;
+    tr.insertCell().textContent = v;
+  }
+  out.appendChild(t);
+};
+
+const xml = await (await fetch("./live_capture.xml")).text();
+
+group("decode a real capture");
+const events = decodeEvents(xml);
+ok("the capture decoded", events.length > 0, String(events.length));
+ok("no event fell through to UNKNOWN",
+   events.every((e) => e.type !== "UNKNOWN"),
+   events.filter((e) => e.type === "UNKNOWN").map((e) => e.code).join(","));
+
+const counts = {};
+for (const e of events) counts[e.type] = (counts[e.type] ?? 0) + 1;
+table(Object.entries(counts).sort((a, b) => b[1] - a[1]));
+
+ok("every decoded type is a known GameEvent.Type",
+   Object.keys(counts).every((t) => Object.values(EVENT_TYPES).includes(t)));
+
+group("reduce it");
+const state = reduceAll(initialState("asdf"), events);
+ok("five seats", seats(state).length === 5, seats(state).join(","));
+ok("a Free Peoples player", !!fpId(state), String(fpId(state)));
+ok("cards are in play", allCards(state).length > 0, String(allCards(state).length));
+ok("a phase", !!state.phase, String(state.phase));
+
+const wounded = allCards(state).filter((c) => wounds(c) > 0);
+ok("real tokens arrived", wounded.length > 0,
+   wounded.map((c) => `${c.cardId}:${wounds(c)}`).join(" "));
+
+group("charStats, including the signet form");
+const withStats = Object.entries(state.stats?.charStats ?? {});
+ok("charStats parsed", withStats.length > 0, String(withStats.length));
+const nan = withStats.filter(([, s]) =>
+  Number.isNaN(s.strength) || Number.isNaN(s.vitality) ||
+  (s.resistance !== undefined && Number.isNaN(s.resistance)));
+ok("no NaN anywhere in the numbers", nan.length === 0,
+   nan.map(([id]) => id).join(","));
+const signed = withStats.filter(([, s]) => s.signet);
+ok("a companion's signet was read, not swallowed into the number",
+   signed.length > 0,
+   signed.map(([id, s]) => `${id}:${s.signet}/${s.resistance}`).join(" "));
+
+group("the real board is complete");
+const focus = seats(state).find((p) => p !== "asdf" && p !== fpId(state));
+const ctx = { viewerId: "asdf", focusId: focus, fpId: fpId(state),
+              spectating: false, skirmishing: state.skirmish != null };
+const split = assignBands(allCards(state), ctx);
+table([...split.byBand].filter(([, c]) => c.length).map(([b, c]) => [b, c.length]));
+const complete = checkComplete(allCards(state), ctx);
+ok("no card in play is claimed by no band", complete.ok,
+   complete.missing.map((c) => `${c.cardId}/${c.zone}`).join(" "));
+
+const result = document.getElementById("result");
+result.textContent = fail === 0 ? `RESULT: ALL PASS (${pass})` : `RESULT: ${fail} FAILED of ${pass + fail}`;
+result.className = fail === 0 ? "pass" : "fail";
+</script>
+</body>
+</html>

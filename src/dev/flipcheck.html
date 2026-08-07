@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>flip check</title>
+<link rel="stylesheet" href="../styles/board.css">
+<style>body{font-family:ui-monospace,Consolas,monospace;font-size:13px;padding:12px}
+#out{color:#E8E0D4}.pass{color:#6E9B7A}.fail{color:#FF5240}#board{height:70vh}</style>
+</head><body>
+<div id="board"></div><div id="out"></div>
+<script type="module">
+import { createStore } from "../state/store.js";
+import { decodeEvents } from "../net/protocol.js";
+import { createBoard } from "../view/board.js";
+import * as fixture from "./fixture.js";
+
+const out = document.getElementById("out");
+let pass = 0, fail = 0;
+const ok = (l, c, d) => { const e = document.createElement("div");
+  e.className = c ? "pass" : "fail";
+  e.textContent = (c ? "PASS  " : "FAIL  ") + l + (c || !d ? "" : "  -> " + d);
+  out.appendChild(e); c ? pass++ : fail++; };
+
+const store = createStore("asdf");
+const boardEl = document.getElementById("board");
+createBoard(boardEl, store, {});
+
+// Count animations started during the second paint.
+let started = 0, moves = 0, entries = 0;
+const real = Element.prototype.animate;
+Element.prototype.animate = function (...args) {
+  started++;
+  const first = args[0]?.[0] ?? {};
+  if (String(first.transform ?? "").startsWith("translate")) moves++; else entries++;
+  return real.apply(this, args);
+};
+
+store.dispatchAll(decodeEvents(fixture.setup()));
+const afterFirst = started;
+ok("first paint animates entries", afterFirst > 0, String(afterFirst));
+
+started = 0;
+store.dispatchAll(decodeEvents(fixture.shadowPhase()));
+ok("a state change animates the cards it moved or added", started > 0, String(started));
+
+started = moves = entries = 0;
+store.dispatchAll(decodeEvents("<events><ge type=\"TP\" count=\"11\"/></events>"));
+ok("a change that moves nothing animates nothing",
+   started === 0, `moves=${moves} entries=${entries}`);
+
+ok("cards still render", boardEl.querySelectorAll(".card").length > 0,
+   String(boardEl.querySelectorAll(".card").length));
+
+const r = document.createElement("div");
+r.id = "result";
+r.className = fail === 0 ? "pass" : "fail";
+r.textContent = fail === 0 ? `RESULT: ALL PASS (${pass})` : `RESULT: ${fail} FAILED of ${pass + fail}`;
+document.body.appendChild(r);
+</script></body></html>

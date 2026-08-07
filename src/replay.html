@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>GEMP — replay</title>
+<link rel="stylesheet" href="./styles/board.css">
+<style>
+  .replaybar {
+    position: fixed; left: 50%; bottom: 10px; transform: translateX(-50%);
+    display: flex; gap: 10px; align-items: center; z-index: 99;
+    padding: 7px 12px; border-radius: 4px; min-width: 640px;
+    background: color-mix(in srgb, var(--surface) 94%, transparent);
+    border: 1px solid var(--rule-2);
+    font-family: var(--mono); font-size: 11px; color: var(--ink-3);
+  }
+  .replaybar button {
+    font-family: var(--mono); font-size: 10px; padding: 3px 9px; border-radius: 2px;
+    cursor: pointer; background: transparent; color: var(--brass);
+    border: 1px solid var(--brass);
+  }
+  .replaybar button:disabled { opacity: .35; cursor: default; }
+  .replaybar input[type=range] { flex: 1; min-width: 160px; accent-color: var(--brass); }
+  .replaybar b { color: var(--ink); font-weight: 600; }
+  .bad { color: var(--alert); }
+</style>
+</head>
+<body>
+<div id="board"></div>
+<div class="replaybar">
+  <button type="button" id="back" title="One event back">◀</button>
+  <button type="button" id="play">Play</button>
+  <button type="button" id="fwd" title="One event on">▶</button>
+  <input type="range" id="scrub" min="0" value="0">
+  <span id="at">0 / 0</span>
+  <span id="note"></span>
+</div>
+
+<script type="module">
+/**
+ * Watching a finished game.
+ *
+ * A recorded game is served at `/replay/{player}${recordingId}` and is nothing
+ * more than the same `<ge>` events a live game sends, in order, wrapped in
+ * `<gameReplay>` with an `<info>` header. So the decoder, the reducer and the
+ * board all work unchanged -- a replay is the live client with the transport
+ * replaced by an array and a cursor.
+ *
+ * Rebuilding from event 0 on every step is deliberate. The reducer is pure and
+ * a whole game is ~1700 events, so replaying the prefix is a fraction of a
+ * millisecond and it makes stepping BACKWARD free. Trying to invert events
+ * instead would mean writing an undo for each of the 27, and getting one of
+ * them subtly wrong would corrupt the board in a way nothing would catch.
+ *
+ *   replay.html?replayId=asdf$06g7k8qg1z5em444
+ */
+import { initialState, reduce } from "./state/reduce.js";
+import { createStore } from "./state/store.js";
+import { decodeEvents } from "./net/protocol.js";
+import { createBoard } from "./view/board.js";
+import { createPathPanel, createChatPanel } from "./view/panels.js";
+import { createZoom, createPileViewer } from "./view/piles.js";
+import { loadImageTable } from "./model/images.js";
+
+const q = new URLSearchParams(location.search);
+const replayId = q.get("replayId") ?? "";
+const noteEl = document.getElementById("note");
+const atEl = document.getElementById("at");
+const scrub = document.getElementById("scrub");
+const playBtn = document.getElementById("play");
+
+const say = (text, bad) => { noteEl.textContent = text; noteEl.className = bad ? "bad" : ""; };
+
+// The viewer is the player the recording belongs to: a replay is one seat's
+// view of the game, exactly as that seat saw it, hidden information included.
+const viewerId = replayId.split("$")[0] || "asdf";
+
+const boardEl = document.getElementById("board");
+const store = createStore(viewerId);
+const board = createBoard(boardEl, store, {});
+const path = createPathPanel(boardEl, store);
+const chat = createChatPanel(boardEl, store);       // no onSend: nothing to say to a recording
+const piles = createPileViewer(boardEl, store);
+createZoom(boardEl);
+store.subscribe((s) => { path.paint(s); chat.paint(s); piles.paint(s); });
+
+let events = [];
+let at = 0;
+let timer = null;
+
+/** Rebuild the state from scratch up to `n`. Pure reducer, so this is cheap. */
+function seek(n) {
+  at = Math.max(0, Math.min(n, events.length));
+  let state = initialState(viewerId);
+  for (let i = 0; i < at; i++) state = reduce(state, events[i]);
+  store.replace(state);
+  scrub.value = String(at);
+  atEl.textContent = `${at} / ${events.length}`;
+}
+
+function stop() {
+  if (timer) { clearInterval(timer); timer = null; }
+  playBtn.textContent = "Play";
+}
+
+playBtn.addEventListener("click", () => {
+  if (timer) return stop();
+  playBtn.textContent = "Pause";
+  timer = setInterval(() => {
+    if (at >= events.length) return stop();
+    seek(at + 1);
+  }, 220);
+});
+document.getElementById("fwd").addEventListener("click", () => { stop(); seek(at + 1); });
+document.getElementById("back").addEventListener("click", () => { stop(); seek(at - 1); });
+scrub.addEventListener("input", () => { stop(); seek(Number(scrub.value)); });
+
+loadImageTable().then(() => board.repaint());
+
+// Dev convenience, as in live.html: obtain a cookie for a headless run.
+if (q.get("login")) {
+  await fetch("/gemp-lotr-server/login", {
+    method: "POST", credentials: "same-origin",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ login: q.get("login"), password: q.get("password") ?? "" })
+  });
+}
+
+if (!replayId.includes("$")) {
+  say("Need ?replayId=<player>$<recordingId>", true);
+} else {
+  try {
+    // NOT encodeURIComponent: the "$" separating player from recording id must
+    // reach the server literally. ReplayRequestHandler checks `contains("$")`
+    // and, unlike the chat handler, never URL-decodes -- so an encoded %24 is a
+    // flat 404 that looks exactly like a missing recording.
+    const res = await fetch(`/gemp-lotr-server/replay/${replayId}`,
+                            { credentials: "same-origin" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const xml = await res.text();
+    events = decodeEvents(xml);
+    scrub.max = String(events.length);
+
+    // The <info> header is not an event, so it is read separately -- it is the
+    // only place the outcome is recorded.
+    const info = new DOMParser().parseFromString(xml, "text/xml")
+                                .getElementsByTagName("info")[0];
+    const winner = info?.getAttribute("winner");
+    say(`${events.length} events` + (winner ? ` · won by ${winner}` : ""));
+    seek(0);
+  } catch (e) {
+    say("Could not load replay: " + (e.message ?? e), true);
+  }
+}
+</script>
+</body>
+</html>

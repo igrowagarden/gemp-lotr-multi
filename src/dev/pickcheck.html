@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>card picker</title>
+<link rel="stylesheet" href="../styles/board.css">
+<style>body{font-family:ui-monospace,Consolas,monospace;font-size:13px;padding:10px}
+#host{position:relative;height:60vh;border:1px solid #444}
+.pass{color:#6E9B7A}.fail{color:#FF5240}</style></head>
+<body><div id="host"></div><div id="out"></div>
+<script type="module">
+/**
+ * Choosing among cards the client has never been sent.
+ *
+ * The decisions here are built to match what the engine actually sends, taken
+ * from ArbitraryCardsSelectionDecision and ChooseArbitraryCardsEffect:
+ * `cardId` is already "temp<i>", `blueprintId` is parallel to it, `selectable`
+ * is a parallel true/false array, and the answer is the temp ids comma-joined.
+ */
+import { createPicker, pickable, boundsOf } from "../view/picker.js";
+import { decodeEvents } from "../net/protocol.js";
+
+const out = document.getElementById("out");
+let pass = 0, fail = 0;
+const ok = (l, c, d) => { const e = document.createElement("div");
+  e.className = c ? "pass" : "fail";
+  e.textContent = (c ? "PASS  " : "FAIL  ") + l + (d ? "  -> " + d : "");
+  out.appendChild(e); c ? pass++ : fail++; };
+
+const sent = [];
+const picker = createPicker(document.getElementById("host"),
+  { onAnswer: (id, value) => sent.push([id, value]) });
+
+/** A decision as the wire delivers it. */
+const decision = (type, text, params) => ({
+  id: 1, decisionType: type, shape: "cards", text, parameters: params
+});
+
+// ---- the wire format is decoded the way the server writes it ---------------
+
+const wire = decodeEvents(
+  `<events><ge type="D" id="7" decisionType="ARBITRARY_CARDS" text="Opponent's hand">` +
+  `<parameter name="min" value="0"/><parameter name="max" value="0"/>` +
+  `<parameter name="cardId" value="temp0"/><parameter name="cardId" value="temp1"/>` +
+  `<parameter name="blueprintId" value="1_290"/><parameter name="blueprintId" value="1_310"/>` +
+  `<parameter name="selectable" value="false"/><parameter name="selectable" value="false"/>` +
+  `</ge></events>`)[0];
+ok("a decision's parallel arrays survive decoding",
+   wire.decision?.parameters?.cardId?.length === 2 &&
+   wire.decision?.parameters?.blueprintId?.[1] === "1_310",
+   JSON.stringify(wire.decision?.parameters?.blueprintId ?? null));
+
+// ---- look at an opponent's hand: min 0, max 0, nothing selectable ----------
+
+const look = decision("ARBITRARY_CARDS", "Opponent's hand", {
+  min: ["0"], max: ["0"],
+  cardId: ["temp0", "temp1", "temp2"],
+  blueprintId: ["1_290", "1_310", "1_43"],
+  selectable: ["false", "false", "false"]
+});
+picker.show(look);
+const cards = () => [...picker.root.querySelectorAll(".pickgrid .card")];
+ok("the whole hand is shown", cards().length === 3, `${cards().length} cards`);
+ok("none of it is choosable", cards().every((c) => c.classList.contains("is-locked")));
+ok("and the art is real", !!picker.root.querySelector(".pickgrid .card .c-art"),
+   picker.root.querySelector(".c-art")?.getAttribute("src") ?? "none");
+
+// This one is informational, but the engine is still WAITING on it.
+const done = [...picker.root.querySelectorAll(".pickbar button")]
+  .find((b) => b.textContent === "Done");
+ok("it can still be answered, or the game stalls", !!done);
+done?.click();
+ok("and answering it sends an empty value", sent.length === 1 && sent[0][1] === "",
+   JSON.stringify(sent));
+
+// ---- discard a Shadow card from that hand: shown is not selectable ---------
+
+sent.length = 0;
+const discard = decision("ARBITRARY_CARDS", "Choose a card to discard", {
+  min: ["1"], max: ["1"],
+  cardId: ["temp0", "temp1", "temp2"],
+  blueprintId: ["1_290", "1_310", "1_43"],
+  selectable: ["false", "true", "false"]
+});
+picker.show(discard);
+ok("cards are still all shown", cards().length === 3);
+ok("but only the matching one is pickable",
+   cards().filter((c) => c.classList.contains("is-pickable")).length === 1,
+   cards().map((c) => c.classList.contains("is-pickable") ? "pick" : "lock").join(","));
+
+const confirm = () => [...picker.root.querySelectorAll(".pickbar button")]
+  .find((b) => b.textContent.startsWith("Confirm"));
+ok("confirm is refused below the minimum", confirm()?.disabled === true);
+ok("and there is no None button when min is 1",
+   ![...picker.root.querySelectorAll(".pickbar button")].some((b) => b.textContent === "None"));
+
+// Clicking a locked card must do nothing: the engine rejects the whole answer.
+cards().find((c) => c.classList.contains("is-locked"))?.click();
+ok("a locked card cannot be chosen", confirm()?.disabled === true);
+
+cards().find((c) => c.classList.contains("is-pickable"))?.click();
+ok("choosing the pickable one enables confirm", confirm()?.disabled === false);
+confirm()?.click();
+ok("and it answers with the temp id, not an index or a card id",
+   sent.length === 1 && sent[0][1] === "temp1", JSON.stringify(sent));
+
+// ---- the maximum is enforced here, not discovered as a rejection ----------
+
+sent.length = 0;
+picker.show(decision("ARBITRARY_CARDS", "Choose up to 2", {
+  min: ["0"], max: ["2"],
+  cardId: ["temp0", "temp1", "temp2"],
+  blueprintId: ["1_290", "1_310", "1_43"],
+  selectable: ["true", "true", "true"]
+}));
+cards().forEach((c) => c.click());          // try to pick all three
+ok("never more than the maximum is chosen",
+   picker.root.querySelectorAll(".pickgrid .card.is-chosen").length === 2,
+   `${picker.root.querySelectorAll(".is-chosen").length} chosen of 3 clicked`);
+ok("None is offered when min is 0",
+   [...picker.root.querySelectorAll(".pickbar button")].some((b) => b.textContent === "None"));
+
+// ---- helpers, and the two-argument constructor ----------------------------
+
+ok("absent `selectable` means everything is selectable",
+   pickable(decision("ARBITRARY_CARDS", "x", { cardId: ["temp0"], blueprintId: ["1_290"] }))
+     .every((c) => c.selectable));
+const b = boundsOf(decision("ARBITRARY_CARDS", "x", { min: ["1"], max: ["3"] }));
+ok("bounds are read off the decision", b.min === 1 && b.max === 3, JSON.stringify(b));
+
+const r = document.createElement("div");
+r.id = "result"; r.className = fail === 0 ? "pass" : "fail";
+r.textContent = fail === 0 ? `RESULT: ALL PASS (${pass})` : `RESULT: ${fail} FAILED of ${pass + fail}`;
+document.body.appendChild(r);
+</script></body></html>

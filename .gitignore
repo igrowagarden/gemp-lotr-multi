@@ -1,0 +1,6 @@
+# Python bytecode from the harness scripts
+__pycache__/
+*.pyc
+
+# Captured wire data is re-capturable and large; keep the small canonical one.
+src/dev/*.tmp

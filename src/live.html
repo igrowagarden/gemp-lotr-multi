@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>GEMP — live board</title>
+<link rel="stylesheet" href="./styles/board.css">
+<style>
+  .statusbar {
+    position: fixed; left: 50%; bottom: 10px; transform: translateX(-50%);
+    display: flex; gap: 10px; align-items: center; z-index: 99;
+    padding: 7px 12px; border-radius: 4px;
+    background: color-mix(in srgb, var(--surface) 94%, transparent);
+    border: 1px solid var(--rule-2);
+    font-family: var(--mono); font-size: 11px; color: var(--ink-3);
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-3); }
+  .dot.live { background: var(--free); }
+  .dot.retrying { background: var(--brass); }
+  .dot.conflict, .dot.failed { background: var(--alert); }
+  .statusbar b { color: var(--ink); font-weight: 600; }
+  .statusbar button {
+    font-family: var(--mono); font-size: 9px; text-transform: uppercase;
+    letter-spacing: .08em; padding: 2px 8px; border-radius: 2px; cursor: pointer;
+    background: transparent; color: var(--ink-3); border: 1px solid var(--rule-2);
+  }
+  .statusbar button:hover { color: var(--alert); border-color: var(--alert); }
+  .bad { color: var(--alert); }
+</style>
+</head>
+<body>
+<div id="board"></div>
+<div class="statusbar">
+  <span class="dot" id="dot"></span>
+  <span id="status">starting</span>
+  <span id="detail"></span>
+  <button type="button" id="concede" title="Leave this game">Concede</button>
+</div>
+
+<script type="module">
+/**
+ * The client against a real server.
+ *
+ * Must be served from the GEMP origin -- the session cookie is bound to it, so
+ * a page served from anywhere else cannot authenticate. In practice that means
+ * copying src/ into the container's web directory; see sync.sh.
+ *
+ *   /gemp-lotr/newclient/live.html?gameId=1&participantId=asdf
+ *
+ * `&login=asdf&password=asdf` is a DEV CONVENIENCE ONLY: it posts the normal
+ * login form first so a headless run can obtain a cookie without a browser
+ * session. It never ships -- the real client is opened from the hall, already
+ * authenticated.
+ */
+import { createStore } from "./state/store.js";
+import { currentSite, spokenTo } from "./state/reduce.js";
+import { createTransport, TransportStatus } from "./net/transport.js";
+import { createChatClient } from "./net/chat.js";
+import { createBoard } from "./view/board.js";
+import { createPathPanel, createChatPanel } from "./view/panels.js";
+import { createPicker } from "./view/picker.js";
+import { createEffects } from "./view/effects.js";
+import { createAlerts } from "./view/alerts.js";
+import { createCardInfo } from "./view/cardinfo.js";
+import { createPreGame } from "./view/pregame.js";
+import { createPileViewer, createZoom } from "./view/piles.js";
+import { createDetacher } from "./view/detach.js";
+import { loadImageTable } from "./model/images.js";
+import { closeTopmost, allFlyouts } from "./view/flyout.js";
+
+const q = new URLSearchParams(location.search);
+const gameId = q.get("gameId") ?? "1";
+const participantId = q.get("participantId") ?? "asdf";
+
+const dot = document.getElementById("dot");
+const statusEl = document.getElementById("status");
+const detailEl = document.getElementById("detail");
+
+function show(status, detail) {
+  dot.className = "dot " + status;
+  statusEl.innerHTML = `<b>${participantId}</b> · game ${gameId} · ${status}`;
+  if (detail) detailEl.textContent = detail;
+}
+
+let answeredId = null;
+let lastSite = null;
+let seenFirstSite = false;
+const store = createStore(participantId);
+const board = createBoard(document.getElementById("board"), store, {
+  // The prompt renders controls for the decision's shape; answering rides on
+  // the next poll, interrupting the one in flight.
+  onAnswer: (decisionId, value) => {
+    transport.answer(decisionId, value);
+    detailEl.textContent = `answered ${decisionId} = "${value}"`;
+  },
+  onPiles: (playerId) => piles.show(playerId),
+  onDetach: (playerId) => detacher.detach(playerId),
+  onDefect: (missing, dropped) => {
+    detailEl.className = "bad";
+    detailEl.textContent =
+      [missing.length ? `${missing.length} card(s) in no band` : "",
+       dropped.length ? `dropped: ${dropped.map((d) => d.band).join(",")}` : ""]
+      .filter(Boolean).join(" · ");
+  }
+});
+
+const transport = createTransport({
+  gameId,
+  participantId,
+  onEvents: (events) => {
+    store.dispatchAll(events);
+    // After the dispatch, so the nodes the effects mark are the ones the
+    // repaint just produced rather than the ones about to be replaced.
+    effects.handle(events);
+    const s = store.getState();
+    if (!detailEl.className) {
+      detailEl.textContent =
+        `${Object.keys(s.cards).length} cards · ${s.phase ?? "—"} · FP ${s.currentPlayer ?? "—"}`;
+    }
+    // Dev-only: stop once the opening state has arrived. A long poll never
+    // resolves by design, so a headless run would otherwise have a request
+    // pending forever and could never be captured.
+    if (q.has("handshake")) transport.stop();
+
+    // Dev-only: answer the first decision addressed to us, then settle once the
+    // server's response to it comes back. Proves the whole loop end to end --
+    // decision in, answer out, new state in -- without a human clicking.
+    if (q.has("answer")) {
+      if (answeredId != null) { transport.stop(); return; }
+      const d = store.getState().decision;
+      if (d && d.forPlayer === participantId) {
+        answeredId = d.id;
+        detailEl.textContent = `answering ${d.decisionType} (${d.shape}) with "${q.get("answer")}"`;
+        transport.answer(d.id, q.get("answer"));
+      }
+    }
+  },
+  onStatus: (status, err) => {
+    show(status, err ? String(err.message ?? err) : undefined);
+    if (status === TransportStatus.CONFLICT) {
+      detailEl.className = "bad";
+      detailEl.textContent =
+        "another client holds this seat's channel (HTTP 409) — close the other tab or use another account";
+    }
+  }
+});
+
+// Dev-only: obtain a cookie so a headless run can connect. Same origin, so the
+// browser stores it exactly as a normal login would.
+const login = q.get("login");
+if (login) {
+  const res = await fetch("/gemp-lotr-server/login", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ login, password: q.get("password") ?? "" })
+  });
+  if (!res.ok) show("failed", "login " + res.status);
+}
+
+// Chat and the site path: two instances of one window component, hosted on the
+// board so they can be dragged anywhere within it.
+const boardEl = document.getElementById("board");
+// Sites carry card actions too (sanctuaries, "Use Rivendell Terrace"), and they
+// are drawn here rather than in a band -- so the path needs a way to answer.
+const path = createPathPanel(boardEl, store, {
+  onAnswer: (id, value) => transport.answer(id, value),
+  // Sites are drawn here, not in a band, so a CARD_SELECTION naming one has to
+  // join the board's selection rather than keep its own -- the board owns the
+  // count and the Confirm button.
+  selection: board.selection
+});
+const chatClient = createChatClient({ room: "Game" + gameId, participantId });
+const chat = createChatPanel(boardEl, store, {
+  onSend: (text) => chatClient.send(text).catch((e) => show("failed", "chat " + (e.status ?? e.message)))
+});
+const piles = createPileViewer(boardEl, store);
+// Decisions about cards that are not on the board -- an opponent's hand, a
+// deck, a discard pile. The engine describes them in the decision itself.
+const picker = createPicker(boardEl, {
+  onAnswer: (id, value) => transport.answer(id, value)
+});
+const detacher = createDetacher(store, { onNote: (t) => { detailEl.textContent = t; } });
+const effects = createEffects(boardEl);
+const pregame = createPreGame(boardEl, store);
+const alerts = createAlerts({ title: `GEMP — game ${gameId}` });
+createZoom(boardEl);
+// Right click a card for what is modifying it -- the server knows, and nothing
+// was asking. Left click already means "choose this card" during a decision.
+createCardInfo(boardEl, { fetchInfo: (cardId) => transport.cardInfo(cardId) });
+
+// Conceding was implemented in the transport and wired to nothing, so a player
+// could not leave a game at all. Confirmed first: it is irreversible.
+document.getElementById("concede").addEventListener("click", async () => {
+  if (!confirm("Concede this game? This cannot be undone.")) return;
+  try {
+    await transport.concede();
+    show("stopped", "conceded");
+  } catch (e) {
+    show("failed", "concede " + (e.status ?? e.message));
+  }
+});
+let lastChat = 0;
+
+store.subscribe((s) => {
+  path.paint(s);
+  chat.paint(s);
+  piles.paint(s);
+
+  // The picker follows the decision rather than being opened by hand: it
+  // appears when one arrives for us and goes when it is answered or withdrawn.
+  const d = s.decision;
+  if (d && d.decisionType === "ARBITRARY_CARDS" && !s.spectating &&
+      d.forPlayer === s.viewerId) picker.show(d);
+  else picker.hide();
+  // Unread counts PEOPLE talking. The game log is a running commentary on every
+  // action -- counting it meant the badge was permanently lit and told you
+  // nothing, so a real message could not stand out.
+  const said = spokenTo(s).length;
+  if (said > lastChat) { chat.notify(said - lastChat); lastChat = said; }
+
+  // Sound and a flashing tab title when a decision is waiting and the tab is
+  // not being looked at. In a five-player game the gap between your turns is
+  // long enough that nobody watches continuously.
+  alerts.update(d && !s.spectating && d.forPlayer === s.viewerId ? d : null);
+  // Shown until the first card reaches the table, then never again.
+  pregame.update(s);
+  // The path opens itself when the fellowship reaches a new site.
+  const here = s.stats ? currentSite(s) : null;
+  if (here && here.siteNumber !== lastSite) {
+    lastSite = here.siteNumber;
+    if (lastSite != null && !path.isOpen && seenFirstSite) path.open();
+    seenFirstSite = true;
+  }
+  // Windows yield only while covering something that wants attention -- and
+  // cards on the board count, not just the ones a decision has lit up. The path
+  // window is wide enough to sit over real cards, and staying opaque over them
+  // is the whole complaint about floating windows. Hovering one brings it back
+  // to full opacity, and parked in dead space it still costs nothing.
+  //
+  // `.band .card` and not `.card`: the pile viewer and the zoom preview are
+  // themselves full of cards, and a window must not yield to its own contents.
+  const hot = [];
+  const prompt = boardEl.querySelector(".prompt.yours");
+  if (prompt) hot.push(prompt.getBoundingClientRect());
+  boardEl.querySelectorAll(".band .card").forEach((c) => hot.push(c.getBoundingClientRect()));
+  for (const f of allFlyouts()) f.yieldTo(hot);
+});
+
+// Dev-only: open panels on load so a headless run can capture their contents.
+for (const which of (q.get("open") ?? "").split(",").filter(Boolean)) {
+  if (which === "path") path.open();
+  if (which === "chat") chat.open();
+  if (which === "piles") piles.show("asdf");
+}
+
+// Left/right are handled by the board itself, so any host gets them.
+document.addEventListener("keydown", (e) => {
+  if (typeof e.target?.closest === "function" &&
+      e.target.closest("input, textarea, select")) return;
+  if (e.key === "Escape") { closeTopmost(); return; }
+  if (e.key === "c") chat.toggle();
+  if (e.key === "p") path.toggle();
+});
+
+// Optional: 1,308 per-set image overrides and 64 errata. The board renders
+// before this resolves; cards without an override are unaffected either way.
+loadImageTable().then(({ loaded, errata }) => {
+  if (loaded) { board.repaint(); path.paint(store.getState()); }
+});
+
+show("connecting");
+transport.start();
+
+/**
+ * Chat runs on its own connection beside the game one. Its messages are pushed
+ * into the same store, through the reducer's existing CHAT_MESSAGE case, so the
+ * store stays the single source of truth and the panel keeps rendering state
+ * rather than holding its own copy.
+ *
+ * `join` returns the room's whole history; each `poll` returns only what is new.
+ * Stopped rather than retried on 403/404 -- no room, or not allowed in it -- and
+ * re-joined on 410, the same meanings the game transport uses.
+ */
+function feedChat(messages) {
+  if (!messages?.length) return;
+  store.dispatchAll(messages.map((m) => ({
+    type: "CHAT_MESSAGE", message: m.text, from: m.from, system: m.system, date: m.date
+  })));
+}
+
+async function runChat() {
+  const feed = feedChat;
+  try {
+    feed((await chatClient.join()).messages);
+  } catch (e) {
+    show("failed", "chat join " + (e.status ?? e.message));
+    return;
+  }
+  while (!chatClient.stopped) {
+    try {
+      feed((await chatClient.poll()).messages);
+    } catch (e) {
+      if (e.status === 410) { try { feed((await chatClient.join()).messages); } catch { return; } continue; }
+      if (e.status === 403 || e.status === 404) return;
+      await new Promise((r) => setTimeout(r, 4000));
+    }
+  }
+}
+// `handshake=1` means "opening state, then stop", and that has to cover chat as
+// well as the game. Joining once and NOT polling is the whole difference: a
+// parked long poll keeps a request pending, and Chrome's virtual clock is
+// frozen while one is, so a headless run's own stop-timer never fires and
+// --dump-dom waits for ever. The `for=N` stop cannot rescue it, for the same
+// reason. Chat under handshake therefore joins, feeds what has been said, and
+// lets go.
+if (q.has("handshake")) {
+  chatClient.join().then((r) => { feedChat(r.messages); chatClient.stop(); })
+                   .catch(() => chatClient.stop());
+} else {
+  runChat();
+}
+
+// Dev-only: a long poll holds its connection open by design, so a headless
+// --dump-dom run never sees the network go idle and waits forever. `&for=6`
+// stops after six seconds so the DOM can be captured. Nothing to do with the
+// real client, which stays connected for the whole game.
+const runFor = parseInt(q.get("for") ?? "", 10);
+if (!Number.isNaN(runFor)) {
+  setTimeout(() => {
+    transport.stop();
+    chatClient.stop();      // chat holds its own long poll; both must let go
+    document.title = "settled";
+  }, runFor * 1000);
+}
+
+window.addEventListener("beforeunload", () => transport.stop());
+window.__gemp = { store, transport, board };   // for headless inspection
+</script>
+</body>
+</html>

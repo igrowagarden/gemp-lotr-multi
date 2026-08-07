@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>nav check</title>
+<link rel="stylesheet" href="../styles/board.css">
+<style>body{font-family:ui-monospace,Consolas,monospace;font-size:13px;padding:10px}
+#board{height:60vh}.pass{color:#6E9B7A}.fail{color:#FF5240}</style></head>
+<body><div id="board"></div><div id="out"></div>
+<script type="module">
+import { createStore } from "../state/store.js";
+import { decodeEvents } from "../net/protocol.js";
+import { createBoard } from "../view/board.js";
+import * as fixture from "./fixture.js";
+
+const out = document.getElementById("out");
+let pass = 0, fail = 0;
+const ok = (l, c, d) => { const e = document.createElement("div");
+  e.className = c ? "pass" : "fail";
+  e.textContent = (c ? "PASS  " : "FAIL  ") + l + (c || !d ? "" : "  -> " + d);
+  out.appendChild(e); c ? pass++ : fail++; };
+
+const store = createStore("asdf");
+const board = createBoard(document.getElementById("board"), store, {});
+store.dispatchAll(decodeEvents(fixture.setup()));
+
+const key = (k, target = document) =>
+  target.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true }));
+
+const start = board.focusId;
+ok("a seat is focused to begin with", !!start, String(start));
+
+key("ArrowRight");
+const afterRight = board.focusId;
+ok("ArrowRight moves to another seat", afterRight && afterRight !== start,
+   `${start} -> ${afterRight}`);
+
+key("ArrowLeft");
+ok("ArrowLeft comes back", board.focusId === start, `${afterRight} -> ${board.focusId}`);
+
+document.querySelector(".navarrow.next").click();
+ok("the on-screen arrow moves it too", board.focusId !== start,
+   `${start} -> ${board.focusId}`);
+
+// wrap all the way round and land where we started
+const seen = new Set([board.focusId]);
+for (let i = 0; i < 8; i++) { key("ArrowRight"); seen.add(board.focusId); }
+ok("it cycles rather than stopping at the end", seen.size >= 3, [...seen].join(","));
+
+// typing must not move the board
+const input = document.createElement("input");
+document.body.appendChild(input);
+const before = board.focusId;
+key("ArrowRight", input);
+ok("typing in a field does not move the board", board.focusId === before);
+input.remove();
+
+// a skirmish suspends the focus
+store.dispatchAll(decodeEvents(fixture.shadowPhase()));
+store.dispatchAll(decodeEvents(fixture.skirmish()));
+const during = board.focusId;
+key("ArrowRight");
+ok("keys are ignored during a skirmish", board.focusId === during);
+ok("and the arrows are visibly disabled",
+   [...document.querySelectorAll(".navarrow")].every((a) => a.disabled));
+
+store.dispatchAll(decodeEvents(fixture.endSkirmish()));
+key("ArrowRight");
+ok("and they work again once it ends", board.focusId !== during);
+
+const r = document.createElement("div");
+r.id = "result"; r.className = fail === 0 ? "pass" : "fail";
+r.textContent = fail === 0 ? `RESULT: ALL PASS (${pass})` : `RESULT: ${fail} FAILED of ${pass + fail}`;
+document.body.appendChild(r);
+</script></body></html>

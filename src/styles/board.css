@@ -1,0 +1,625 @@
+/* Mount Doom. Basalt and ash neutrals, warm-biased, lit from below the board.
+   Gold is you and focus; ember is the shadow side; jade is Free Peoples --
+   deliberately the only hue that is not fire, so a fellowship reads instantly. */
+
+:root {
+  --ground: #0D0B0A;
+  --surface: #17130F;
+  --sunken: #070605;
+  --ink: #E8E0D4;
+  --ink-2: #A79A88;
+  --ink-3: #7A6E60;
+  --rule: #2C241D;
+  --rule-2: #3F332A;
+  --brass: #C89A3C;
+  --free: #6E9B7A;
+  --shadow: #C2564A;
+  --shared: #6E8CA8;
+  --alert: #FF5240;
+  --mono: ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
+  --body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* The numerals printed in a card's own stat column are a humanist serif with
+     lining figures -- compared against magnified card art, not guessed. The
+     reference client sets no family at all here and inherits Verdana, so it is
+     no guide. Georgia and Garamond are deliberately absent from this stack:
+     both default to OLDSTYLE figures, which would set 4 below the baseline and
+     6 above it inside a badge sized for one uniform digit. */
+  --stat: "Palatino Linotype", "Book Antiqua", Palatino, Constantia, Cambria, serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--body);
+}
+
+.board {
+  padding: 6px;
+  height: 100vh;
+  background:
+    radial-gradient(130% 78% at 50% 112%,
+      color-mix(in srgb, var(--shadow) 30%, transparent), transparent 62%),
+    var(--sunken);
+}
+
+/* The board's own content. Panels live on .board beside this, so a repaint
+   cannot delete them. */
+.board-stack { display: flex; flex-direction: column; gap: 5px; height: 100%; }
+
+/* ---------------------------------------------------------------- readout */
+.readout {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 8px;
+  height: 26px;
+  background: var(--surface);
+  border: 1px solid var(--rule-2);
+  border-radius: 2px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.readout .twilight { color: var(--ink); display: inline-flex; align-items: baseline; gap: 4px; }
+.readout .twilight b { font-size: 16px; color: var(--brass); letter-spacing: 0; }
+.readout .sep { width: 1px; height: 13px; background: var(--rule-2); }
+
+.seg { display: flex; border: 1px solid var(--rule-2); border-radius: 2px; overflow: hidden; }
+.seg-btn {
+  font-family: var(--mono); font-size: 8px; letter-spacing: 0.05em;
+  text-transform: uppercase; padding: 3px 8px; cursor: pointer;
+  background: var(--surface); color: var(--ink-3); border: none;
+}
+.seg-btn + .seg-btn { border-left: 1px solid var(--rule-2); }
+.seg-btn.on { background: color-mix(in srgb, var(--brass) 20%, var(--surface)); color: var(--brass); }
+
+/* -------------------------------------------------------------- seat strip */
+.seatstrip { flex: none; display: flex; gap: 4px; height: 36px; }
+.seat {
+  flex: 1; min-width: 0; position: relative; cursor: pointer;
+  padding: 3px 7px; display: flex; flex-direction: column; justify-content: center; gap: 2px;
+  background: var(--surface); border: 1px solid var(--rule-2); border-radius: 2px;
+}
+.seat.fp { border-left: 3px solid var(--free); cursor: default; }
+.seat.sh { border-left: 3px solid var(--shadow); }
+.seat.on { border-color: var(--brass); box-shadow: inset 0 0 0 1px var(--brass); }
+.seat.mine .nm { color: var(--brass); }
+.seat.deciding .nm::after { content: " ◆"; color: var(--brass); animation: pulse 1.4s ease-in-out infinite; }
+.seat .nm {
+  font-family: var(--mono); font-size: 9.5px; color: var(--ink-2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.seat .vitals { display: flex; gap: 5px; font-family: var(--mono); font-size: 8px; color: var(--ink-3); }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+/* ------------------------------------------------------------------ bands */
+.band {
+  min-height: 0; position: relative; overflow: hidden;
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 4px 7px;
+  background: var(--surface);
+  border: 1px solid var(--rule-2);
+  border-radius: 2px;
+  transition: flex-grow 240ms cubic-bezier(.4, 0, .2, 1), flex-basis 240ms cubic-bezier(.4, 0, .2, 1);
+}
+.band--free   { background: color-mix(in srgb, var(--free) 12%, var(--surface));   border-color: color-mix(in srgb, var(--free) 40%, var(--rule-2)); }
+.band--shadow { background: color-mix(in srgb, var(--shadow) 12%, var(--surface)); border-color: color-mix(in srgb, var(--shadow) 40%, var(--rule-2)); }
+.band--shared { background: color-mix(in srgb, var(--shared) 12%, var(--surface)); border-color: color-mix(in srgb, var(--shared) 40%, var(--rule-2)); }
+.band--mine   { box-shadow: inset 0 0 0 1px var(--brass); border-color: var(--brass); }
+.band.is-dim  { opacity: 0.55; }
+
+.band-label {
+  flex: none; font-family: var(--mono); font-size: 8.5px;
+  letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-3);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.band--mine .band-label { color: var(--brass); }
+.band-empty { font-family: var(--mono); font-size: 8.5px; color: var(--ink-3); }
+
+/* A size container so a card group can express its overlap against a definite
+   dimension -- see .cardgroup. */
+.row { display: flex; gap: 5px; flex: 1; min-height: 0; align-items: stretch; container-type: size; }
+
+/* ------------------------------------------------------------------- card */
+.card {
+  position: relative; overflow: hidden; flex: none;
+  height: 100%; aspect-ratio: 5 / 7; border-radius: 2px;
+  background: color-mix(in srgb, var(--ink) 16%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--ink) 26%, var(--surface));
+}
+.card.f { background: color-mix(in srgb, var(--free) 42%, var(--surface));   border-color: color-mix(in srgb, var(--free) 62%, var(--surface)); }
+.card.s { background: color-mix(in srgb, var(--shadow) 42%, var(--surface)); border-color: color-mix(in srgb, var(--shadow) 62%, var(--surface)); }
+.card.p { background: color-mix(in srgb, var(--shared) 38%, var(--surface)); border-color: color-mix(in srgb, var(--shared) 58%, var(--surface)); }
+.card.is-eligible { box-shadow: 0 0 0 2px var(--brass); border-color: var(--brass); }
+/* a flipped card shows the real card back, so nothing to grey out */
+.card.is-skirmishing { box-shadow: 0 0 0 2px var(--shared); }
+/* An assigned minion is offset by `left` to sit under its companion (see
+   alignAssignments); the ring says the pairing is deliberate and not a gap in
+   the row. */
+.card.is-assigned { box-shadow: 0 0 0 2px color-mix(in srgb, var(--alert) 70%, transparent); }
+.card--compact { height: 100%; }
+
+/* Stat badges, over the card's own printed stat column rather than as a strip
+   pasted across the art.
+
+   The SIZES come from the reference client -- `ensureCardHasBoxes`'s sizeChanged
+   listener, gameUi.js:2211 -- whose factors are fractions of the card's own
+   width and height, which is what cqw/cqh are, so they carry over unconverted
+   and stay right if the card's aspect ratio ever changes. Note strength is NOT
+   square: it is the tallest of the three (11.6 x 16.5), and squaring it reads
+   as a misalignment rather than as a wrong size.
+
+   The POSITIONS do not. They are measured off real card art -- the white
+   numerals printed in the stat column of four minions, scratchpad measure2.py,
+   agreeing to within 0.1% -- because the reference client sits a consistent 1
+   to 1.5% of card height BELOW what the cards actually print, which is visible
+   on a real board. Each badge is placed by its centre, since the centre is the
+   thing being matched; the corner is an implementation detail.
+
+     printed centres: strength 67.27%, vitality 79.07%, site/res 89.66% of
+     height; all three at 12.15% of width. (Reference: 68.8 / 80.0 / 90.5.) */
+.card { container-type: size; }
+.c-stat {
+  position: absolute;
+  left: 12.15cqw;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  font-family: var(--stat);
+  font-weight: 700;
+  /* Belt and braces: if the whole stack is missing and a generic serif with
+     oldstyle figures answers, this keeps the digits a uniform height. */
+  font-variant-numeric: lining-nums;
+  font-size: 6.6cqh;
+  line-height: 1;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .85);
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+}
+/* No border-radius: the icons are transparent PNGs that carry their own shape,
+   and rounding the box clips the corners off the strength shield. */
+.c-stat--strength {
+  top: 67.27cqh; width: 16.24cqw; height: 16.5cqh;
+  background-image: url("/gemp-lotr/images/o_icon_strength.png");
+}
+.c-stat--vitality {
+  top: 79.07cqh; width: 10.5cqh; height: 10.5cqh;
+  background-image: url("/gemp-lotr/images/o_icon_vitality.png");
+}
+.c-stat--site {
+  top: 89.66cqh; width: 11.5cqh; height: 11.5cqh;
+  background-image: url("/gemp-lotr/images/o_icon_compass.png");
+}
+.c-stat--resistance {
+  top: 89.66cqh; width: 11.5cqh; height: 11.5cqh;
+  background-image: url("/gemp-lotr/images/o_icon_resistance.png");
+}
+.c-stat--resistance.signet-aragorn { filter: hue-rotate(-25deg) saturate(1.3); }
+.c-stat--resistance.signet-frodo   { filter: hue-rotate(35deg) saturate(1.2); }
+.c-stat--resistance.signet-gandalf { filter: grayscale(.6) brightness(1.15); }
+.c-stat--resistance.signet-theoden { filter: hue-rotate(-60deg) saturate(1.2); }
+/* A pile card is far too small for any of this. */
+.card--compact .c-stat { display: none; }
+
+.c-wounds { position: absolute; top: 2px; left: 2px; display: flex; gap: 1px; align-items: center; }
+.c-pip {
+  width: 4px; height: 4px; border-radius: 50%; background: var(--alert);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--sunken) 70%, transparent);
+}
+.c-more { font-family: var(--mono); font-size: 6px; color: var(--alert); }
+
+.c-burden, .c-token {
+  position: absolute; right: 2px;
+  font-family: var(--mono); font-size: 7px;
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  border-radius: 2px; padding: 0 2px;
+}
+.c-burden { top: 1px; color: var(--brass); }
+.c-token { bottom: 1px; color: var(--ink-2); }
+
+
+.c-owner {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  font-family: var(--mono); font-size: 7px; text-align: center;
+  color: var(--surface); background: color-mix(in srgb, var(--shadow) 70%, transparent);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.c-owner b { margin-right: 3px; }
+.c-owner.is-mine { background: color-mix(in srgb, var(--brass) 75%, transparent); color: var(--ground); }
+
+/* ----------------------------------------------------------------- prompt */
+.prompt {
+  flex: none; height: 24px; display: flex; align-items: center; gap: 8px;
+  padding: 0 8px; border: 1px solid var(--rule-2); border-radius: 2px;
+  background: var(--surface);
+  font-family: var(--mono); font-size: 9.5px; color: var(--ink-3);
+  white-space: nowrap; overflow: hidden;
+}
+.prompt.yours {
+  border-color: var(--brass); box-shadow: inset 0 0 0 1px var(--brass);
+  background: color-mix(in srgb, var(--brass) 9%, var(--surface));
+}
+.prompt.yours .ptext { color: var(--ink); }
+.pdot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-3); flex: none; }
+.prompt.yours .pdot { background: var(--brass); animation: pulse 1.4s ease-in-out infinite; }
+.ptext { overflow: hidden; text-overflow: ellipsis; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* prompt controls */
+.pactions { display: flex; gap: 4px; margin-left: auto; flex: none; }
+.pbtn {
+  font-family: var(--mono); font-size: 9px; letter-spacing: 0.05em;
+  text-transform: uppercase; padding: 2px 9px; border-radius: 2px; cursor: pointer;
+  background: var(--surface); color: var(--ink-2); border: 1px solid var(--rule-2);
+}
+.pbtn.primary { background: color-mix(in srgb, var(--brass) 22%, var(--surface)); color: var(--brass); border-color: var(--brass); }
+.pbtn:hover { filter: brightness(1.15); }
+.pnum {
+  width: 54px; font-family: var(--mono); font-size: 10px; padding: 1px 4px;
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--rule-2); border-radius: 2px;
+}
+.ptimer { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--ink-3); flex: none; }
+.seat .clk { color: var(--ink-2); }
+.seat.deciding .clk { color: var(--brass); }
+/* a card picked for the current decision, not yet confirmed */
+.card.is-chosen { box-shadow: 0 0 0 3px var(--brass); transform: translateY(-3px); }
+.card.is-eligible { cursor: pointer; }
+
+/* ------------------------------------------------------------- flyouts */
+.board { position: relative; }
+.flyout {
+  position: absolute; z-index: 6; display: flex; flex-direction: column;
+  background: var(--surface); border: 1px solid var(--rule-2); border-radius: 2px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.26); overflow: hidden;
+  /* No size transition: an animating window cannot be measured when it opens. */
+  transition: opacity 160ms ease;
+  touch-action: none;
+}
+.flyout.shut { box-shadow: none; }
+.flyout:not(.shut) { min-width: 92px; min-height: 62px; }
+.flyout.active:not(.shut) { z-index: 8; box-shadow: 0 14px 40px rgba(0,0,0,.55); }
+.flyout.active:not(.shut) .flyout-title, .flyout.active:not(.shut) .grip { color: var(--brass); }
+.flyout.dragging { box-shadow: 0 16px 44px rgba(0,0,0,.5); }
+.flyout.blocking:not(.dragging):not(:hover):not(:focus-within) { opacity: .5; }
+@media (prefers-contrast: more) { .flyout.blocking { opacity: 1; } }
+
+/* The docked tab carries "Site path · 5/9", which is longer than the title and
+   is set vertically -- at 92px the count ran off the end and lost the "/9". Tall
+   enough for the whole string now, and dropped clear of the first band label
+   underneath the seat strip. */
+/* Opens inside the tall focus band rather than straddling the support strip
+   above it, which is where a wide horizontal path used to land. */
+.flyout--path { right: 6px; top: 21%; width: 122px; height: 66%; }
+.flyout--path.shut { width: 17px; height: 132px; }
+.flyout--chat { right: 6px; bottom: 6%; width: 440px; height: 260px; }
+.flyout--chat.shut { width: 17px; height: 74px; }
+
+.flyout-tab {
+  flex: 1; width: 100%; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 6px; padding: 5px 0;
+  cursor: pointer; border: none; background: color-mix(in srgb, var(--ink) 7%, var(--surface));
+  font-family: var(--mono); font-size: 8.5px; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--ink-2);
+}
+.flyout--path .flyout-tab { background: color-mix(in srgb, var(--shared) 22%, var(--surface)); color: var(--shared); }
+.flyout:not(.shut) .flyout-tab { display: none; }
+.flyout-tab .flyout-word { writing-mode: vertical-rl; text-orientation: mixed; }
+.flyout-flag {
+  display: none; min-width: 12px; height: 11px; padding: 0 3px; border-radius: 6px;
+  background: var(--alert); color: #1A0B08; font-size: 8px; line-height: 11px;
+  text-align: center; writing-mode: horizontal-tb;
+}
+.flyout.shut[data-unread]:not([data-unread="0"]) .flyout-flag { display: block; }
+
+.flyout-head {
+  flex: none; display: flex; align-items: center; gap: 6px; padding: 3px 5px;
+  background: color-mix(in srgb, var(--ink) 8%, var(--surface));
+  border-bottom: 1px solid var(--rule); cursor: grab; user-select: none;
+}
+.flyout-head:active { cursor: grabbing; }
+.flyout--path .flyout-head { background: color-mix(in srgb, var(--shared) 22%, var(--surface)); }
+.flyout.shut .flyout-head, .flyout.shut .flyout-body, .flyout.shut .flyout-resize { display: none; }
+.flyout-title { font-family: var(--mono); font-size: 8.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-2); white-space: nowrap; }
+.grip { font-family: var(--mono); font-size: 9px; color: var(--ink-3); }
+.flyout-ctl, .flyout-close {
+  flex: none; cursor: pointer; font-family: var(--mono); font-size: 8px; line-height: 1;
+  padding: 2px 5px; background: transparent; border: 1px solid var(--rule-2);
+  border-radius: 2px; color: var(--ink-2);
+}
+.flyout-ctl { margin-left: auto; }
+.flyout-ctl + .flyout-close { margin-left: 0; }
+.flyout-head > .flyout-close:not(.flyout-ctl + *) { margin-left: auto; }
+.flyout-close:hover { color: var(--alert); border-color: var(--alert); }
+.flyout-ctl:hover { color: var(--brass); border-color: var(--brass); }
+.flyout-body { flex: 1; padding: 4px 6px; min-height: 0; overflow: auto; }
+.flyout-resize {
+  position: absolute; right: 0; bottom: 0; width: 13px; height: 13px;
+  cursor: nwse-resize; z-index: 3;
+  background: linear-gradient(135deg, transparent 46%, var(--rule-2) 46%, var(--rule-2) 60%,
+                              transparent 60%, transparent 72%, var(--rule-2) 72%, var(--rule-2) 86%, transparent 86%);
+}
+
+/* the adventure path */
+.sitecol { position: relative; height: 100%; }
+/* Height is set inline by panels.js, in px, for both orientations -- the window
+   is sized to the sites that have actually been played, so a percentage here
+   would just re-spread them over whatever height that produced. */
+.site {
+  position: absolute; aspect-ratio: 7 / 5; border-radius: 2px;
+  background: color-mix(in srgb, var(--shared) 38%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--shared) 60%, var(--surface));
+  box-shadow: 0 -2px 4px rgba(0,0,0,.4);
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 4px; padding: 2px 4px; overflow: hidden;
+}
+/* Site art, beneath the labels and above the tinted placeholder. The labels are
+   in normal flow, so they need `position: relative` for z-index to apply --
+   unlike the card overlays, which position themselves and must NOT be given a
+   position here. See the note on `.card > :not(.c-art)`. */
+.site .s-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.snum, .sowner {
+  position: relative; z-index: 1;
+  font-family: var(--mono); font-size: 7px; line-height: 1; color: var(--surface);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .9);
+}
+.snum { font-variant-numeric: tabular-nums; flex: none; }
+.sowner { opacity: .85; }
+/* Sites already walked are NOT faded. They were at .42, which made every site
+   stacked behind the current one read as translucent -- a path of ghosts with
+   one solid card in it. `.now` already marks where the fellowship stands, with
+   a brass border and a lift, so the fade said it a second time and cost
+   legibility to do it. */
+.site.now { z-index: 5; background: color-mix(in srgb, var(--brass) 34%, var(--surface)); border-color: var(--brass); box-shadow: 0 0 0 1px var(--brass), 0 3px 10px rgba(0,0,0,.55); }
+.site.now .snum, .site.now .sowner { color: var(--ink); }
+.site.pending { background: transparent; border-style: dashed; border-color: var(--rule-2); box-shadow: none; }
+.site.pending .snum, .site.pending .sowner { color: var(--ink-3); }
+
+/* The transcript scrolls; the say box stays put at the bottom. The body itself
+   must not scroll, or the input scrolls away with the backlog. */
+.flyout--chat .flyout-body { display: flex; flex-direction: column; overflow: hidden; gap: 4px; }
+.chat-lines {
+  flex: 1; min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 2px;
+  font-family: var(--mono); font-size: 9px; line-height: 1.45; color: var(--ink-2);
+}
+.chat-warn { color: var(--alert); }
+/* The room narrating itself, set back from what people actually said. */
+.chat-system { color: var(--ink-3); }
+.chat-who { color: var(--brass); margin-right: 5px; }
+.chat-who::after { content: ":"; }
+/* A card named in the log. Hovering one previews it, through the same zoom the
+   board uses. */
+.cardhint {
+  color: var(--free); border-bottom: 1px dotted color-mix(in srgb, var(--free) 55%, transparent);
+  cursor: help;
+}
+.chat-warn .cardhint { color: inherit; border-bottom-color: currentColor; }
+
+.chat-say { flex: none; display: flex; gap: 4px; }
+.chat-say input {
+  flex: 1; min-width: 0; padding: 3px 6px; border-radius: 2px;
+  font-family: var(--mono); font-size: 10px;
+  background: var(--sunken); color: var(--ink);
+  border: 1px solid var(--rule-2);
+}
+.chat-say input:focus { outline: none; border-color: var(--brass); }
+.chat-say button {
+  flex: none; padding: 3px 10px; border-radius: 2px; cursor: pointer;
+  font-family: var(--mono); font-size: 9px; text-transform: uppercase; letter-spacing: .08em;
+  background: transparent; color: var(--brass); border: 1px solid var(--brass);
+}
+.chat-say button:hover { background: color-mix(in srgb, var(--brass) 16%, transparent); }
+
+/* A card and whatever rides on it. The attachments come first in the DOM so the
+   host paints on top; they overlap so the group costs little more width than
+   the host alone, and each still peeks out far enough to be recognised and
+   hovered. */
+.cardgroup { display: flex; flex: none; height: 100%; align-items: stretch; }
+/* The overlap is measured against the ROW's height, not the group's width. A
+   percentage margin on a flex item resolves against its container's inline
+   size, and `.cardgroup` is auto-width -- sized by the very children the margin
+   is meant to pull together -- so a percentage there is circular and lands the
+   group half off the band. Cards are `height: 100%` with an aspect ratio, so
+   the row's height is the one definite dimension in play: 48cqh is ~67% of a
+   card's width at 5:7, and stays correct at any band height. */
+.cardgroup > .card + .card { margin-left: -48cqh; }
+.cardgroup > .card:not(:last-child) { filter: brightness(.82); }
+
+/* Being dragged to a new place in its row. */
+.card.is-dragging { opacity: .75; z-index: 25; cursor: grabbing; }
+
+/* Marked inactive for this turn: it is still on the board and still counts, so
+   it is dimmed rather than hidden, and its numbers go grey the way the
+   reference client greys them. */
+.card.is-inactive { filter: grayscale(.55) brightness(.72); }
+.card.is-inactive .c-stat { color: #9a9a9a; text-shadow: none; }
+/* An errata card, marked down the edge rather than across the art. */
+.card.has-errata::after {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+  z-index: 2; background: repeating-linear-gradient(
+    180deg, var(--brass) 0 5px, transparent 5px 10px);
+}
+.card--compact.has-errata::after { width: 2px; }
+
+/* Transient feedback: what just happened, and to what. These are applied
+   directly to the DOM and wiped by the next repaint, which is correct -- they
+   describe a moment, not a state. */
+.card.is-flash { box-shadow: 0 0 0 3px var(--brass), 0 0 18px 4px color-mix(in srgb, var(--brass) 60%, transparent); }
+.card.is-source { box-shadow: 0 0 0 3px var(--free), 0 0 16px 3px color-mix(in srgb, var(--free) 55%, transparent); }
+.card.is-affected { box-shadow: 0 0 0 3px var(--alert), 0 0 16px 3px color-mix(in srgb, var(--alert) 55%, transparent); }
+/* A card that is nowhere on the board -- usually an event as it is played --
+   held up long enough to read. */
+.onscreen {
+  position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%);
+  z-index: 40; pointer-events: none;
+  animation: onscreen-in 220ms cubic-bezier(.2, .9, .3, 1);
+}
+.onscreen img {
+  height: 46vh; max-height: 420px; border-radius: 5px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .7), 0 0 0 2px var(--brass);
+}
+@keyframes onscreen-in {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(.86); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) { .onscreen { animation: none; } }
+
+/* Before the game: the format's preamble, your notes, and the table. */
+.flyout--pregame { left: 50%; top: 14%; width: 520px; height: 340px; }
+.flyout--pregame .flyout-body { display: flex; flex-direction: column; gap: 10px; }
+.pregame-summary, .pregame-notes {
+  font-family: var(--body); font-size: 11.5px; line-height: 1.5; color: var(--ink-2);
+  display: flex; flex-direction: column; gap: 5px;
+}
+.pregame-notes { color: var(--brass); }
+.pregame-seats { display: flex; flex-wrap: wrap; gap: 8px; }
+.pregame-seat {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 5px 7px; border-radius: 3px;
+  background: var(--sunken); border: 1px solid var(--rule-2);
+}
+.pregame-seat.is-you { border-color: var(--brass); }
+.pregame-who { font-family: var(--mono); font-size: 9px; color: var(--ink-3); }
+.pregame-seat.is-you .pregame-who { color: var(--brass); }
+.pregame-seat img { height: 92px; border-radius: 2px; }
+
+.cardinfo-body {
+  font-family: var(--body); font-size: 11px; line-height: 1.45; color: var(--ink-2);
+  display: flex; flex-direction: column; gap: 4px;
+}
+
+/* Choosing between several abilities on one card. */
+.actionmenu {
+  position: absolute; z-index: 30; min-width: 150px; max-width: 320px;
+  display: flex; flex-direction: column; padding: 3px;
+  background: var(--surface); border: 1px solid var(--brass); border-radius: 3px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, .6);
+}
+.actionitem {
+  text-align: left; padding: 5px 8px; border: none; border-radius: 2px;
+  background: transparent; color: var(--ink); cursor: pointer;
+  font-family: var(--body); font-size: 11px; line-height: 1.3;
+}
+.actionitem:hover { background: color-mix(in srgb, var(--brass) 22%, transparent); }
+
+/* The card picker: cards described by a decision, not held in state. */
+.flyout--picker { left: 50%; top: 24%; width: 460px; height: 300px; }
+.flyout--picker .flyout-body { display: flex; flex-direction: column; gap: 6px; }
+.pickgrid {
+  flex: 1; min-height: 0; overflow-y: auto;
+  display: flex; flex-wrap: wrap; align-content: flex-start; gap: 6px;
+}
+.pickgrid .card { height: 132px; cursor: default; }
+/* Shown but not choosable -- "look at the hand, discard a Shadow card" shows
+   the whole hand. Dimmed rather than hidden: what is NOT choosable is
+   information too. */
+.pickgrid .card.is-locked { opacity: .4; filter: grayscale(.5); }
+.pickgrid .card.is-pickable { cursor: pointer; }
+.pickgrid .card.is-pickable:hover { outline: 1px solid var(--brass); }
+.pickgrid .card.is-chosen { box-shadow: 0 0 0 3px var(--brass); }
+.pickbar { flex: none; display: flex; align-items: center; gap: 8px; }
+.picknote { font-family: var(--mono); font-size: 9px; color: var(--ink-3); flex: 1; }
+.pnote { font-family: var(--mono); font-size: 9px; color: var(--ink-3); }
+
+/* piles and zoom */
+.pilebtn {
+  position: absolute; top: 2px; right: 3px; width: 13px; height: 13px; padding: 0;
+  display: grid; place-items: center; cursor: pointer;
+  font-family: var(--mono); font-size: 9px; line-height: 1;
+  color: var(--ink-3); background: transparent;
+  border: 1px solid var(--rule-2); border-radius: 2px;
+}
+.pilebtn:hover { color: var(--brass); border-color: var(--brass); }
+
+.flyout--piles { left: 6px; top: 22%; width: 300px; height: 220px; }
+/* No docked tab, so a shut piles window leaves nothing behind at all rather
+   than collapsing to a tab-sized stub. */
+.flyout.no-tab.shut { display: none; }
+.piletabs { display: flex; gap: 3px; flex-wrap: wrap; margin-bottom: 5px; }
+.ptab {
+  font-family: var(--mono); font-size: 8px; text-transform: uppercase;
+  letter-spacing: .05em; padding: 2px 7px; border-radius: 2px; cursor: pointer;
+  background: var(--surface); color: var(--ink-3); border: 1px solid var(--rule-2);
+}
+.ptab.on { background: color-mix(in srgb, var(--brass) 20%, var(--surface)); color: var(--brass); border-color: var(--brass); }
+/* The one place a grid beats a row: a discard runs past 40 cards. */
+.pilegrid { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 4px; }
+.pilegrid .card { height: 62px; }
+
+.zoom {
+  position: absolute; top: 50%; transform: translateY(-50%); z-index: 10;
+  height: 62%; aspect-ratio: 5 / 7; border-radius: 4px;
+  border: 1px solid var(--brass);
+  background: color-mix(in srgb, var(--ink) 18%, var(--surface));
+  box-shadow: 0 12px 34px rgba(0,0,0,.5);
+  pointer-events: none; display: none; place-items: center;
+}
+.zoom.on { display: grid; }
+.zoom.landscape { height: 44%; aspect-ratio: 7 / 5; }
+.zoom.at-left { left: 10px; }
+.zoom.at-right { right: 10px; }
+.zoom span { font-family: var(--mono); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--brass); }
+
+/* card art, beneath the overlays and above the tinted placeholder */
+.c-art {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; border-radius: 2px; z-index: 0;
+}
+/* Lifts the overlays above the art, and NOTHING else. This selector is 0,2,0,
+   so any `position` here beats the 0,1,0 rule each overlay writes for itself --
+   it was `position: relative`, which silently returned every badge to normal
+   flow and turned its top/left into a flow offset. The stat badges then landed
+   at 60/91/111% instead of 60/74/84, and the third was clipped off the card.
+   Every overlay positions itself; z-index applies to them as they are. */
+/* A meta-site modifier's own art, across the bottom of the site it modifies.
+   Bottom-anchored and cropped, the way the reference client does it. */
+.c-meta {
+  position: absolute; left: 0; right: 0; bottom: 0; width: 100%;
+  object-fit: cover; object-position: bottom; z-index: 0;
+  border-top: 1px solid color-mix(in srgb, var(--brass) 60%, transparent);
+}
+.card > :not(.c-art) { z-index: 1; }
+.card > .c-meta { z-index: 0; }
+.zoom { overflow: hidden; }
+.zoom .z-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+
+.seatbtns { position: absolute; top: 2px; right: 3px; display: flex; gap: 2px; }
+.seatbtns .pilebtn { position: static; }
+
+/* Seat carousel arrows.
+   Sat at 50%, which is where the band labels of the two lower bands land -- the
+   arrows covered the first few characters of each, so "MINIONS IN PLAY" read as
+   "IONS IN PLAY". Raised clear of them. They stay well inside the tall middle
+   band, which is what they need to be reachable over. */
+.navarrow {
+  position: absolute; top: 38%; transform: translateY(-50%); z-index: 7;
+  width: 22px; height: 52px; padding: 0; display: grid; place-items: center;
+  cursor: pointer; border-radius: 3px;
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  border: 1px solid var(--rule-2); color: var(--ink-2);
+  font-family: var(--mono); font-size: 13px; line-height: 1;
+}
+.navarrow:hover:not([disabled]) { background: var(--surface); color: var(--brass); border-color: var(--brass); }
+.navarrow[disabled] { opacity: .3; cursor: default; }
+.navarrow.prev { left: 6px; }
+.navarrow.next { right: 6px; }
+.poschip {
+  position: absolute; top: 6px; left: 50%; transform: translateX(-50%); z-index: 7;
+  font-family: var(--mono); font-size: 9px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--ink-2); background: color-mix(in srgb, var(--surface) 90%, transparent);
+  border: 1px solid var(--rule-2); border-radius: 9px; padding: 1px 9px; white-space: nowrap;
+}

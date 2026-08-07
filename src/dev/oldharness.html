@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>old GUI harness</title>
+
+<!-- The old client's own stylesheets. Absolute paths: this page is served from
+     /gemp-lotr/newclient/dev/ but the old client lives at /gemp-lotr/. -->
+<link rel="stylesheet" href="/gemp-lotr/css/gemp-001/game.css">
+<link rel="stylesheet" href="/gemp-lotr/css/gemp-001/autozoom.css">
+<link rel="stylesheet" href="/gemp-lotr/css/dark-hive/jquery-ui-1.8.16.custom.css">
+<link rel="stylesheet" href="/gemp-lotr/css/jquery.contextMenu.css">
+<link rel="stylesheet" href="/gemp-lotr/js/jquery/styles/jquery.spinnercontrol.css">
+</head>
+<body>
+<!-- game.html's own body, verbatim: initializeGameUI reaches into these ids. -->
+<div id="main">
+  <div id="pregame-info">
+    <div id="pregame-general" class="ui-widget-content"> </div>
+    <div class="ui-widget-content" style="display:flex;">
+      <div id="left-pregame-info" class="ui-widget-content">
+        <div id="left-pregame-header">You</div>
+        <div id="left-pregame-content"></div>
+      </div>
+      <div id="vs-overlay">VS</div>
+      <div id="right-pregame-info" class="ui-widget-content">
+        <div id="right-pregame-header">Them</div>
+        <div id="right-pregame-content"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/gemp-lotr/js/jquery/jquery-1.6.2.js"></script>
+<script src="/gemp-lotr/js/jquery/jquery-ui-1.8.16.custom.min.js"></script>
+<script src="/gemp-lotr/js/jquery/jquery.cookie.js"></script>
+<script src="/gemp-lotr/js/jquery/jquery.spinnercontrol.js"></script>
+<script src="/gemp-lotr/js/jquery/jquery.layout.js"></script>
+<script src="/gemp-lotr/js/jquery/jquery.touchSwipe.js"></script>
+<script src="/gemp-lotr/js/gemp-022/inheritance.js"></script>
+<script src="/gemp-lotr/js/gemp-022/common.js"></script>
+<script src="/gemp-lotr/js/gemp-022/logging.js"></script>
+<script src="/gemp-lotr/js/gemp-022/chat.js"></script>
+<script src="/gemp-lotr/js/gemp-022/communication.js"></script>
+<script src="/gemp-lotr/js/gemp-022/commonUi.js"></script>
+<script src="/gemp-lotr/js/gemp-022/cards/CardFilter.js"></script>
+<script src="/gemp-lotr/js/gemp-022/cards/CardGroup.js"></script>
+<script src="/gemp-lotr/js/gemp-022/cards/Card.js"></script>
+<script src="/gemp-lotr/js/gemp-022/cards/CardDisplay.js"></script>
+<script src="/gemp-lotr/js/gemp-022/cards/CardInfoDialog.js"></script>
+<script src="/gemp-lotr/js/gemp-022/cards/CardImages.js"></script>
+<script src="/gemp-lotr/js/gemp-022/cards/PackImages.js"></script>
+<script src="/gemp-lotr/js/gemp-022/hobbit.js"></script>
+<script src="/gemp-lotr/js/gemp-022/set40.js"></script>
+<script src="/gemp-lotr/js/gemp-022/PC_Cards.js"></script>
+<script src="/gemp-lotr/js/gemp-022/autoZoomHandler.js"></script>
+<script src="/gemp-lotr/js/gemp-022/gameUi.js"></script>
+<script src="/gemp-lotr/js/gemp-022/gameAnimations.js"></script>
+
+<script>
+/**
+ * A can opener for the old client.
+ *
+ * The old GUI is 3000 lines of jQuery that assumes a server, a chat room and a
+ * human with a mouse. But every answer it ever sends leaves through ONE door --
+ * `decisionFunction` -> `communication.gameDecisionMade` (gameUi.js:1272) -- and
+ * every event it ever receives enters through another: `processXml`. Stub the
+ * first and call the second and the whole thing becomes a pure function from
+ * event stream to answer, with no network and no human.
+ *
+ * That is what makes it usable as an ORACLE. It is the client thousands of games
+ * were played through, so where the new client disagrees with it about what to
+ * send, the new client is the one that is wrong until proven otherwise.
+ *
+ * Everything below is stubbing, not logic: the harness must not teach the old
+ * client anything, only watch it.
+ */
+window.OLD = (function () {
+  var ui = null;
+  var calls = { processDecision: 0, cardActionChoice: 0, lastType: null };
+  var sent = [];            // every (decisionId, value) it tried to send
+  var errors = [];
+
+  window.onerror = function (msg, src, line) {
+    errors.push(msg + " @" + String(src).split("/").pop() + ":" + line);
+  };
+
+  // getUrlParam is read all over the old client (gameId, participantId).
+  var params = {};
+  window.getUrlParam = function (name) { return params[name] ?? null; };
+
+  function boot(opts) {
+    params = { gameId: opts.gameId ?? "1", participantId: opts.participantId ?? "asdf" };
+    sent = [];
+    errors = [];
+
+    document.getElementById("main").innerHTML =
+      document.getElementById("main").innerHTML;   // reset between runs
+
+    ui = new GempLotrGameUI("/gemp-lotr-server", false);
+
+    // Cut every wire to the outside world. `gameDecisionMade` is the one that
+    // matters -- it is where an answer would have gone -- and the rest simply
+    // must not fire XHRs in a headless run.
+    ui.communication.gameDecisionMade = function (decisionId, result) {
+      sent.push({ decisionId: String(decisionId), value: String(result) });
+    };
+    // NATIVE MODALS ARE A WIRE TO THE OUTSIDE WORLD TOO.
+    //
+    // `assignMinionsDecision`'s Done button calls
+    // `confirm("At least one minion has not been assigned...")` (gameUi.js:2892)
+    // whenever a minion is left unassigned. Headless there is nobody to answer
+    // it, so the page stops dead -- `--dump-dom` returns zero bytes and the run
+    // looks like a crash rather than a question. Answering "yes" is what a
+    // player driving the same click would do, and it is the only value that
+    // lets the decision be observed at all.
+    window.confirm = function () { return true; };
+    window.alert = function () {};
+    window.prompt = function () { return null; };
+
+    ui.communication.startGameSession = function () {};
+    ui.communication.updateGameState = function () {};
+    ui.communication.getGameCardModifiers = function () {};
+    ui.communication.concede = function () {};
+
+    // The chat box opens its own long poll and is irrelevant to decisions, but
+    // the UI calls a scattering of methods on it during layout (setBounds,
+    // appendMessage, beginGameChat, ...). A proxy answering every property with
+    // a no-op is sturdier than a list that has to be kept in step with 3000
+    // lines of client we are deliberately not reading in full.
+    ui.chatBox = new Proxy({}, { get: function () { return function () {}; } });
+
+    // Make `#main`'s jQuery queue SYNCHRONOUS.
+    //
+    // The old client defers real work onto `$("#main").queue(...)` -- decision
+    // rendering included (gameAnimations.js:1201). In a browser the queue is
+    // pumped by animations finishing; headless there are none, and any queued
+    // function that does not reach its `next()` stalls every later one for
+    // ever. Draining by hand does not help: jQuery will not dequeue past a
+    // function it believes is still running.
+    //
+    // Since nothing here animates, "queue this" can simply mean "do it now".
+    // That is the whole point of the can opener: we want the client's LOGIC,
+    // not its pacing.
+    if (!$.fn.__queuePatched) {
+      var origQueue = $.fn.queue;
+      $.fn.queue = function (type, fn) {
+        var f = (typeof type === "function") ? type : fn;
+        if (typeof f === "function" && this[0] && this[0].id === "main") {
+          try { f(function () {}); } catch (e) { errors.push("queued: " + e.message); }
+          return this;
+        }
+        return origQueue.apply(this, arguments);
+      };
+      $.fn.__queuePatched = true;
+    }
+
+    // Count the two steps a card-action decision must pass through, so a
+    // mismatch says WHERE it stopped instead of only that it did.
+    calls = { processDecision: 0, cardActionChoice: 0, lastType: null };
+    var origProcess = ui.animations.processDecision.bind(ui.animations);
+    ui.animations.processDecision = function (decision, animate) {
+      calls.processDecision++;
+      calls.lastType = decision.getAttribute("decisionType");
+      return origProcess(decision, animate);
+    };
+    var origCardAction = ui.cardActionChoiceDecision.bind(ui);
+    ui.cardActionChoiceDecision = function (decision) {
+      calls.cardActionChoice++;
+      calls.lastCardActionId = decision.getAttribute("id");
+      var r = origCardAction(decision);
+      // Measured INSIDE the call: how many cards it actually lit up. If this is
+      // non-zero here but zero by the time offers() runs, something wiped it
+      // afterwards. If it is zero here, the handler itself found nothing.
+      calls.attachedDuringCall = $(".actionableCard").length;
+      return r;
+    };
+
+    // NO TOUCH DEBOUNCE IN A HEADLESS RUN.
+    //
+    // gameUi.js:834-840 ignores a click on the same card id within
+    // `selectionDebounceMs` of the last one, to stop a touch device
+    // double-firing. Cases here run milliseconds apart and deliberately reuse
+    // the same board card, so the debounce silently swallowed the click and the
+    // differential reported "the old client sent nothing" for most of
+    // CARD_ACTION_CHOICE and half of CARD_SELECTION. It is a real protection for
+    // a real finger and pure noise for a driver.
+    ui.selectionDebounceMs = 0;
+
+    ui.layoutUI(true);
+    return { ok: !!ui, errors: errors.slice() };
+  }
+
+  /** Feed one batch of events, exactly as the server would send it. */
+  function feed(xmlText) {
+    var doc = new DOMParser().parseFromString(xmlText, "text/xml");
+    // processXml only accepts <gameState> or <update> as the root.
+    ui.processXml(doc, false);
+    return { errors: errors.slice() };
+  }
+
+  /**
+   * Feed events one at a time, which is how the client's own replay path does
+   * it (`playNextReplayEvent` -> `processGameEvent`). Always with animate=false:
+   * the animated path defers work onto jQuery's `#main` queue, and in a
+   * headless run with no frames being painted that queue never drains, so the
+   * client would sit for ever having processed nothing.
+   */
+  function feedEvents(elements) {
+    for (var i = 0; i < elements.length; i++) {
+      try {
+        // `cleanupDecision` BEFORE each event, exactly as playNextReplayEvent
+        // queues it. Without it the per-card `data("action")` arrays are never
+        // cleared, so every decision inherits the last one's options -- which
+        // showed up here as two different cards both offering "actionId 0".
+        ui.cleanupDecision();
+        ui.processGameEvent(elements[i], animateFor(elements[i]));
+      } catch (e) {
+        errors.push("event " + i + " (" + elements[i].getAttribute("type") + "): " + e.message);
+      }
+    }
+    return { errors: errors.slice() };
+  }
+
+  /**
+   * Decisions must be fed with animate=TRUE. Everything else stays false.
+   *
+   * `processDecision` ends with:
+   *
+   *     if (!animate) that.game.layoutUI(false);
+   *
+   * (gameAnimations.js:1233) -- so with animate=false the board is re-laid out
+   * the instant after the decision handler has attached `data("action")` and
+   * the `actionableCard` class to the cards, and both are thrown away. The
+   * client then genuinely offers nothing, for a decision it correctly received
+   * and correctly rendered a moment earlier.
+   *
+   * That is why the old harness appeared to under-report options: the harness
+   * was destroying them. animate=false is right for card movement -- it is what
+   * keeps the animation queue from stalling -- but for a DECISION it is exactly
+   * wrong. The queue patch in boot() means animate=true no longer defers
+   * anything, so there is no cost to it.
+   */
+  function animateFor(ge) {
+    return ge.getAttribute("type") === "D";
+  }
+
+  /**
+   * Run out jQuery's `#main` queue.
+   *
+   * `processDecision` (gameAnimations.js:1201) defers ALL of its work onto
+   * `$("#main").queue(...)`, whatever the animate flag says -- so a decision is
+   * not rendered when processGameEvent returns, it is rendered when the queue
+   * next runs. In a browser something is always animating and the queue drains
+   * by itself; headless, nothing does, so the client showed no options for
+   * decisions it had genuinely been asked. That is what made the mismatches
+   * INTERMITTENT: whether the queue happened to have drained was a race.
+   *
+   * Draining explicitly is the difference between reading the old client's
+   * answer and reading whatever it had got round to.
+   */
+  function drain() {
+    for (var i = 0; i < 200; i++) {
+      var pending = $("#main").queue();
+      if (!pending || !pending.length) break;
+      try { $("#main").dequeue(); } catch (e) { errors.push("drain: " + e.message); break; }
+    }
+  }
+
+  /**
+   * Feed a whole batch as it arrived from the server, then make sure the
+   * decision it carried is the thing left standing.
+   *
+   * `cleanupDecision` runs before EVERY event, so a batch of [decision, more,
+   * events] renders the decision and then wipes it -- the client ends up
+   * showing no options for a decision it has genuinely been asked. Feeding one
+   * event at a time hides this because a replay is walked decision by decision;
+   * a live server sends whatever it has.
+   *
+   * So: feed everything, and if the batch's decision was not the last event,
+   * process it once more at the end. That is the state the player is really in.
+   */
+  function feedBatch(elements) {
+    var lastDecision = null;
+    for (var i = 0; i < elements.length; i++) {
+      try {
+        ui.cleanupDecision();
+        ui.processGameEvent(elements[i], animateFor(elements[i]));
+      } catch (e) {
+        errors.push("event " + i + " (" + elements[i].getAttribute("type") + "): " + e.message);
+      }
+      if (elements[i].getAttribute("type") === "D") lastDecision = elements[i];
+    }
+    drain();
+    // ALWAYS re-render the batch's decision last, not merely when it happened
+    // to arrive last. Several things clear a rendered decision -- our own
+    // cleanupDecision before each event, and layoutUI after some of them -- and
+    // the oracle must be read in the state the player is actually in: decision
+    // current, options attached. Re-rendering is cheap and idempotent.
+    if (lastDecision) {
+      try {
+        ui.cleanupDecision();
+        ui.processGameEvent(lastDecision, true);
+      } catch (e) {
+        errors.push("re-render decision: " + e.message);
+      }
+      calls.attachedAfterRerender = $(".actionableCard").length;
+      // NO drain() here. Draining after the re-render runs whatever stale work
+      // is still queued -- including a `layoutUI` from an earlier event -- on
+      // top of the decision that was just rendered, and that is what threw the
+      // options away. Measured: attachedDuringCall 1, actionableAtEndOfFeed 0.
+      // The queue is flushed BEFORE the re-render instead, so the decision is
+      // the last thing to touch the DOM.
+    }
+    // What the oracle would say RIGHT NOW, at the end of feeding. Compared with
+    // what offers() reports later, this says whether the options are lost
+    // inside the harness or after control leaves it.
+    calls.reRendered = !!lastDecision;
+    calls.offersAtEndOfFeed = offers().options.length;
+    calls.actionableAtEndOfFeed = $(".actionableCard").length;
+    return { errors: errors.slice() };
+  }
+
+  /**
+   * Feed from `start` until a DECISION has been processed, and stop there.
+   *
+   * This is the position the oracle has to be read from: `cleanupDecision` runs
+   * before every event, so a decision only survives while it is the LAST thing
+   * fed. Feeding a round number of events almost always lands between
+   * decisions, with nothing on offer.
+   */
+  function feedUntilDecision(elements, start) {
+    for (var i = start; i < elements.length; i++) {
+      try {
+        ui.cleanupDecision();
+        ui.processGameEvent(elements[i], animateFor(elements[i]));
+      } catch (e) {
+        errors.push("event " + i + " (" + elements[i].getAttribute("type") + "): " + e.message);
+      }
+      if (elements[i].getAttribute("type") === "D") {
+        drain();
+        return { at: i, done: false, decision: describe(elements[i]) };
+      }
+    }
+    return { at: elements.length, done: true, decision: null };
+  }
+
+  /** The decision element, as plain data both clients can be asked about. */
+  function describe(ge) {
+    var params = {};
+    var ps = ge.getElementsByTagName("parameter");
+    for (var i = 0; i < ps.length; i++) {
+      var n = ps[i].getAttribute("name");
+      (params[n] = params[n] || []).push(ps[i].getAttribute("value"));
+    }
+    return {
+      id: ge.getAttribute("id"),
+      type: ge.getAttribute("decisionType"),
+      text: ge.getAttribute("text"),
+      params: params
+    };
+  }
+
+  /** Parse a document and hand back its <ge> elements, in order. */
+  function parseEvents(xmlText) {
+    var doc = new DOMParser().parseFromString(xmlText, "text/xml");
+    return doc.getElementsByTagName("ge");
+  }
+
+  /**
+   * What the old client is currently offering, in a form the new client can be
+   * asked the same question about.
+   *
+   * Read off the DOM it produced rather than off its internals: what a player
+   * can actually click IS the client's answer to "what are my options", and it
+   * is the only definition both clients can be measured against.
+   */
+  function offers() {
+    var out = { shape: null, options: [] };
+
+    // Buttons in the small dialog: ACTION_CHOICE and MULTIPLE_CHOICE.
+    var dialogButtons = $(".ui-dialog:visible button, #smallDialog button")
+      .filter(function () { return $(this).is(":visible"); });
+    // Cards the client has lit up as choosable.
+    //
+    // BOTH the class AND the data, because that is the client's OWN gate:
+    // gameUi.js:832 acts on a click only when the card `hasClass("selectableCard")
+    // || hasClass("actionableCard")`. `data("action")` alone is not enough.
+    //
+    // The two come apart. `clearSelection` (gameUi.js:2990-2995) nulls the data
+    // only on elements that still carry one of those classes, so a card whose
+    // class was dropped by an intervening re-layout keeps its stale action array
+    // for ever. Measured on a host card carrying an attachment: `act=2` left
+    // over from a decision several decisions earlier, while `actionableCards`
+    // correctly reported 1. Reading the data alone therefore reports options the
+    // real client would refuse to act on -- the oracle inventing offers.
+    //
+    // Live runs rarely hit it, because board events between decisions re-create
+    // the card elements and take the orphaned data with them. `decisionfuzz.html`
+    // feeds decisions with no board events between them, which is what exposed it.
+    var actionCards = $(".card").filter(function () {
+      return $(this).hasClass("actionableCard") && $(this).data("action") != null;
+    });
+    var selectable = $(".selectableCard");
+
+    // The card's id lives on `data("card").cardId`, not on a `cardId` data key
+    // -- that is what the client's own `:cardId()` selector reads (gameUi:138).
+    var idOf = function (node) {
+      var d = $(node).data("card");
+      return d && d.cardId != null ? String(d.cardId) : null;
+    };
+
+    if (actionCards.length) {
+      out.shape = "cardAction";
+      actionCards.each(function () {
+        var id = idOf(this);
+        var acts = $(this).data("action") || [];
+        for (var i = 0; i < acts.length; i++) {
+          out.options.push({ cardId: id, actionId: String(acts[i].actionId),
+                             text: acts[i].actionText });
+        }
+      });
+    } else if (selectable.length) {
+      out.shape = "cardSelection";
+      selectable.each(function () {
+        out.options.push({ cardId: idOf(this) });
+      });
+    } else if ($("#multipleChoiceDecision option").length) {
+      // MULTIPLE_CHOICE HAS TWO RENDERINGS, and only one of them is buttons.
+      // `multipleChoiceDecision` (gameUi.js:2121) switches on
+      // `results.length > 2 || settingsAlwaysDropDown`: above two options it
+      // builds a <select> whose option VALUES are the indices and a single "OK"
+      // button; at two or fewer it builds one button per option. Counting
+      // buttons alone therefore reported "1 option" for a ten-way choice --
+      // which reads as the new client inventing nine options.
+      out.shape = "button";
+      $("#multipleChoiceDecision option").each(function (i) {
+        out.options.push({ index: i, text: $(this).text() });
+      });
+    } else if (dialogButtons.length) {
+      out.shape = "button";
+      dialogButtons.each(function (i) {
+        out.options.push({ index: i, text: $(this).text() });
+      });
+    }
+    return out;
+  }
+
+  /**
+   * Why is the old client offering nothing? Enough of its internals to tell a
+   * missing DOM node from a decision it never rendered.
+   */
+  function diagnose(cardIds) {
+    var known = {};
+    $(".card").each(function () {
+      var d = $(this).data("card");
+      if (d && d.cardId != null) known[String(d.cardId)] = d.zone || "?";
+    });
+    return {
+      totalCards: Object.keys(known).length,
+      askedAbout: (cardIds || []).map(function (id) {
+        // The client finds cards with `$.inArray(cardData.cardId, ["253"])`,
+        // which is type-sensitive -- a numeric id never matches a string one.
+        // `selectorFinds` is the client's OWN lookup, so it answers the only
+        // question that matters: can it reach this card at all?
+        var el = $(".card:cardId(" + id + ")");
+        var d = el.length ? el.data("card") : null;
+        return { cardId: String(id), inDom: known[String(id)] || null,
+                 selectorFinds: el.length,
+                 idType: d ? typeof d.cardId : null,
+                 hasActionData: el.length ? (el.data("action") || []).length : null };
+      }),
+      bottomPlayer: ui && ui.bottomPlayerId,
+      hasHand: !!(ui && ui.hand),
+      // `allowSelection` both attaches data("action") AND adds this class
+      // (gameUi.js:2342). Class present but data missing => something cleared
+      // the data afterwards. Neither present => the function never ran.
+      actionableCards: $(".actionableCard").length,
+      hasAlertText: !!(ui && ui.alertText),
+      recentErrors: errors.slice(-3),
+      calls: JSON.parse(JSON.stringify(calls))
+    };
+  }
+
+  return {
+    boot: boot,
+    diagnose: diagnose,
+    feed: feed,
+    feedEvents: feedEvents,
+    feedUntilDecision: feedUntilDecision,
+    feedBatch: feedBatch,
+    drain: drain,
+    parseEvents: parseEvents,
+    offers: offers,
+    sent: function () { return sent.slice(); },
+    errors: function () { return errors.slice(); },
+    /** Drive the old UI the way a player would, then read what it sent. */
+    click: function (selector, index) {
+      var nodes = $(selector).filter(":visible");
+      var node = nodes[index ?? 0];
+      if (!node) return { clicked: false, sent: sent.slice() };
+      $(node).trigger("click");
+      return { clicked: true, sent: sent.slice() };
+    },
+    /**
+     * The same, WITHOUT the `:visible` filter.
+     *
+     * jQuery calls an element visible only when it has layout, and cards the
+     * client puts inside `cardActionDialog` have none in a headless run -- the
+     * dialog is never really opened and painted. So `click()` refused every card
+     * belonging to CARD_ACTION_CHOICE and ARBITRARY_CARDS, and the differential
+     * reported "the old client sent nothing" for both types across every case.
+     * That reads as the old client failing when it is the harness declining to
+     * press the button.
+     *
+     * Safe because the client's own gate does not consider visibility either:
+     * gameUi.js:832 acts on a click whenever the card carries `selectableCard`
+     * or `actionableCard`. `click()` keeps the filter for board cards, where
+     * visibility is meaningful and real.
+     */
+    clickAny: function (selector, index) {
+      var node = $(selector)[index ?? 0];
+      if (!node) return { clicked: false, sent: sent.slice() };
+      $(node).trigger("click");
+      return { clicked: true, sent: sent.slice() };
+    },
+    /** Answer straight through the funnel, bypassing the mouse. */
+    answer: function (decisionId, value) {
+      ui.decisionFunction(decisionId, value);
+      return sent.slice();
+    },
+    get ui() { return ui; }
+  };
+})();
+document.title = "old-harness-ready";
+
+/**
+ * Self-test: `?replayId=<player>$<id>&upto=N` boots the old client, feeds it the
+ * first N events of a real recording, and reports what it managed. This is the
+ * proof that the can opener works at all -- everything downstream assumes it.
+ */
+(async function () {
+  var q = new URLSearchParams(location.search);
+  var replayId = q.get("replayId");
+  if (!replayId) return;
+  var upto = parseInt(q.get("upto") || "300", 10);
+
+  var out = document.createElement("pre");
+  out.id = "selftest";
+  out.style.cssText = "position:fixed;left:0;bottom:0;z-index:9999;background:#000;color:#0f0;font:11px monospace;margin:0;padding:6px;max-height:40vh;overflow:auto";
+  document.body.appendChild(out);
+  var lines = [];
+
+  try {
+    if (q.get("login")) {
+      await fetch("/gemp-lotr-server/login", {
+        method: "POST", credentials: "same-origin",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ login: q.get("login"), password: q.get("password") || "" })
+      });
+    }
+    var xml = await (await fetch("/gemp-lotr-server/replay/" + replayId,
+                                 { credentials: "same-origin" })).text();
+    var events = window.OLD.parseEvents(xml);
+    lines.push("events in recording: " + events.length);
+
+    var player = replayId.split("$")[0];
+    lines.push("boot as: " + player);
+    window.OLD.boot({ gameId: "1", participantId: player });
+
+    var all = [].slice.call(events);
+    var at = 0, seen = 0, last = null;
+    while (seen < upto) {
+      var r = window.OLD.feedUntilDecision(all, at);
+      if (r.done) break;
+      at = r.at + 1; seen++; last = r;
+    }
+    lines.push("decisions reached: " + seen + " (event " + at + " of " + all.length + ")");
+    lines.push("last decision: " + (last ? last.decision.type + " -- " + last.decision.text : "none"));
+    lines.push("cards rendered: " + document.querySelectorAll(".card").length);
+    lines.push("decisions it tried to send: " + JSON.stringify(window.OLD.sent()));
+    lines.push("offers now: " + JSON.stringify(window.OLD.offers()));
+    var errs = window.OLD.errors();
+    lines.push("errors: " + errs.length);
+    // NL via fromCharCode, not an escape: this block has been rewritten by
+    // script more than once, and a backslash-n that survives one pass and not
+    // the next becomes a raw line break inside a string literal -- a syntax
+    // error that kills the whole page silently.
+    for (var e2 = 0; e2 < Math.min(errs.length, 6); e2++) lines.push("  ! " + errs[e2]);
+  } catch (e) {
+    lines.push("THREW: " + (e && e.message));
+  }
+  out.textContent = lines.join(String.fromCharCode(10));
+  document.title = "old-selftest-done";
+})();
+</script>
+</body>
+</html>

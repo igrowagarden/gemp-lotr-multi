@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>card state and reordering</title>
+<link rel="stylesheet" href="../styles/board.css">
+<style>body{font-family:ui-monospace,Consolas,monospace;font-size:13px;padding:10px}
+#board{height:60vh}.pass{color:#6E9B7A}.fail{color:#FF5240}</style></head>
+<body><div id="board"></div><div id="out"></div>
+<script type="module">
+/**
+ * Two things the board knew and never showed, plus reordering by hand.
+ *
+ *  - TURN_CHANGE.otherCardIds marks cards inactive for the turn. The reducer
+ *    stored them from the beginning; nothing drew them, so a card that cannot
+ *    be used looked exactly like one that can.
+ *  - Errata cards are blueprint sets 50-89 (Card.hasErrata). Their printed
+ *    text is not the text being played.
+ */
+import { createStore } from "../state/store.js";
+import { decodeEvents } from "../net/protocol.js";
+import { createBoard } from "../view/board.js";
+import { renderCard } from "../view/card.js";
+import { hasErrata } from "../model/images.js";
+import * as fixture from "./fixture.js";
+
+const out = document.getElementById("out");
+let pass = 0, fail = 0;
+const ok = (l, c, d) => { const e = document.createElement("div");
+  e.className = c ? "pass" : "fail";
+  e.textContent = (c ? "PASS  " : "FAIL  ") + l + (d ? "  -> " + d : "");
+  out.appendChild(e); c ? pass++ : fail++; };
+
+const boardEl = document.getElementById("board");
+const store = createStore("asdf");
+const board = createBoard(boardEl, store, {});
+store.dispatchAll(decodeEvents(fixture.setup()));
+store.dispatchAll(decodeEvents(fixture.shadowPhase()));
+
+// ---- errata ---------------------------------------------------------------
+
+ok("errata is sets 50-89", hasErrata("60_28") && !hasErrata("1_290") && !hasErrata("91_5"),
+   `60_28=${hasErrata("60_28")}, 1_290=${hasErrata("1_290")}, 91_5=${hasErrata("91_5")}`);
+const s = store.getState();
+const errataNode = renderCard({ cardId: 99, blueprintId: "60_28", zone: "FREE_CHARACTERS", owner: "asdf" },
+                              s, { density: "board" });
+ok("an errata card is marked", errataNode.classList.contains("has-errata"));
+const plainNode = renderCard({ cardId: 98, blueprintId: "1_290", zone: "FREE_CHARACTERS", owner: "asdf" },
+                             s, { density: "board" });
+ok("an ordinary card is not", !plainNode.classList.contains("has-errata"));
+
+// ---- inactive -------------------------------------------------------------
+
+const anyCard = boardEl.querySelector(".card[data-card-id]");
+const id = Number(anyCard.dataset.cardId);
+ok("nothing is inactive to begin with",
+   !boardEl.querySelector(".card.is-inactive"));
+
+store.dispatchAll(decodeEvents(
+  `<events><ge type="TC" participantId="asdf" otherCardIds="${id}"/></events>`));
+ok("TURN_CHANGE marks the cards it names",
+   store.getState().inactive.includes(id), JSON.stringify(store.getState().inactive));
+const nowInactive = boardEl.querySelector(`.card[data-card-id="${id}"]`);
+ok("and the board shows it", nowInactive?.classList.contains("is-inactive"),
+   nowInactive?.className ?? "gone");
+ok("only that one", boardEl.querySelectorAll(".card.is-inactive").length === 1,
+   `${boardEl.querySelectorAll(".card.is-inactive").length} dimmed`);
+
+store.dispatchAll(decodeEvents(
+  `<events><ge type="TC" participantId="qwer" otherCardIds=""/></events>`));
+ok("a new turn clears it", !boardEl.querySelector(".card.is-inactive"));
+
+// ---- reordering by hand ---------------------------------------------------
+
+const row = boardEl.querySelector('[data-band="minions"] .row');
+const idsOf = () => [...row.children].map((n) => Number(n.dataset.cardId));
+const before = idsOf();
+ok("there is a row to reorder", before.length >= 3, `${before.length} cards`);
+
+// Drag the last card to the front, the way a pointer would.
+const node = row.children[row.children.length - 1];
+const first = row.children[0].getBoundingClientRect();
+const from = node.getBoundingClientRect();
+// pointerId matters: setPointerCapture throws for one the browser does not
+// know, and a synthetic event defaults to 0.
+const send = (type, x) => node.dispatchEvent(
+  new PointerEvent(type, { pointerId: 1, clientX: x, clientY: from.top + 5,
+                           button: 0, bubbles: true }));
+send("pointerdown", from.left + 5);
+send("pointermove", first.left + 2);
+send("pointerup", first.left + 2);
+
+const after = idsOf();
+ok("dragging moves the card to the front", after[0] === before[before.length - 1],
+   `${before.join(",")} -> ${after.join(",")}`);
+ok("and keeps every card", after.length === before.length &&
+   before.every((i) => after.includes(i)));
+
+// The order must survive a repaint, or it is not an order at all.
+store.dispatchAll(decodeEvents(
+  `<events><ge type="TP" count="7"/></events>`));
+ok("the order survives a repaint", idsOf()[0] === after[0],
+   `${idsOf().join(",")}`);
+
+// A click that is really a click must still work: a tiny movement is not a drag.
+let clicked = 0;
+const target = row.children[1];
+target.addEventListener("click", () => clicked++);
+const box = target.getBoundingClientRect();
+const tap = (type, x) => target.dispatchEvent(
+  new PointerEvent(type, { pointerId: 2, clientX: x, clientY: box.top + 5,
+                           button: 0, bubbles: true }));
+tap("pointerdown", box.left + 5);
+tap("pointermove", box.left + 7);      // 2px: below the threshold
+tap("pointerup", box.left + 7);
+target.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+ok("a small movement is still a click, not a reorder", clicked === 1, `${clicked} click(s)`);
+
+// ---- attachments ride on their host ---------------------------------------
+
+// zone="ATTACHED" with a targetCardId. assignBands separated these from the
+// start as `onParent`, and paint ignored them -- so the One Ring, and every
+// possession, was simply never drawn.
+const hostId = Number(boardEl.querySelector('[data-band="contested"] .card').dataset.cardId);
+store.dispatchAll(decodeEvents(
+  `<events><ge type="PCIP" cardId="777" blueprintId="1_2" zone="ATTACHED"` +
+  ` participantId="asdf" targetCardId="${hostId}" targetType="attached"/></events>`));
+
+ok("an attached card reaches state",
+   store.getState().cards[777]?.attachedTo === hostId,
+   String(store.getState().cards[777]?.attachedTo));
+const rider = boardEl.querySelector('.card[data-card-id="777"]');
+ok("and is drawn", !!rider);
+ok("grouped with its host, not loose in the row",
+   rider?.parentElement?.classList.contains("cardgroup") === true,
+   rider?.parentElement?.className ?? "none");
+ok("the host paints on top of it",
+   rider?.parentElement?.lastElementChild?.dataset.cardId === String(hostId),
+   rider?.parentElement?.lastElementChild?.dataset.cardId ?? "none");
+ok("it is a real card, so it zooms and can be inspected",
+   !!rider?.querySelector(".c-art") && rider?.dataset.blueprintId === "1_2",
+   rider?.dataset.blueprintId ?? "none");
+
+const r = document.createElement("div");
+r.id = "result"; r.className = fail === 0 ? "pass" : "fail";
+r.textContent = fail === 0 ? `RESULT: ALL PASS (${pass})` : `RESULT: ${fail} FAILED of ${pass + fail}`;
+document.body.appendChild(r);
+</script></body></html>

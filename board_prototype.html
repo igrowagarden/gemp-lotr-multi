@@ -1,0 +1,2428 @@
+<title>Five-Player Board — Layout Options</title>
+<style>
+  :root {
+    /* Ash: the light theme is fallen ash, not paper. */
+    --ground:   #D8D3CA;
+    --surface:  #E9E5DD;
+    --sunken:   #C6C0B5;
+    --ink:      #191411;
+    --ink-2:    #4D453B;
+    --ink-3:    #74695C;
+    --rule:     #BCB4A7;
+    --rule-2:   #A69B8C;
+    --brass:    #8A6018;
+    --free:     #3C6350;
+    --shadow:   #A33B2E;
+    --shared:   #40596F;
+    --alert:    #C0281B;
+    --alert-ink:#FFFFFF;
+
+    --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+    --font-body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    --font-data: ui-monospace, "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+
+    --measure: 66ch;
+    --radius: 3px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground:  #0D0B0A;
+      --surface: #17130F;
+      --sunken:  #070605;
+      --ink:     #E8E0D4;
+      --ink-2:   #A79A88;
+      --ink-3:   #7A6E60;
+      --rule:    #2C241D;
+      --rule-2:  #3F332A;
+      --brass:   #C89A3C;
+      --free:    #6E9B7A;
+      --shadow:  #C2564A;
+      --shared:  #6E8CA8;
+      --alert:   #FF5240;
+      --alert-ink:#1A0B08;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:  #10141A;
+    --surface: #171D25;
+    --sunken:  #0A0D12;
+    --ink:     #DDE3E9;
+    --ink-2:   #99A6B2;
+    --ink-3:   #6B7885;
+    --rule:    #2A333D;
+    --rule-2:  #3A4650;
+    --brass:   #C79A45;
+    --free:    #7FA164;
+    --shadow:  #C06A6B;
+    --shared:  #6E93A8;
+    --alert:   #FF6B5E;
+    --alert-ink:#1A0F0D;
+  }
+  :root[data-theme="light"] {
+    --ground:   #D8D3CA;
+    --surface:  #E9E5DD;
+    --sunken:   #C6C0B5;
+    --ink:      #191411;
+    --ink-2:    #4D453B;
+    --ink-3:    #74695C;
+    --rule:     #BCB4A7;
+    --rule-2:   #A69B8C;
+    --brass:    #8A6018;
+    --free:     #3C6350;
+    --shadow:   #A33B2E;
+    --shared:   #40596F;
+    --alert:    #C0281B;
+    --alert-ink:#FFFFFF;
+  }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: clamp(28px, 5vw, 72px) clamp(18px, 4vw, 40px) 96px;
+    display: flex;
+    flex-direction: column;
+    gap: 64px;
+  }
+
+  /* ---------- type ---------- */
+  .eyebrow {
+    font-family: var(--font-data);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  h1 {
+    font-family: var(--font-display);
+    font-size: clamp(30px, 5vw, 46px);
+    line-height: 1.12;
+    font-weight: 600;
+    text-wrap: balance;
+    margin: 10px 0 0;
+  }
+  h2 {
+    font-family: var(--font-display);
+    font-size: clamp(23px, 3vw, 30px);
+    line-height: 1.2;
+    font-weight: 600;
+    text-wrap: balance;
+    margin: 0;
+  }
+  h3 {
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 650;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    margin: 0;
+  }
+  p { max-width: var(--measure); margin: 0; }
+  .lede { font-size: 18px; color: var(--ink-2); max-width: var(--measure); }
+  code {
+    font-family: var(--font-data);
+    font-size: 0.88em;
+    background: var(--sunken);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    padding: 0.08em 0.34em;
+  }
+  a { color: var(--brass); text-underline-offset: 2px; }
+  a:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+
+  header .rule-line { height: 1px; background: var(--rule); margin-top: 26px; }
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 26px;
+    font-family: var(--font-data);
+    font-size: 11.5px;
+    color: var(--ink-3);
+    margin-top: 14px;
+  }
+
+  /* ---------- problem list ---------- */
+  .findings {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .finding {
+    background: var(--surface);
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .finding .n {
+    font-family: var(--font-data);
+    font-size: 26px;
+    font-variant-numeric: tabular-nums;
+    color: var(--brass);
+    line-height: 1;
+  }
+  .finding .t { font-size: 14px; color: var(--ink-2); }
+
+  /* ---------- wireframe language ---------- */
+  .wrap { overflow-x: auto; padding-bottom: 4px; }
+  .wire {
+    min-width: 660px;
+    display: grid;
+    gap: 5px;
+    padding: 6px;
+    /* firelight from below the board, as if the table sat under Orodruin */
+    background:
+      radial-gradient(130% 78% at 50% 112%,
+        color-mix(in srgb, var(--shadow) 30%, transparent),
+        transparent 62%),
+      var(--sunken);
+    border: 1px solid var(--rule-2);
+    border-radius: var(--radius);
+    aspect-ratio: 16 / 9;
+    position: relative;
+  }
+  .wire--today { grid-template-columns: 78px 116px 1fr;  grid-template-rows: 5fr 9fr 9fr 10fr 6fr 10fr; }
+  .wire--a {
+    grid-template-columns: 1fr;
+    grid-template-rows: 24px 34px 6fr var(--r-free, 10fr) var(--r-minions, 14fr) 10fr 6fr 22px 11fr;
+    transition: grid-template-rows 240ms cubic-bezier(.4, 0, .2, 1);
+  }
+
+  /* A spectator has no hand and makes no decisions, so that row goes back to
+     the board and the prompt becomes a pure status line. */
+  .wire--a.spectating {
+    grid-template-rows: 24px 34px 6fr var(--r-free, 10fr) var(--r-minions, 14fr) 12fr 7fr 22px 0fr;
+  }
+  .wire--a.spectating #a-handzone { display: none; }
+  .wire--a.spectating .pactions { display: none; }
+  .wire--a.spectating .z.mine {
+    box-shadow: none;
+    border-color: color-mix(in srgb, var(--free) 40%, var(--rule-2));
+  }
+  .wire--a.spectating .z.mine > .lbl { color: var(--ink-3); }
+  .wire--a.spectating .seatbar .seat { cursor: pointer; }
+  .wire--a:not(.spectating) #a-follow { display: none; }
+  #a-follow {
+    font-family: var(--font-data);
+    font-size: 8px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 1px 7px;
+    border-radius: 2px;
+    cursor: pointer;
+    background: var(--surface);
+    color: var(--ink-3);
+    border: 1px solid var(--rule-2);
+    flex: none;
+  }
+  #a-follow.on { background: color-mix(in srgb, var(--brass) 20%, var(--surface)); color: var(--brass); border-color: var(--brass); }
+  /* mode switch — the most consequential control on the page, sized like it */
+  .modebar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    padding: 12px 16px;
+    background: var(--surface);
+    border: 1px solid var(--rule-2);
+    border-left: 3px solid var(--brass);
+    border-radius: var(--radius);
+  }
+  .modelabel {
+    font-family: var(--font-data);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  .modeswitch {
+    display: flex;
+    border: 1px solid var(--rule-2);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .modebtn {
+    font-family: var(--font-body);
+    font-size: 14px;
+    font-weight: 600;
+    padding: 8px 20px;
+    cursor: pointer;
+    background: transparent;
+    color: var(--ink-2);
+    border: none;
+  }
+  .modebtn + .modebtn { border-left: 1px solid var(--rule-2); }
+  .modebtn:hover { background: color-mix(in srgb, var(--brass) 10%, transparent); }
+  .modebtn.on { background: var(--brass); color: var(--ground); }
+  .modebtn:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+  .modehint { font-size: 13px; color: var(--ink-2); }
+
+  .notes {
+    margin: 0;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    max-width: 96ch;
+  }
+  .notes li { font-size: 14px; color: var(--ink-2); }
+  .notes b { color: var(--ink); font-weight: 600; }
+  .notes .dim { color: var(--ink-3); }
+
+  .z {
+    position: relative;
+    border: 1px solid var(--rule-2);
+    border-radius: 2px;
+    background: var(--surface);
+    padding: 4px 6px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-height: 0;
+    min-width: 0;
+  }
+  .z > .lbl {
+    font-family: var(--font-data);
+    font-size: 8.5px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: none;
+  }
+  .z.free   { background: color-mix(in srgb, var(--free) 12%, var(--surface)); border-color: color-mix(in srgb, var(--free) 40%, var(--rule-2)); }
+  .z.shad   { background: color-mix(in srgb, var(--shadow) 12%, var(--surface)); border-color: color-mix(in srgb, var(--shadow) 40%, var(--rule-2)); }
+  .z.share  { background: color-mix(in srgb, var(--shared) 12%, var(--surface)); border-color: color-mix(in srgb, var(--shared) 40%, var(--rule-2)); }
+  .z.mine   { box-shadow: inset 0 0 0 1px var(--brass); border-color: var(--brass); }
+  .z.mine > .lbl { color: var(--brass); }
+
+  .slots { display: flex; gap: 3px; flex: 1; min-height: 0; align-items: stretch; }
+  .slots.wrapped { flex-wrap: wrap; align-content: flex-start; }
+  .slots.col { flex-direction: column; align-items: center; }
+  .slot {
+    aspect-ratio: 5 / 7;
+    border-radius: 1.5px;
+    background: color-mix(in srgb, var(--ink) 16%, var(--surface));
+    border: 1px solid color-mix(in srgb, var(--ink) 26%, var(--surface));
+    flex: none;
+    height: 100%;
+  }
+  /* ---------- the card ----------
+     One component at three densities. Board scale carries stats, wounds and a
+     token count; a pile card carries none of it, because at ~57px tall none of
+     it is legible; zoom carries everything. What survives each step down is a
+     decision, not a scale factor. */
+  .slot { position: relative; overflow: hidden; }
+
+  .cstats {
+    position: absolute;
+    left: 2px;
+    bottom: 1px;
+    font-family: var(--font-data);
+    font-size: 8px;
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+    background: color-mix(in srgb, var(--surface) 82%, transparent);
+    border-radius: 2px;
+    padding: 0 2px;
+    letter-spacing: -0.02em;
+  }
+  .cstats b { font-weight: 700; }
+  .cstats i { font-style: normal; opacity: 0.75; }
+
+  /* Wounds get the loudest treatment on the card: a wounded character is the
+     thing you most need to notice, and they must not blend into culture tokens. */
+  .cwounds { position: absolute; top: 2px; left: 2px; display: flex; gap: 1px; }
+  .wpip {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--alert);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--sunken) 70%, transparent);
+  }
+  .ctok {
+    position: absolute;
+    top: 1px;
+    right: 2px;
+    font-family: var(--font-data);
+    font-size: 7px;
+    color: var(--ink-2);
+    background: color-mix(in srgb, var(--surface) 78%, transparent);
+    border-radius: 2px;
+    padding: 0 2px;
+  }
+  /* Attachments fan behind at the left edge, showing only their spine. */
+  .catt {
+    position: absolute;
+    left: 0;
+    top: 3px;
+    bottom: 3px;
+    display: flex;
+    gap: 1px;
+  }
+  .aspine {
+    width: 3px;
+    border-radius: 1px 0 0 1px;
+    background: color-mix(in srgb, var(--brass) 55%, var(--surface));
+  }
+
+  .slot.f { background: color-mix(in srgb, var(--free) 42%, var(--surface)); border-color: color-mix(in srgb, var(--free) 62%, var(--surface)); }
+  .slot.s { background: color-mix(in srgb, var(--shadow) 42%, var(--surface)); border-color: color-mix(in srgb, var(--shadow) 62%, var(--surface)); }
+  .slot.p { background: color-mix(in srgb, var(--shared) 38%, var(--surface)); border-color: color-mix(in srgb, var(--shared) 58%, var(--surface)); }
+
+  .ghost {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: color-mix(in srgb, var(--sunken) 78%, transparent);
+    font-family: var(--font-data);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--shadow);
+    text-align: center;
+    padding: 4px;
+    line-height: 1.4;
+  }
+
+  /* seat chips */
+  .seat {
+    border: 1px solid var(--rule-2);
+    border-radius: 2px;
+    background: var(--surface);
+    padding: 3px 5px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-height: 0;
+    justify-content: center;
+  }
+  .seat .nm {
+    font-family: var(--font-data);
+    font-size: 9px;
+    letter-spacing: 0.04em;
+    color: var(--ink-2);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .seat .vitals {
+    display: flex;
+    gap: 4px;
+    font-family: var(--font-data);
+    font-size: 8px;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-3);
+  }
+  .seat.on { border-color: var(--brass); box-shadow: inset 0 0 0 1px var(--brass); background: color-mix(in srgb, var(--brass) 10%, var(--surface)); }
+  .seat.on .nm { color: var(--brass); }
+  .seat.fp { border-left: 3px solid var(--free); }
+  .seat.sh { border-left: 3px solid var(--shadow); }
+  .seat.deciding .nm::after {
+    content: " ◆";
+    color: var(--brass);
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  .seat.out { opacity: 0.4; }
+  .seat.out .nm { text-decoration: line-through; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  /* the prompt: same place every time, whether or not it is your turn */
+  .prompt {
+    grid-area: 8 / 1 / 9 / 2;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 8px;
+    border: 1px solid var(--rule-2);
+    border-radius: 2px;
+    background: var(--surface);
+    font-family: var(--font-data);
+    font-size: 9px;
+    letter-spacing: 0.05em;
+    color: var(--ink-3);
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .prompt.yours {
+    border-color: var(--brass);
+    box-shadow: inset 0 0 0 1px var(--brass);
+    background: color-mix(in srgb, var(--brass) 9%, var(--surface));
+  }
+  .prompt.yours .ptext { color: var(--ink); }
+  .pdot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-3); flex: none; }
+  .prompt.yours .pdot { background: var(--brass); animation: pulse 1.4s ease-in-out infinite; }
+  .ptext { overflow: hidden; text-overflow: ellipsis; }
+  .pactions { display: flex; gap: 4px; margin-left: auto; flex: none; }
+  .pbtn {
+    font-family: var(--font-data);
+    font-size: 8px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 1px 8px;
+    border-radius: 2px;
+    cursor: pointer;
+    background: var(--surface);
+    color: var(--ink-2);
+    border: 1px solid var(--rule-2);
+  }
+  .pbtn.primary {
+    background: color-mix(in srgb, var(--brass) 22%, var(--surface));
+    color: var(--brass);
+    border-color: var(--brass);
+  }
+  .ptimer { font-variant-numeric: tabular-nums; flex: none; }
+
+  /* a card you are allowed to answer the current decision with */
+  .slot.eligible { box-shadow: 0 0 0 2px var(--brass); border-color: var(--brass); }
+
+  /* every minion in play, from every seat, in one band */
+  .minions-row { display: flex; gap: 5px; flex: 1; min-height: 0; align-items: stretch; }
+  .minion { display: flex; flex-direction: column; gap: 2px; min-height: 0; flex: none; }
+  .minion .slot { height: 80%; }
+  .mtag {
+    font-family: var(--font-data);
+    font-size: 7px;
+    letter-spacing: 0.03em;
+    color: var(--ink-3);
+    text-align: center;
+    white-space: nowrap;
+    flex: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .mtag b {
+    display: inline-block;
+    min-width: 9px;
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--shadow) 55%, var(--surface));
+    color: var(--surface);
+    font-weight: 700;
+    margin-right: 2px;
+  }
+  .minion.mine .slot { box-shadow: 0 0 0 1px var(--brass); }
+  .minion.mine .mtag { color: var(--brass); }
+  .minion.mine .mtag b { background: var(--brass); }
+  .bandnote { font-family: var(--font-data); font-size: 8px; color: var(--ink-3); }
+
+  /* piles and detach: reached from the seat that owns them */
+  .seat { position: relative; }
+  .seatbtns {
+    position: absolute;
+    top: 2px;
+    right: 3px;
+    display: flex;
+    gap: 2px;
+  }
+  .pilebtn, .detachbtn {
+    width: 12px;
+    height: 12px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    font-family: var(--font-data);
+    font-size: 9px;
+    line-height: 1;
+    cursor: pointer;
+    color: var(--ink-3);
+    background: transparent;
+    border: 1px solid var(--rule-2);
+    border-radius: 2px;
+  }
+  .pilebtn:hover, .detachbtn:hover { color: var(--brass); border-color: var(--brass); }
+  .pilebtn:focus-visible, .detachbtn:focus-visible { outline: 2px solid var(--brass); outline-offset: 1px; }
+  .seat.detached .detachbtn { color: var(--brass); border-color: var(--brass); }
+  /* diagnostics land in front of you, not somewhere up the page */
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: 20px;
+    transform: translateX(-50%);
+    z-index: 999;
+    max-width: min(680px, 92vw);
+    font-family: var(--font-data);
+    font-size: 12px;
+    line-height: 1.5;
+    padding: 10px 16px;
+    border-radius: 4px;
+    background: var(--surface);
+    color: var(--ink);
+    border: 1px solid var(--alert);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    display: none;
+  }
+  .toast.on { display: block; }
+  .toast.ok { border-color: var(--free); }
+
+  .pileview {
+    position: absolute;
+    inset: 7% 11%;
+    z-index: 9;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 6px;
+    background: var(--surface);
+    border: 1px solid var(--brass);
+    border-radius: 3px;
+    box-shadow: 0 12px 38px rgba(0, 0, 0, 0.45);
+  }
+  .pileview[hidden] { display: none; }
+  .pilehead { display: flex; align-items: center; gap: 8px; flex: none; }
+  .pilewho {
+    font-family: var(--font-data);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--brass);
+    flex: none;
+  }
+  .piletabs { display: flex; gap: 3px; flex-wrap: wrap; }
+  .ptab {
+    font-family: var(--font-data);
+    font-size: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 2px 7px;
+    border-radius: 2px;
+    cursor: pointer;
+    background: var(--surface);
+    color: var(--ink-3);
+    border: 1px solid var(--rule-2);
+  }
+  .ptab.on { background: color-mix(in srgb, var(--brass) 20%, var(--surface)); color: var(--brass); border-color: var(--brass); }
+  .ptab:focus-visible, .pclose:focus-visible { outline: 2px solid var(--brass); outline-offset: 1px; }
+  .pclose {
+    margin-left: auto;
+    flex: none;
+    font-family: var(--font-data);
+    font-size: 9px;
+    padding: 1px 7px;
+    cursor: pointer;
+    color: var(--ink-2);
+    background: var(--surface);
+    border: 1px solid var(--rule-2);
+    border-radius: 2px;
+  }
+  .pilegrid {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    gap: 4px;
+    overflow-y: auto;
+  }
+  .pilegrid .slot { height: 20%; }
+  .pileempty { font-family: var(--font-data); font-size: 9px; color: var(--ink-3); }
+
+  /* zoom: anchored opposite the pointer, never under it */
+  .zoom {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 10;
+    height: 62%;
+    aspect-ratio: 5 / 7;
+    border-radius: 4px;
+    border: 1px solid var(--brass);
+    background: color-mix(in srgb, var(--ink) 18%, var(--surface));
+    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.5);
+    pointer-events: none;
+    display: none;
+    place-items: center;
+  }
+  .zoom.on { display: grid; }
+  .zoom.landscape { height: 44%; aspect-ratio: 7 / 5; }
+  .zoom.at-left { left: 10px; }
+  .zoom.at-right { right: 10px; }
+  .zoom span {
+    font-family: var(--font-data);
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--brass);
+  }
+  .rail { display: flex; flex-direction: column; gap: 4px; }
+  /* ---------- flyouts: chat and site path ---------- */
+  .flyout {
+    position: absolute;
+    z-index: 6;
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--rule-2);
+    border-radius: 2px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.26);
+    overflow: hidden;
+    /* No size transition: a window that animates open cannot be measured
+       reliably at the moment it opens, and the position it is restored to
+       depends on that measurement. Only opacity animates. */
+    transition: opacity 160ms ease;
+    touch-action: none;
+  }
+  .flyout.shut { box-shadow: none; }
+
+  /* A window fades only when it is actually covering something that wants your
+     attention — the prompt, a card you can play, a running skirmish. Sitting in
+     an empty corner costs it nothing. Pointing at it, dragging it, or tabbing
+     into it brings it back, and a docked tab never fades. */
+  .flyout.blocking:not(.shut):not(.dragging):not(:hover):not(:focus-within) {
+    opacity: 0.5;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+  }
+  @media (prefers-contrast: more) {
+    .flyout.blocking { opacity: 1; }
+  }
+
+  .flyout--chat { right: 6px; bottom: 6%; width: 196px; height: 102px; }
+  .flyout--chat.shut { width: 17px; height: 74px; }
+
+  /* The adventure path: sites turned on their side and overlapped, so nine of
+     them fit in a column and each still shows the edge that carries its number. */
+  .sitecol { position: relative; flex: 1; min-height: 0; }
+  .site {
+    position: absolute;
+    height: 21%;
+    aspect-ratio: 7 / 5;
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--shared) 38%, var(--surface));
+    border: 1px solid color-mix(in srgb, var(--shared) 60%, var(--surface));
+    box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 4px;
+    padding: 2px 4px;
+  }
+  .snum, .sowner {
+    font-family: var(--font-data);
+    font-size: 7px;
+    line-height: 1;
+    color: var(--surface);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .snum { font-variant-numeric: tabular-nums; flex: none; }
+  .sowner { opacity: 0.85; }
+  /* transposed: same sideways cards, overlapping left-to-right instead of down */
+  .flyout--path.horiz .site { height: 84%; }
+  .site.past { opacity: 0.42; }
+  /* not yet played — nobody knows what it is, only who will play it */
+  .site.pending {
+    background: transparent;
+    border-style: dashed;
+    border-color: var(--rule-2);
+    box-shadow: none;
+  }
+  .site.pending .snum, .site.pending .sowner { color: var(--ink-3); }
+  /* the site you are on is never covered by the ones after it */
+  .site.now {
+    z-index: 5;
+    background: color-mix(in srgb, var(--brass) 34%, var(--surface));
+    border-color: var(--brass);
+    box-shadow: 0 0 0 1px var(--brass), 0 3px 10px rgba(0, 0, 0, 0.55);
+  }
+  .site.now .snum { color: var(--ink); }
+
+  /* Right edge, top to bottom: path tab, the next-seat arrow at mid-height,
+     then the chat tab. Docked, none of the three overlap. */
+  .flyout--path {
+    right: 6px;
+    top: 9%;
+    width: 118px;
+    height: 72%;
+    background: color-mix(in srgb, var(--shared) 11%, var(--surface));
+    border-color: color-mix(in srgb, var(--shared) 42%, var(--rule-2));
+  }
+  .flyout--path.shut { width: 17px; height: 92px; }
+
+  /* docked: the edge tab you click to bring the window back */
+  .flyout-tab {
+    flex: 1;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 5px 0;
+    cursor: pointer;
+    border: none;
+    background: color-mix(in srgb, var(--ink) 7%, var(--surface));
+    font-family: var(--font-data);
+    font-size: 8.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+  }
+  .flyout--path .flyout-tab {
+    background: color-mix(in srgb, var(--shared) 22%, var(--surface));
+    color: var(--shared);
+  }
+  .flyout-tab:hover { filter: brightness(1.08) saturate(1.1); }
+  .flyout-tab:focus-visible { outline: 2px solid var(--brass); outline-offset: -2px; }
+  .flyout-tab .flyout-word { writing-mode: vertical-rl; text-orientation: mixed; }
+  .flyout:not(.shut) .flyout-tab { display: none; }
+
+  /* open: a window you can pick up by its title bar */
+  .flyout-head {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 5px;
+    background: color-mix(in srgb, var(--ink) 8%, var(--surface));
+    border-bottom: 1px solid var(--rule);
+    cursor: grab;
+    user-select: none;
+  }
+  .flyout-head:active { cursor: grabbing; }
+  .flyout--path .flyout-head {
+    background: color-mix(in srgb, var(--shared) 22%, var(--surface));
+    border-bottom-color: color-mix(in srgb, var(--shared) 32%, var(--rule));
+  }
+  .flyout-title {
+    font-family: var(--font-data);
+    font-size: 8.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    white-space: nowrap;
+  }
+  .flyout--path .flyout-title { color: var(--shared); }
+  .grip {
+    font-family: var(--font-data);
+    font-size: 9px;
+    line-height: 1;
+    color: var(--ink-3);
+    flex: none;
+  }
+  .flyout-close {
+    margin-left: auto;
+    flex: none;
+    cursor: pointer;
+    font-family: var(--font-data);
+    font-size: 8px;
+    line-height: 1;
+    padding: 2px 5px;
+    background: transparent;
+    border: 1px solid var(--rule-2);
+    border-radius: 2px;
+    color: var(--ink-2);
+  }
+  .flyout-close:hover { color: var(--alert); border-color: var(--alert); }
+  .flyout-close:focus-visible { outline: 2px solid var(--brass); outline-offset: 1px; }
+  .flyout.shut .flyout-head { display: none; }
+
+  .flyout-body {
+    flex: 1;
+    padding: 4px 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .flyout.shut .flyout-body { display: none; }
+  .flyout.dragging { box-shadow: 0 16px 44px rgba(0, 0, 0, 0.5); }
+  .flyout:not(.shut) { min-width: 92px; min-height: 62px; }
+
+  .flyout-turn, .flyout-resize { flex: none; }
+  .flyout-turn {
+    cursor: pointer;
+    font-family: var(--font-data);
+    font-size: 8px;
+    line-height: 1;
+    padding: 2px 5px;
+    margin-left: auto;
+    background: transparent;
+    border: 1px solid var(--rule-2);
+    border-radius: 2px;
+    color: var(--ink-2);
+  }
+  .flyout-turn:hover { color: var(--brass); border-color: var(--brass); }
+  .flyout-turn:focus-visible { outline: 2px solid var(--brass); outline-offset: 1px; }
+  .flyout-turn + .flyout-close { margin-left: 0; }
+
+  .flyout-resize {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 13px;
+    height: 13px;
+    cursor: nwse-resize;
+    z-index: 3;
+    background: linear-gradient(135deg, transparent 46%, var(--rule-2) 46%, var(--rule-2) 60%, transparent 60%,
+                                        transparent 72%, var(--rule-2) 72%, var(--rule-2) 86%, transparent 86%);
+  }
+  .flyout.shut .flyout-resize { display: none; }
+
+  /* the window in front — the one Escape will close */
+  .flyout.active:not(.shut) {
+    z-index: 8;
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55);
+  }
+  .flyout.active:not(.shut) .flyout-title { color: var(--brass); }
+  .flyout.active:not(.shut) .grip { color: var(--brass); }
+
+  .chat-lines {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-family: var(--font-data);
+    font-size: 8px;
+    line-height: 1.5;
+    color: var(--ink-3);
+  }
+  .chat-lines b { color: var(--ink-2); font-weight: 600; }
+
+  .chat-flag {
+    display: none;
+    min-width: 12px;
+    height: 11px;
+    padding: 0 3px;
+    border-radius: 6px;
+    background: var(--alert);
+    color: var(--alert-ink);
+    font-family: var(--font-data);
+    font-size: 8px;
+    font-variant-numeric: tabular-nums;
+    line-height: 11px;
+    text-align: center;
+    writing-mode: horizontal-tb;
+    flex: none;
+    animation: flagIn 220ms cubic-bezier(.2, .9, .3, 1.4);
+  }
+  .flyout--chat.shut[data-unread]:not([data-unread="0"]) .chat-flag { display: block; }
+  @keyframes flagIn {
+    from { transform: scale(0.4); opacity: 0; }
+    to   { transform: scale(1); opacity: 1; }
+  }
+
+  /* the site you are on, and the ones already walked */
+  .slot.now {
+    border-color: var(--brass);
+    box-shadow: 0 0 0 1px var(--brass);
+    background: color-mix(in srgb, var(--brass) 32%, var(--surface));
+    animation: siteIn 420ms cubic-bezier(.2, .9, .3, 1.3);
+  }
+  .slot.past { opacity: 0.34; }
+  @keyframes siteIn {
+    from { transform: scale(0.72); }
+    to   { transform: scale(1); }
+  }
+
+  .demo {
+    font-family: var(--font-data);
+    font-size: 11px;
+    color: var(--c);
+    background: transparent;
+    border: 1px solid var(--c);
+    border-radius: 2px;
+    padding: 1px 8px;
+    cursor: pointer;
+  }
+  .demo:hover { background: color-mix(in srgb, var(--c) 12%, transparent); }
+  .demo:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+  .demo--chat { --c: var(--alert); }
+  .demo--site { --c: var(--shared); }
+  .demo--skirm { --c: var(--shadow); }
+  .demo--decide { --c: var(--brass); }
+  .demo--elim { --c: var(--ink-3); }
+  .demo--phase { --c: var(--free); }
+
+  /* segmented control: which side of each board is drawn */
+  .seg {
+    display: flex;
+    border: 1px solid var(--rule-2);
+    border-radius: 2px;
+    overflow: hidden;
+    flex: none;
+  }
+  .seg-btn {
+    flex: 1;
+    padding: 3px 2px;
+    cursor: pointer;
+    font-family: var(--font-data);
+    font-size: 7.5px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    background: var(--surface);
+    color: var(--ink-3);
+    border: none;
+    white-space: nowrap;
+  }
+  .seg-btn + .seg-btn { border-left: 1px solid var(--rule-2); }
+  .seg-btn.on { background: color-mix(in srgb, var(--brass) 20%, var(--surface)); color: var(--brass); }
+  .seg-btn:focus-visible { outline: 2px solid var(--brass); outline-offset: -2px; }
+
+  /* cycle through seats */
+  .navarrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 7;
+    width: 22px;
+    height: 52px;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    background: color-mix(in srgb, var(--surface) 90%, transparent);
+    border: 1px solid var(--rule-2);
+    border-radius: 3px;
+    color: var(--ink-2);
+    font-family: var(--font-data);
+    font-size: 13px;
+    line-height: 1;
+    padding: 0;
+  }
+  .navarrow:hover { background: var(--surface); color: var(--brass); border-color: var(--brass); }
+  .navarrow:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+  .navarrow.prev { left: 6px; }
+  .navarrow.next { right: 6px; }
+
+  /* every seat, horizontally, across the top */
+  .seatbar {
+    grid-area: 2 / 1 / 3 / 2;
+    display: flex;
+    gap: 4px;
+    min-height: 0;
+  }
+  .seatbar .seat {
+    flex: 1;
+    min-width: 0;
+    cursor: pointer;
+    padding: 2px 6px;
+  }
+  .seatbar .seat .vitals { flex-wrap: wrap; }
+  .seatbar .seat.mine { cursor: default; }
+
+  .poschip {
+    position: absolute;
+    top: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 7;
+    font-family: var(--font-data);
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    background: color-mix(in srgb, var(--surface) 90%, transparent);
+    border: 1px solid var(--rule-2);
+    border-radius: 9px;
+    padding: 1px 9px;
+    white-space: nowrap;
+  }
+
+  /* a zone showing the side its player is not currently playing */
+  .z--dim { opacity: 0.55; }
+  .z--dim .slots { display: none; }
+  .dchip-inline {
+    display: none;
+    font-family: var(--font-data);
+    font-size: 8px;
+    letter-spacing: 0.05em;
+    color: var(--ink-3);
+    white-space: nowrap;
+  }
+  .z--dim .dchip-inline { display: block; }
+
+  /* top readout: the numbers you check every turn */
+  .topbar {
+    grid-area: 1 / 1 / 2 / 2;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 8px;
+    background: var(--surface);
+    border: 1px solid var(--rule-2);
+    border-radius: 2px;
+    font-family: var(--font-data);
+    font-size: 9px;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .topbar .twilight {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    color: var(--ink);
+  }
+  .topbar .twilight b {
+    font-size: 15px;
+    font-variant-numeric: tabular-nums;
+    color: var(--brass);
+    letter-spacing: 0;
+  }
+  .topbar .phase { color: var(--ink); }
+  .topbar .sep { width: 1px; height: 13px; background: var(--rule-2); flex: none; }
+  .topbar .clock { margin-left: auto; font-variant-numeric: tabular-nums; }
+
+  /* skirmish: assignment pairs, drawn across every seat at once */
+  .pairs { display: flex; gap: 6px; flex: 1; min-height: 0; }
+  .pair {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 3px 4px;
+    border: 1px solid color-mix(in srgb, var(--shared) 40%, var(--rule-2));
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--shared) 8%, var(--surface));
+  }
+  .pair.mine { border-color: var(--brass); box-shadow: inset 0 0 0 1px var(--brass); }
+  .pair .who {
+    font-family: var(--font-data);
+    font-size: 7.5px;
+    letter-spacing: 0.05em;
+    color: var(--ink-3);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: none;
+  }
+  .pair.mine .who { color: var(--brass); }
+  .pair .vs {
+    font-family: var(--font-data);
+    font-size: 7px;
+    letter-spacing: 0.14em;
+    color: var(--ink-3);
+    text-align: center;
+    border-top: 1px dashed var(--rule-2);
+    padding-top: 2px;
+    flex: none;
+  }
+  .tot {
+    display: inline-block;
+    min-width: 15px;
+    padding: 0 3px;
+    border-radius: 2px;
+    font-family: var(--font-data);
+    font-size: 8px;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    line-height: 12px;
+  }
+  .tot.s { background: color-mix(in srgb, var(--shadow) 60%, var(--surface)); color: var(--surface); }
+  .tot.f { background: color-mix(in srgb, var(--free) 60%, var(--surface)); color: var(--surface); }
+
+  .wire--a .skirm-only { display: none; }
+  .wire--a.skirmishing .skirm-only { display: flex; }
+  .wire--a.skirmishing .phase-only { display: none; }
+  .navarrow[disabled] { opacity: 0.3; cursor: default; }
+  .navarrow[disabled]:hover { background: color-mix(in srgb, var(--surface) 90%, transparent); color: var(--ink-2); border-color: var(--rule-2); }
+
+  /* a filterable row of cards, and the chip that replaces it when filtered out */
+
+  /* ---------- option blocks ---------- */
+  .option { display: flex; flex-direction: column; gap: 20px; }
+  .option-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; }
+  .tag {
+    font-family: var(--font-data);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--brass);
+    border: 1px solid var(--brass);
+    border-radius: 2px;
+    padding: 1px 7px;
+    flex: none;
+  }
+  .chip {
+    font-family: var(--font-data);
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    border: 1px solid var(--rule-2);
+    border-radius: 2px;
+    padding: 1px 7px;
+    margin-left: auto;
+    flex: none;
+    white-space: nowrap;
+  }
+  .ledger {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .col { background: var(--surface); padding: 16px 20px 18px; display: flex; flex-direction: column; gap: 10px; }
+  .col ul { margin: 0; padding-left: 17px; display: flex; flex-direction: column; gap: 7px; }
+  .col li { font-size: 14.5px; color: var(--ink-2); }
+  .col li strong { color: var(--ink); font-weight: 600; }
+  .buys h3 { color: var(--free); }
+  .costs h3 { color: var(--shadow); }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 20px;
+    font-family: var(--font-data);
+    font-size: 11px;
+    color: var(--ink-3);
+    align-items: center;
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .sw { width: 11px; height: 11px; border-radius: 2px; border: 1px solid var(--rule-2); flex: none; }
+  .sw.f { background: color-mix(in srgb, var(--free) 42%, var(--surface)); }
+  .sw.s { background: color-mix(in srgb, var(--shadow) 42%, var(--surface)); }
+  .sw.p { background: color-mix(in srgb, var(--shared) 38%, var(--surface)); }
+  .sw.m { background: var(--surface); border-color: var(--brass); box-shadow: inset 0 0 0 1px var(--brass); }
+
+  .caption { font-family: var(--font-data); font-size: 11px; color: var(--ink-3); margin-top: -6px; }
+  section { display: flex; flex-direction: column; gap: 18px; }
+  .divider { height: 1px; background: var(--rule); }
+  .close {
+    border: 1px solid var(--rule-2);
+    border-left: 3px solid var(--brass);
+    border-radius: var(--radius);
+    background: var(--surface);
+    padding: 22px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  }
+</style>
+
+<div class="page">
+
+  <header>
+    <div class="eyebrow">GEMP · five-player board</div>
+    <h1>The board</h1>
+    <div class="rule-line"></div>
+  </header>
+
+  <section class="option">
+    <div class="modebar">
+      <span class="modelabel">Viewing as</span>
+      <div class="modeswitch" role="group" aria-label="Player or spectator">
+        <button class="modebtn on" type="button" id="mode-play">Player — asdf</button>
+        <button class="modebtn" type="button" id="spectate">Spectator</button>
+      </div>
+      <span class="modehint" id="modehint">Your hand and decisions are yours.</span>
+    </div>
+
+    <div class="legend">
+      <span><i class="sw f"></i> Free Peoples</span>
+      <span><i class="sw s"></i> Shadow</span>
+      <span><i class="sw p"></i> Site path</span>
+      <span><i class="sw m"></i> You</span>
+      <button class="demo demo--phase" type="button" id="phase">Next phase</button>
+      <button class="demo demo--decide" type="button" id="decide">Next decision</button>
+      <button class="demo demo--skirm" type="button" id="skirmish">Start a skirmish</button>
+      <button class="demo demo--site" type="button" id="move">Move to next site</button>
+      <button class="demo demo--chat" type="button" id="ping">New chat message</button>
+      <button class="demo demo--elim" type="button" id="elim">Eliminate qwer</button>
+    </div>
+
+    <div class="wrap">
+      <div class="wire wire--a" tabindex="0" id="wire-a">
+        <div class="topbar">
+          <span class="twilight">Twilight <b>10</b></span>
+          <span class="sep"></span>
+          <span class="phase" id="a-phase">Assignment</span>
+          <span class="sep"></span>
+          <span>Initiative: Free Peoples</span>
+          <span class="sep"></span>
+          <span id="a-move">Move 1 / 4</span>
+          <span class="sep"></span>
+          <span>Rule of 4: 2</span>
+          <button type="button" id="a-follow" class="on" style="margin-left: auto;">Follow the action</button>
+          <div class="seg" role="group" aria-label="Filter opponent cards by side">
+            <button class="seg-btn on" type="button" data-mode="auto">Auto</button>
+            <button class="seg-btn" type="button" data-mode="fp">FP</button>
+            <button class="seg-btn" type="button" data-mode="shadow">Shadow</button>
+            <button class="seg-btn" type="button" data-mode="all">All</button>
+          </div>
+          <span class="clock">44:43</span>
+        </div>
+
+        <div class="seatbar" id="a-rail">
+          <div class="seat fp" data-opp="0"><span class="nm">carol — Free Peoples</span><span class="vitals"><i>site 4</i><i>hand 8</i><i>thr 0</i></span><span class="seatbtns"><button class="detachbtn" type="button" data-detach="carol" aria-label="Open carol’s board in its own window">⧉</button><button class="pilebtn" type="button" data-who="carol" aria-label="carol's piles">⊞</button></span></div>
+          <div class="seat sh" data-opp="1"><span class="nm">dave — shadow</span><span class="vitals"><i class="mcount">minions 3</i><i>hand 6</i><i>thr 0</i></span><span class="seatbtns"><button class="detachbtn" type="button" data-detach="dave" aria-label="Open dave’s board in its own window">⧉</button><button class="pilebtn" type="button" data-who="dave" aria-label="dave's piles">⊞</button></span></div>
+          <div class="seat sh" data-opp="2"><span class="nm">qwer — shadow</span><span class="vitals"><i class="mcount">minions 1</i><i>hand 9</i><i>thr 0</i></span><span class="seatbtns"><button class="detachbtn" type="button" data-detach="qwer" aria-label="Open qwer’s board in its own window">⧉</button><button class="pilebtn" type="button" data-who="qwer" aria-label="qwer's piles">⊞</button></span></div>
+          <div class="seat sh" data-opp="3"><span class="nm">Librarian — shadow</span><span class="vitals"><i class="mcount">minions 2</i><i>hand 7</i><i>thr 0</i></span><span class="seatbtns"><button class="detachbtn" type="button" data-detach="Librarian" aria-label="Open Librarian’s board in its own window">⧉</button><button class="pilebtn" type="button" data-who="Librarian" aria-label="Librarian's piles">⊞</button></span></div>
+          <div class="seat mine sh"><span class="nm">asdf — you</span><span class="vitals"><i class="mcount">minions 1</i><i>hand 8</i><i>thr 0</i></span><span class="seatbtns"><button class="detachbtn" type="button" data-detach="asdf" aria-label="Open asdf’s board in its own window">⧉</button><button class="pilebtn" type="button" data-who="asdf" aria-label="your piles">⊞</button></span></div>
+        </div>
+
+        <div class="pileview" id="a-pile" hidden>
+          <div class="pilehead">
+            <span class="pilewho" id="a-pilewho">dave</span>
+            <div class="piletabs" id="a-piletabs">
+              <button class="ptab on" type="button" data-n="34">Discard 34</button>
+              <button class="ptab" type="button" data-n="2">Dead 2</button>
+              <button class="ptab" type="button" data-n="5">Adventure 5</button>
+              <button class="ptab" type="button" data-n="0">Removed 0</button>
+            </div>
+            <button class="pclose" type="button" id="a-pileclose">Close</button>
+          </div>
+          <div class="pilegrid" id="a-pilegrid"></div>
+        </div>
+
+        <div class="z shad phase-only" style="grid-area: 3 / 1 / 4 / 2;" id="a-support">
+          <div class="lbl">support area</div>
+          <div class="slots"></div>
+        </div>
+        <div class="z free phase-only" style="grid-area: 4 / 1 / 5 / 2;" id="a-free">
+          <div class="lbl">free characters</div>
+          <span class="dchip-inline"></span>
+          <div class="slots"></div>
+        </div>
+        <div class="z shad phase-only" style="grid-area: 5 / 1 / 6 / 2;" id="a-minions">
+          <div class="lbl">Minions in play</div>
+          <div class="minions-row"></div>
+        </div>
+
+        <div class="z share skirm-only" style="grid-area: 3 / 1 / 6 / 2; flex-direction: column;" id="a-skirmish">
+          <div class="lbl">Skirmish · every seat shown, focus suspended</div>
+          <div class="pairs">
+            <div class="pair">
+              <span class="who">dave · 2 minions</span>
+              <div class="slots"><div class="slot s"></div><div class="slot s"></div></div>
+              <div class="vs">assigned to</div>
+              <div class="slots"><div class="slot f"></div></div>
+              <span class="who">carol · Frodo <span class="tot s">9</span> <span class="tot f">6</span></span>
+            </div>
+            <div class="pair">
+              <span class="who">Librarian · 1 minion</span>
+              <div class="slots"><div class="slot s"></div></div>
+              <div class="vs">assigned to</div>
+              <div class="slots"><div class="slot f"></div></div>
+              <span class="who">carol · Aragorn <span class="tot s">6</span> <span class="tot f">8</span></span>
+            </div>
+            <div class="pair mine">
+              <span class="who">asdf · you · 1 minion</span>
+              <div class="slots"><div class="slot s"></div></div>
+              <div class="vs">assigned to</div>
+              <div class="slots"><div class="slot f"></div></div>
+              <span class="who">carol · Gimli <span class="tot s">7</span> <span class="tot f">7</span></span>
+            </div>
+            <div class="pair">
+              <span class="who">qwer · unassigned</span>
+              <div class="slots"><div class="slot s"></div></div>
+              <div class="vs">no assignment</div>
+              <div class="slots"></div>
+              <span class="who">—</span>
+            </div>
+          </div>
+        </div>
+
+        <button class="navarrow prev" type="button" id="a-prev" aria-label="Previous seat">‹</button>
+        <button class="navarrow next" type="button" id="a-next" aria-label="Next seat">›</button>
+        <div class="poschip" id="a-pos">1 / 4</div>
+
+        <div class="z free mine" style="grid-area: 6 / 1 / 7 / 2;" id="a-myfree">
+          <div class="lbl">Your free characters</div>
+          <div class="slots"><div class="slot f"></div><div class="slot f"></div></div>
+        </div>
+        <div class="z free mine" style="grid-area: 7 / 1 / 8 / 2;" id="a-mysupport">
+          <div class="lbl">Your support area</div>
+        </div>
+        <div class="prompt" id="a-prompt">
+          <span class="pdot"></span>
+          <span class="ptext"></span>
+          <span class="pactions"></span>
+          <span class="ptimer"></span>
+        </div>
+
+        <div class="z mine" style="grid-area: 9 / 1 / 10 / 2;" id="a-handzone">
+          <div class="lbl">Your hand</div>
+          <div class="slots" id="a-hand">
+            <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+            <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+            <div class="slot"></div><div class="slot"></div>
+          </div>
+        </div>
+
+        <div class="flyout flyout--chat shut" data-unread="2">
+          <button class="flyout-tab" type="button" aria-expanded="false" aria-label="Open table chat, 2 unread">
+            <span class="chat-flag" aria-hidden="true">2</span>
+            <span class="flyout-word">Chat</span>
+          </button>
+          <div class="flyout-head">
+            <span class="grip">⠿</span>
+            <span class="flyout-title">Table chat</span>
+            <button class="flyout-close" type="button" style="margin-left:auto" aria-label="Close table chat">✕</button>
+          </div>
+          <div class="flyout-resize" aria-hidden="true"></div>
+          <div class="flyout-body">
+            <div class="chat-lines">
+              <span><b>dave:</b> assigning both to Frodo</span>
+              <span><b>qwer:</b> pass</span>
+              <span>System: carol moves to site 4</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="flyout flyout--path shut">
+          <button class="flyout-tab" type="button" aria-expanded="false" aria-label="Open the site path">
+            <span class="flyout-word">Site path · 4/9</span>
+          </button>
+          <div class="flyout-head">
+            <span class="grip">⠿</span>
+            <span class="flyout-title">Site path</span>
+            <button class="flyout-turn" type="button" aria-label="Lay the path left to right">⇄</button>
+            <button class="flyout-close" type="button" aria-label="Close the site path">✕</button>
+          </div>
+          <div class="flyout-body">
+            <div class="sitecol"></div>
+          </div>
+          <div class="flyout-resize" aria-hidden="true"></div>
+        </div>
+      </div>
+    </div>
+
+    <ul class="notes">
+      <li><b>← / →</b>, the edge arrows, or a seat chip walk the table. One opponent at a time keeps cards full size.</li>
+      <li>The <b>minion band is shared</b> — every seat's minions, tagged with whose. It never filters, and it survives a second move. <b>Only shared zones carry an owner tag</b>; elsewhere the zone already says whose it is.</li>
+      <li><b>Cards</b> carry strength/vitality, wound pips, a culture-token count and an attachment fan at board scale — and none of it in a pile, where at ~57px none of it would be legible.</li>
+      <li><b>Auto · FP · Shadow · All</b> filters the focused seat's own cards. Auto shows a fellowship only while that player holds the Free Peoples role.</li>
+      <li><b>Chat and the site path are windows</b> — drag by the title bar, resize from the corner, ✕ or Escape to dock. They reopen where and how you left them, and only fade when they cover something that wants attention.</li>
+      <li><b>⇄</b> lays the path left to right. <b>⊞</b> opens a seat's piles. <b>⧉</b> pops a board into its own window <span class="dim">(blocked in this frame — see harness/web/multiwindow_spike.html)</span>.</li>
+      <li>A <b>skirmish suspends the focus</b> and draws every participating seat; the arrows go dead rather than lying.</li>
+    </ul>
+
+  </section>
+
+</div>
+
+<div class="toast" id="detach-note" role="status" aria-live="polite"></div>
+
+<script>
+  // Anything that throws anywhere in this script says so, in front of you.
+  window.addEventListener("error", function (e) {
+    var el = document.getElementById("detach-note");
+    if (!el) return;
+    el.textContent = "Script error: " + e.message + "  (" + (e.lineno || "?") + ")";
+    el.classList.add("on");
+    el.classList.remove("ok");
+  });
+
+  function unreadOf(panel) {
+    return parseInt(panel.getAttribute("data-unread") || "0", 10);
+  }
+
+  function sync(panel) {
+    var tab = panel.querySelector(".flyout-tab");
+    var open = !panel.classList.contains("shut");
+    var isChat = panel.classList.contains("flyout--chat");
+
+    if (isChat) {
+      var flag = panel.querySelector(".chat-flag");
+      var n = unreadOf(panel);
+      flag.textContent = n > 9 ? "9+" : String(n);
+      tab.setAttribute("aria-label", "Open table chat" + (n ? ", " + n + " unread" : ""));
+    } else {
+      tab.setAttribute("aria-label", "Open the site path");
+    }
+    tab.setAttribute("aria-expanded", String(open));
+  }
+
+  // Open restores wherever you last dragged it to; close docks it back to the
+  // edge tab. The position outlives the close, which is the whole point.
+  // Which window is in front. Escape closes this one and only this one.
+  var activePanel = null;
+
+  function setActive(panel) {
+    document.querySelectorAll(".flyout.active").forEach(function (p) {
+      p.classList.remove("active");
+    });
+    activePanel = panel || null;
+    if (panel) panel.classList.add("active");
+  }
+
+  // What currently wants your attention. A window only yields to these.
+  function hotRects() {
+    var rects = [];
+    var d = DECISIONS[dIdx];
+    if (d.yours) {
+      rects.push(document.getElementById("a-prompt").getBoundingClientRect());
+      document.querySelectorAll("#a-hand .slot.eligible").forEach(function (el) {
+        rects.push(el.getBoundingClientRect());
+      });
+    }
+    if (wireA.classList.contains("skirmishing")) {
+      rects.push(document.getElementById("a-skirmish").getBoundingClientRect());
+    }
+    document.querySelectorAll(".flyout--chat.shut[data-unread]:not([data-unread='0'])")
+      .forEach(function (el) { rects.push(el.getBoundingClientRect()); });
+    return rects;
+  }
+
+  function overlaps(a, b) {
+    return !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
+  }
+
+  function updateBlocking() {
+    var hots = hotRects();
+    document.querySelectorAll(".flyout").forEach(function (panel) {
+      if (panel.classList.contains("shut")) { panel.classList.remove("blocking"); return; }
+      var rect = panel.getBoundingClientRect();
+      panel.classList.toggle("blocking", hots.some(function (hot) {
+        return overlaps(rect, hot);
+      }));
+    });
+  }
+
+  // Keep a window wholly inside the board, whatever the board's current size.
+  function clampToWire(panel, x, y) {
+    var wire = panel.closest(".wire").getBoundingClientRect();
+    var w = panel.offsetWidth;
+    var h = panel.offsetHeight;
+    return {
+      x: Math.max(2, Math.min(x, wire.width - w - 2)),
+      y: Math.max(2, Math.min(y, wire.height - h - 2))
+    };
+  }
+
+  function openPanel(panel) {
+    panel.classList.remove("shut");
+    if (panel.classList.contains("flyout--chat")) panel.setAttribute("data-unread", "0");
+
+    // First open: adopt whatever the stylesheet docked it at, for both position
+    // and size. Safe to measure now only because the open state has no size
+    // transition that could be caught mid-flight.
+    var wr = panel.closest(".wire").getBoundingClientRect();
+    var pr = panel.getBoundingClientRect();
+    if (!panel._pos) panel._pos = { x: pr.left - wr.left, y: pr.top - wr.top };
+    if (!panel._size) panel._size = { w: pr.width, h: pr.height };
+
+    panel.style.width = panel._size.w + "px";
+    panel.style.height = panel._size.h + "px";
+    // Re-clamp on every open: the board may have been resized since you placed it.
+    panel._pos = clampToWire(panel, panel._pos.x, panel._pos.y);
+    panel.style.left = panel._pos.x + "px";
+    panel.style.top = panel._pos.y + "px";
+    panel.style.right = "auto";
+    panel.style.bottom = "auto";
+
+    if (panel.classList.contains("flyout--path")) paintPath(panel);
+    setActive(panel);
+    sync(panel);
+    updateBlocking();
+  }
+
+  function shutPanel(panel) {
+    panel.classList.add("shut");
+    panel.classList.remove("active");
+    panel._auto = false;
+    clearTimeout(panel._timer);
+    panel.style.left = "";
+    panel.style.top = "";
+    panel.style.right = "";
+    panel.style.bottom = "";
+    panel.style.width = "";
+    panel.style.height = "";
+    // hand focus to whatever is still open, so Escape keeps working down the stack
+    if (activePanel === panel) setActive(document.querySelector(".flyout:not(.shut)"));
+    sync(panel);
+    updateBlocking();
+  }
+
+  // Touching a window brings it to the front
+  document.querySelectorAll(".flyout").forEach(function (panel) {
+    panel.addEventListener("pointerdown", function () {
+      if (!panel.classList.contains("shut")) setActive(panel);
+    });
+  });
+
+  // Resize from the corner. The size is remembered exactly like the position is.
+  document.querySelectorAll(".flyout-resize").forEach(function (grip) {
+    grip.addEventListener("pointerdown", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      grip.setPointerCapture(e.pointerId);
+
+      var panel = grip.closest(".flyout");
+      var wire = panel.closest(".wire").getBoundingClientRect();
+      var rect = panel.getBoundingClientRect();
+      var startX = e.clientX;
+      var startY = e.clientY;
+      panel.classList.add("dragging");
+
+      function move(ev) {
+        var w = Math.max(92, Math.min(rect.width + (ev.clientX - startX), wire.width - panel._pos.x - 2));
+        var h = Math.max(62, Math.min(rect.height + (ev.clientY - startY), wire.height - panel._pos.y - 2));
+        panel._size = { w: w, h: h };
+        panel.style.width = w + "px";
+        panel.style.height = h + "px";
+        if (panel.classList.contains("flyout--path")) paintPath(panel);
+        updateBlocking();
+      }
+      function up(ev) {
+        panel.classList.remove("dragging");
+        grip.releasePointerCapture(ev.pointerId);
+        grip.removeEventListener("pointermove", move);
+        grip.removeEventListener("pointerup", up);
+        grip.removeEventListener("pointercancel", up);
+      }
+      grip.addEventListener("pointermove", move);
+      grip.addEventListener("pointerup", up);
+      grip.addEventListener("pointercancel", up);
+    });
+  });
+
+  // Transpose the path. The window swaps its own proportions to match, since a
+  // left-to-right path wants to be wide and short rather than tall and narrow.
+  document.querySelectorAll(".flyout-turn").forEach(function (btn) {
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      var panel = btn.closest(".flyout");
+      var horiz = panel.classList.toggle("horiz");
+      btn.setAttribute("aria-label", horiz ? "Stack the path top to bottom" : "Lay the path left to right");
+
+      // A horizontal path wants the window's proportions the other way round.
+      if (panel._size && panel._pos) {
+        panel._size = { w: panel._size.h, h: panel._size.w };
+        panel.style.width = panel._size.w + "px";
+        panel.style.height = panel._size.h + "px";
+        panel._pos = clampToWire(panel, panel._pos.x, panel._pos.y);
+        panel.style.left = panel._pos.x + "px";
+        panel.style.top = panel._pos.y + "px";
+      }
+
+      paintPath(panel);
+      updateBlocking();
+    });
+  });
+
+  document.querySelectorAll(".flyout-tab").forEach(function (tab) {
+    tab.addEventListener("click", function () {
+      var panel = tab.closest(".flyout");
+      panel._auto = false;
+      clearTimeout(panel._timer);
+      openPanel(panel);
+    });
+  });
+
+  document.querySelectorAll(".flyout-close").forEach(function (btn) {
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      shutPanel(btn.closest(".flyout"));
+    });
+  });
+
+  document.querySelectorAll(".flyout-head").forEach(function (head) {
+    head.addEventListener("pointerdown", function (e) {
+      // Any control in the title bar keeps its click. Capturing the pointer for a
+      // drag would retarget it to the head and the button would never fire.
+      if (e.target.closest("button")) return;
+      e.preventDefault();
+      head.setPointerCapture(e.pointerId);
+
+      var panel = head.closest(".flyout");
+      var wire = panel.closest(".wire").getBoundingClientRect();
+      var rect = panel.getBoundingClientRect();
+      var offX = e.clientX - rect.left;
+      var offY = e.clientY - rect.top;
+      panel.classList.add("dragging");
+      panel._auto = false;
+      clearTimeout(panel._timer);
+
+      function move(ev) {
+        var pos = clampToWire(panel, ev.clientX - wire.left - offX, ev.clientY - wire.top - offY);
+        panel._pos = pos;
+        panel.style.left = pos.x + "px";
+        panel.style.top = pos.y + "px";
+        panel.style.right = "auto";
+        panel.style.bottom = "auto";
+        updateBlocking();
+      }
+      function up(ev) {
+        panel.classList.remove("dragging");
+        head.releasePointerCapture(ev.pointerId);
+        head.removeEventListener("pointermove", move);
+        head.removeEventListener("pointerup", up);
+        head.removeEventListener("pointercancel", up);
+      }
+      head.addEventListener("pointermove", move);
+      head.addEventListener("pointerup", up);
+      head.addEventListener("pointercancel", up);
+    });
+  });
+
+  document.getElementById("ping").addEventListener("click", function () {
+    document.querySelectorAll(".flyout--chat.shut").forEach(function (panel) {
+      var flag = panel.querySelector(".chat-flag");
+      panel.setAttribute("data-unread", String(unreadOf(panel) + 1));
+      sync(panel);
+      updateBlocking();
+      flag.style.animation = "none";
+      void flag.offsetWidth;
+      flag.style.animation = "";
+    });
+  });
+
+  /* ---- the site path opens itself when the fellowship moves ---- */
+  var SITES = 9;
+  var DWELL = 3200;
+
+  var SITE_H = 21; // card height, % of the column
+
+  // Only site 1 is pre-played. Every other site is played on demand by whoever
+  // sits two seats around from the current player, in the direction the *current*
+  // site sets — so the path is revealed as you go, out of different players' decks.
+  var PATH = [
+    { n: 1, who: "carol",     dir: "↓" },
+    { n: 2, who: "Librarian", dir: "↑" },
+    { n: 3, who: "dave",      dir: "↓" },
+    { n: 4, who: "qwer",      dir: "↓" }
+  ];
+  var TO_PLAY = ["asdf", "carol", "dave", "Librarian", "qwer"];
+
+  function paintPath(panel) {
+    var n = parseInt(panel.dataset.site, 10);
+    var col = panel.querySelector(".sitecol");
+    col.innerHTML = "";
+
+    var pendingWho = TO_PLAY[PATH.length % TO_PLAY.length];
+    var shown = PATH.length + (PATH.length < SITES ? 1 : 0);
+    var horiz = panel.classList.contains("horiz");
+
+    // The cards keep their orientation either way — only the overlap axis moves.
+    // Down the column the step is a share of the height; across, it has to be
+    // measured, because a sideways card's width comes from the column's height.
+    var stepPct = shown > 1 ? (100 - SITE_H) / (shown - 1) : 0;
+    var stepPx = 0;
+    if (horiz) {
+      var cardW = col.clientHeight * 0.84 * (7 / 5);
+      stepPx = shown > 1 ? Math.max(7, (col.clientWidth - cardW) / (shown - 1)) : 0;
+    }
+
+    function place(el, i) {
+      if (horiz) {
+        el.style.left = (i * stepPx).toFixed(1) + "px";
+        el.style.top = "50%";
+        el.style.transform = "translateY(-50%)";
+      } else {
+        el.style.top = (i * stepPct).toFixed(2) + "%";
+        el.style.left = "50%";
+        el.style.transform = "translateX(-50%)";
+      }
+    }
+
+    PATH.forEach(function (entry, i) {
+      var site = document.createElement("div");
+      site.className = "site" + (entry.n === n ? " now" : entry.n < n ? " past" : "");
+      place(site, i);
+      site.innerHTML =
+        '<span class="snum">' + entry.n + " " + entry.dir + "</span>" +
+        '<span class="sowner">' + entry.who + "</span>";
+      col.appendChild(site);
+    });
+
+    if (PATH.length < SITES) {
+      var next = document.createElement("div");
+      next.className = "site pending";
+      place(next, shown - 1);
+      next.innerHTML =
+        '<span class="snum">' + (PATH.length + 1) + "</span>" +
+        '<span class="sowner">' + pendingWho + " plays</span>";
+      col.appendChild(next);
+    }
+
+    panel.querySelector(".flyout-word").textContent = "Site path · " + n + "/" + SITES;
+  }
+
+  function scheduleDrop(panel) {
+    clearTimeout(panel._timer);
+    panel._timer = setTimeout(function () {
+      if (!panel._auto) return;
+      if (panel.matches(":hover")) { scheduleDrop(panel); return; }
+      shutPanel(panel);
+    }, DWELL);
+  }
+
+  document.querySelectorAll(".flyout--path").forEach(function (panel) {
+    panel.dataset.site = "4";
+    paintPath(panel);
+  });
+
+  /* ---- filter opponent cards by side: auto / fp / shadow / all ---- */
+  function sidesFor(mode, activeSide) {
+    if (mode === "all")    return { fp: true,  shadow: true };
+    if (mode === "fp")     return { fp: true,  shadow: false };
+    if (mode === "shadow") return { fp: false, shadow: true };
+    return { fp: activeSide === "fp", shadow: activeSide === "shadow" };
+  }
+
+  /* ---- Option A: one opponent, arrows to cycle ---- */
+  // Every seat, including yours. DiscardAllMinionsGameProcess clears minions at
+  // regroup, so only the shadow players of the current turn have any — the Free
+  // Peoples player never does.
+  // s = strength, v = vitality, w = wounds, t = culture tokens, a = attachments
+  var SEATS = [
+    { name: "carol", side: "fp", minions: 0, support: ["f", "f"],
+      free: [{ k: "f", s: 9, v: 4, a: 2 }, { k: "f", s: 6, v: 3, w: 1 }, { k: "f", s: 3, v: 4, w: 2, t: 3 }] },
+    { name: "dave", side: "shadow", minions: 3, support: ["s"],
+      free: [{ k: "f", s: 8, v: 3, a: 1 }, { k: "f", s: 6, v: 3 }, { k: "f", s: 5, v: 2, w: 1 }, { k: "f", s: 4, v: 3 }] },
+    { name: "qwer", side: "shadow", minions: 1, support: [],
+      free: [{ k: "f", s: 7, v: 3 }, { k: "f", s: 5, v: 3, w: 2 }, { k: "f", s: 4, v: 2 }] },
+    { name: "Librarian", side: "shadow", minions: 2, support: ["s", "s"],
+      free: [{ k: "f", s: 9, v: 4, a: 3 }, { k: "f", s: 6, v: 2 }, { k: "f", s: 5, v: 3, w: 1 }, { k: "f", s: 3, v: 3 }] },
+    { name: "asdf", side: "shadow", minions: 1, support: ["s"], you: true,
+      free: [{ k: "f", s: 8, v: 4, w: 1, a: 1 }, { k: "f", s: 6, v: 3 }, { k: "f", s: 4, v: 2 }] }
+  ];
+
+  // Minion counts move with the phase, so their stats come from a fixed table
+  // indexed by seat and position rather than being stored on the seat.
+  var MINION_STATS = [
+    { s: 7, v: 2 }, { s: 9, v: 3, w: 1 }, { s: 6, v: 2 }, { s: 8, v: 2, t: 2 }
+  ];
+  var OPPS = SEATS.filter(function (s) { return !s.you; });
+
+  var wireA = document.getElementById("wire-a");
+  // Row proportions animate, so re-check overlap once the board has settled.
+  wireA.addEventListener("transitionend", updateBlocking);
+  var aSupport = document.getElementById("a-support");
+  var aFree = document.getElementById("a-free");
+  var aMinions = document.getElementById("a-minions");
+  var aPos = document.getElementById("a-pos");
+  var idxA = 0;
+
+  // A card at board density. Owner is passed only for shared zones — everywhere
+  // else the zone already says whose it is, so the tag would be noise.
+  function cardEl(spec, doc) {
+    doc = doc || document;
+    if (typeof spec === "string") spec = { k: spec };
+    var el = doc.createElement("div");
+    el.className = "slot " + (spec.k || "");
+
+    if (spec.a) {
+      var fan = doc.createElement("span");
+      fan.className = "catt";
+      for (var i = 0; i < spec.a; i++) {
+        var spine = doc.createElement("span");
+        spine.className = "aspine";
+        fan.appendChild(spine);
+      }
+      el.appendChild(fan);
+    }
+    if (spec.w) {
+      var wounds = doc.createElement("span");
+      wounds.className = "cwounds";
+      for (var j = 0; j < spec.w; j++) {
+        var pip = doc.createElement("span");
+        pip.className = "wpip";
+        wounds.appendChild(pip);
+      }
+      el.appendChild(wounds);
+    }
+    if (spec.t) {
+      var tok = doc.createElement("span");
+      tok.className = "ctok";
+      tok.textContent = "◆" + spec.t;
+      el.appendChild(tok);
+    }
+    if (spec.s !== undefined) {
+      var stats = doc.createElement("span");
+      stats.className = "cstats";
+      stats.innerHTML = "<b>" + spec.s + "</b>/<i>" + spec.v + "</i>";
+      el.appendChild(stats);
+    }
+    return el;
+  }
+
+  function fill(zone, specs) {
+    var slots = zone.querySelector(".slots");
+    slots.innerHTML = "";
+    specs.forEach(function (spec) { slots.appendChild(cardEl(spec)); });
+  }
+
+  /* Seven decision types, three interaction shapes: answer with a button,
+     answer with a number, or answer by touching cards. The prompt keeps one
+     anatomy across all of them — who is asked, what, how to answer, time left. */
+  var DECISIONS = [
+    { yours: true,  seat: null, text: "Play a card or use a special ability, or pass",
+      actions: [["Pass", true]], eligible: [0, 3, 6], timer: "0:24" },
+    { yours: true,  seat: null, text: "Choose 2 cards to discard — 1 chosen",
+      actions: [["Confirm", true], ["Cancel", false]], eligible: [1, 2, 4, 5, 7], timer: "0:31" },
+    { yours: true,  seat: null, text: "How much twilight to spend?",
+      actions: [["− 3 +", false], ["Accept", true]], eligible: [], timer: "0:18" },
+    { yours: false, seat: 1,    text: "Waiting for dave — assigning minions",
+      actions: [], eligible: [], timer: "1:02" },
+    { yours: false, seat: 3,    text: "Waiting for Librarian — shadow phase",
+      actions: [], eligible: [], timer: "0:47" }
+  ];
+  var dIdx = 0;
+
+  function renderPrompt() {
+    var d = DECISIONS[dIdx];
+    var prompt = document.getElementById("a-prompt");
+    // A spectator is never asked anything, so the strip reports rather than asks.
+    var yours = d.yours && !spectating;
+    prompt.classList.toggle("yours", yours);
+    prompt.querySelector(".ptext").textContent = spectating
+      ? (d.yours ? "asdf is deciding — " + d.text : d.text)
+      : (d.yours ? "You: " : "") + d.text;
+    prompt.querySelector(".ptimer").textContent = d.timer;
+
+    var actions = prompt.querySelector(".pactions");
+    actions.innerHTML = "";
+    d.actions.forEach(function (pair) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "pbtn" + (pair[1] ? " primary" : "");
+      b.textContent = pair[0];
+      actions.appendChild(b);
+    });
+
+    document.querySelectorAll("#a-hand .slot").forEach(function (slot, i) {
+      slot.classList.toggle("eligible", d.eligible.indexOf(i) >= 0);
+    });
+  }
+
+  // One band, every seat's minions, each carrying whose it is. At two players
+  // ownership was implied by position; above two it has to be said.
+  function renderMinions() {
+    var row = aMinions.querySelector(".minions-row");
+    row.innerHTML = "";
+    var total = 0;
+    var seatsWith = 0;
+
+    SEATS.forEach(function (seat, i) {
+      if (seat.out || !seat.minions) return;
+      seatsWith++;
+      for (var k = 0; k < seat.minions; k++) {
+        var wrap = document.createElement("div");
+        wrap.className = "minion" + (seat.you ? " mine" : "");
+        var stat = MINION_STATS[(i + k) % MINION_STATS.length];
+        var slot = cardEl({ k: "s", s: stat.s, v: stat.v, w: stat.w, t: stat.t });
+        var tag = document.createElement("span");
+        tag.className = "mtag";
+        tag.innerHTML = "<b>" + (i + 1) + "</b>" + (seat.you ? "you" : seat.name);
+        wrap.appendChild(slot);
+        wrap.appendChild(tag);
+        row.appendChild(wrap);
+        total++;
+      }
+    });
+
+    // The band keeps its position always, but not its height: minions only exist
+    // from the shadow phase to regroup, so through the fellowship phase it would
+    // otherwise be a large empty band during the busiest phase for the FP player.
+    if (!total) {
+      var none = document.createElement("span");
+      none.className = "bandnote";
+      var phase = typeof PHASES !== "undefined" ? PHASES[pIdx] : null;
+      none.textContent = "No minions in play. " + ((phase && phase.note) || "");
+      row.appendChild(none);
+    }
+    wireA.style.setProperty("--r-minions", total ? "14fr" : "3fr");
+    aMinions.querySelector(".lbl").textContent = total
+      ? "Minions in play · " + total + " from " + seatsWith + " seats · never filtered"
+      : "Minions in play";
+  }
+
+  function renderA() {
+    // Following the action means the selection tracks whoever holds the Free
+    // Peoples role, so a spectator never has to chase the turn by hand.
+    if (spectating && following) idxA = fpSeat();
+    if (SEATS[idxA] && SEATS[idxA].out) {
+      var live = liveSeats();
+      idxA = live.length ? live[0] : idxA;
+    }
+    var o = SEATS[idxA];
+    var mode = wireA.dataset.mode || "auto";
+    var show = sidesFor(mode, o.side);
+
+    // SUPPORT holds both sides in one zone and the protocol carries no side, so
+    // it cannot be filtered yet. Say so rather than pretending it was.
+    aSupport.querySelector(".lbl").textContent =
+      o.name + " · support area" + (mode === "all" ? "" : " · unfiltered");
+    fill(aSupport, o.support);
+
+    aFree.querySelector(".lbl").textContent =
+      o.name + " · free characters" + (o.side === "fp" ? " · under attack" : "");
+    fill(aFree, o.free);
+    aFree.classList.toggle("z--dim", !show.fp);
+    aFree.querySelector(".dchip-inline").textContent = o.free.length + " companions hidden";
+
+    // The minion band is shared and never filtered: it is the state everyone at
+    // the table is acting on, so hiding part of it would hide the game.
+    renderMinions();
+
+    wireA.style.setProperty("--r-free", show.fp ? "11fr" : "4fr");
+
+    // A skirmish involves minions from several seats at once, so focus is
+    // suspended for its duration and the arrows go dead rather than lying.
+    var skirmishing = wireA.classList.contains("skirmishing");
+    document.getElementById("a-prev").disabled = skirmishing;
+    document.getElementById("a-next").disabled = skirmishing;
+    // The bottom of the board is your own cards when playing, and the contested
+    // fellowship when spectating — so a spectator always sees the action plus
+    // whichever seat they are inspecting.
+    var fp = SEATS[fpSeat()];
+    var mine = document.getElementById("a-myfree");
+    mine.querySelector(".lbl").textContent =
+      spectating ? fp.name + " · fellowship under attack" : "Your free characters";
+    // Spectating, the bottom band is the contested fellowship rather than yours.
+    fill(mine, (spectating ? fp : SEATS[SEATS.length - 1]).free);
+    document.getElementById("a-mysupport").querySelector(".lbl").textContent =
+      spectating ? fp.name + " · support area" : "Your support area";
+    document.getElementById("a-follow").classList.toggle("on", following);
+
+    var live = liveSeats();
+    aPos.textContent = skirmishing
+      ? "skirmish · every seat shown"
+      : (live.indexOf(idxA) + 1) + " / " + live.length + (spectating ? " · spectating" : "");
+
+    document.querySelectorAll("#a-rail .seat").forEach(function (seat, i) {
+      var count = seat.querySelector(".mcount");
+      if (count && SEATS[i]) count.textContent = "minions " + SEATS[i].minions;
+    });
+
+    var deciding = DECISIONS[dIdx].seat;
+    document.querySelectorAll("#a-rail .seat[data-opp]").forEach(function (seat) {
+      var i = parseInt(seat.dataset.opp, 10);
+      seat.classList.toggle("out", !!OPPS[i].out);
+      seat.classList.toggle("on", !skirmishing && i === idxA);
+      seat.classList.toggle("deciding", deciding === i);
+    });
+
+    // `detached` is declared further down; typeof keeps the first render safe.
+    if (typeof detached !== "undefined") {
+      document.querySelectorAll("#a-rail .seat").forEach(function (seat, i) {
+        seat.classList.toggle("detached", !!detached[i] && !detached[i].closed);
+      });
+      paintDetached();
+    }
+
+    renderPrompt();
+    updateBlocking();
+  }
+
+  // A spectator has no seat of their own, so every seat is selectable — no need
+  // to adopt one the way the current client makes them. An eliminated player
+  // leaves the rotation either way.
+  var spectating = false;
+  var following = true;
+
+  function liveSeats() {
+    var pool = spectating ? SEATS : OPPS;
+    return pool.map(function (s, i) { return i; }).filter(function (i) { return !SEATS[i].out; });
+  }
+
+  function fpSeat() {
+    for (var i = 0; i < SEATS.length; i++) if (SEATS[i].side === "fp") return i;
+    return 0;
+  }
+
+  function stepA(delta) {
+    var live = liveSeats();
+    if (!live.length) return;
+    var at = live.indexOf(idxA);
+    if (at < 0) at = 0;
+    idxA = live[(at + delta + live.length) % live.length];
+    following = false;   // a deliberate move takes over from auto-follow
+    renderA();
+  }
+
+  document.getElementById("a-prev").addEventListener("click", function () { stepA(-1); });
+  document.getElementById("a-next").addEventListener("click", function () { stepA(1); });
+  // Delegated so it covers the fifth chip too, which is only selectable when
+  // spectating — a player cannot focus their own seat.
+  document.getElementById("a-rail").addEventListener("click", function (e) {
+    if (e.target.closest("button")) return;
+    var chip = e.target.closest(".seat");
+    if (!chip) return;
+    var chips = [].slice.call(this.querySelectorAll(".seat"));
+    var i = chips.indexOf(chip);
+    if (i < 0 || SEATS[i].out) return;
+    if (!spectating && SEATS[i].you) return;
+    idxA = i;
+    following = false;
+    renderA();
+  });
+
+  document.getElementById("a-follow").addEventListener("click", function () {
+    following = !following;
+    renderA();
+  });
+
+  function setMode(spec) {
+    spectating = spec;
+    wireA.classList.toggle("spectating", spectating);
+    document.getElementById("mode-play").classList.toggle("on", !spectating);
+    document.getElementById("spectate").classList.toggle("on", spectating);
+    document.getElementById("modehint").textContent = spectating
+      ? "No seat, no hand, no decisions — every seat is selectable, and the bottom shows the contested fellowship."
+      : "Your hand and decisions are yours.";
+    following = spectating;
+    if (!spectating && SEATS[idxA].you) idxA = 0;
+    renderA();
+  }
+  document.getElementById("spectate").addEventListener("click", function () { setMode(true); });
+  document.getElementById("mode-play").addEventListener("click", function () { setMode(false); });
+  // Arrows rotate seats and Escape dismisses whatever is open, without first
+  // having to click the board. Scoped to when the board is actually on screen,
+  // since this page scrolls; in the real client it is the whole window.
+  function boardOnScreen() {
+    var r = wireA.getBoundingClientRect();
+    return r.bottom > 0 && r.top < window.innerHeight;
+  }
+
+  document.addEventListener("keydown", function (e) {
+    if (e.target.matches("input, textarea")) return;
+
+    if (e.key === "Escape") {
+      var pile = document.getElementById("a-pile");
+      if (!pile.hidden) { pile.hidden = true; return; }
+      // one Escape, one window — the active one, then the next one down
+      if (activePanel && !activePanel.classList.contains("shut")) {
+        shutPanel(activePanel);
+        return;
+      }
+      var open = document.querySelector(".flyout:not(.shut)");
+      if (open) shutPanel(open);
+      return;
+    }
+    if (!boardOnScreen()) return;
+    if (e.key === "ArrowLeft") { e.preventDefault(); stepA(-1); }
+    if (e.key === "ArrowRight") { e.preventDefault(); stepA(1); }
+  });
+
+  document.querySelectorAll(".seg-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var seg = btn.closest(".seg");
+      var wire = btn.closest(".wire");
+      seg.querySelectorAll(".seg-btn").forEach(function (b) { b.classList.remove("on"); });
+      btn.classList.add("on");
+      wire.dataset.mode = btn.dataset.mode;
+      renderA();
+    });
+  });
+
+  /* ---- skirmish suspends the focus: every seat's minions must be visible ---- */
+  document.getElementById("skirmish").addEventListener("click", function () {
+    var on = wireA.classList.toggle("skirmishing");
+    this.textContent = on ? "End the skirmish" : "Start a skirmish";
+    renderA();
+  });
+
+  document.getElementById("move").addEventListener("click", function () {
+    document.querySelectorAll(".flyout--path").forEach(function (panel) {
+      var n = parseInt(panel.dataset.site, 10);
+      if (n >= SITES) {
+        panel.dataset.site = "1";
+        PATH.length = 1;
+      } else {
+        panel.dataset.site = String(n + 1);
+        // moving reveals the next site, played out of some player's adventure deck
+        if (PATH.length < n + 1) {
+          PATH.push({
+            n: n + 1,
+            who: TO_PLAY[PATH.length % TO_PLAY.length],
+            dir: (n % 3) ? "↓" : "↑"
+          });
+        }
+      }
+      paintPath(panel);
+      openPanel(panel);
+      panel._auto = true;
+      scheduleDrop(panel);
+    });
+  });
+
+  /* ---- detach a seat's board into its own window ----
+     The child is a VIEW ONLY. It never opens a game channel: LotroGameMediator
+     throws SubscriptionConflictException if a second client claims a player's
+     channel, which is the 409 this project already hit. One transport, many views. */
+  var detached = {};
+
+  var noteTimer = null;
+  function noteDetach(msg, ok) {
+    var el = document.getElementById("detach-note");
+    if (!el) return;
+    clearTimeout(noteTimer);
+    el.textContent = msg || "";
+    el.classList.toggle("on", !!msg);
+    el.classList.toggle("ok", !!ok);
+    if (msg && ok) noteTimer = setTimeout(function () { el.classList.remove("on"); }, 4000);
+  }
+
+  function seatIndexByName(name) {
+    for (var i = 0; i < SEATS.length; i++) if (SEATS[i].name === name) return i;
+    return -1;
+  }
+
+  function detachSeat(i) {
+    var seat = SEATS[i];
+    var win = null;
+    try {
+      win = window.open("", "gemp-seat-" + i, "width=430,height=580");
+    } catch (err) {
+      noteDetach("window.open threw " + err.name + " — the frame forbids popups.");
+      return;
+    }
+    if (!win) {
+      noteDetach("Popup blocked by this page's sandbox — no browser setting overrides that. " +
+                 "Verified working in harness/web/multiwindow_spike.html.");
+      return;
+    }
+
+    try {
+      buildDetached(win, i, seat);
+    } catch (err) {
+      // A sandboxed popup can be handed back with an opaque origin, so the
+      // window exists but its document is unreachable. Say so rather than
+      // failing silently, which just looks like a dead button.
+      noteDetach("Popup opened but its document is sandboxed (" + err.name + "). Works in a normal tab.");
+      try { win.close(); } catch (ignored) {}
+      return;
+    }
+
+    noteDetach("Opened " + seat.name + "'s board in its own window.", true);
+    detached[i] = win;
+    win.addEventListener("pagehide", function () {
+      delete detached[i];
+      renderA();
+    });
+    paintDetached();
+    renderA();
+  }
+
+  function buildDetached(win, i, seat) {
+    // Styles do not follow a node across documents; the child needs its own copy.
+    win.document.head.innerHTML = "<title>" + seat.name + " — board</title>";
+    document.querySelectorAll("style").forEach(function (tag) {
+      win.document.head.appendChild(tag.cloneNode(true));
+    });
+    var theme = document.documentElement.getAttribute("data-theme");
+    if (theme) win.document.documentElement.setAttribute("data-theme", theme);
+
+    win.document.body.innerHTML =
+      '<div class="popwrap">' +
+      '<div class="pophead"></div>' +
+      '<div class="z free" data-pop="free"><div class="lbl">free characters</div><div class="slots"></div></div>' +
+      '<div class="z shad" data-pop="minions"><div class="lbl">minions</div><div class="minions-row"></div></div>' +
+      '<div class="z" data-pop="support"><div class="lbl">support area</div><div class="slots"></div></div>' +
+      "</div>";
+
+    var css = win.document.createElement("style");
+    css.textContent =
+      "body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--font-body)}" +
+      ".popwrap{box-sizing:border-box;height:100vh;padding:10px;display:flex;flex-direction:column;gap:8px}" +
+      ".pophead{font-family:var(--font-data);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--brass)}" +
+      ".popwrap .z{flex:1}.popwrap .z[data-pop='support']{flex:.6}" +
+      ".popwrap .lbl{font-size:9px}";
+    win.document.head.appendChild(css);
+  }
+
+  function paintDetached() {
+    Object.keys(detached).forEach(function (key) {
+      var win = detached[key];
+      if (!win || win.closed) { delete detached[key]; return; }
+      var seat = SEATS[key];
+      var doc;
+      try { doc = win.document; } catch (err) { delete detached[key]; return; }
+
+      doc.querySelector(".pophead").textContent =
+        seat.name + " — " + (seat.side === "fp" ? "Free Peoples" : "shadow") +
+        (seat.out ? " — eliminated" : "");
+
+      var free = doc.querySelector("[data-pop='free'] .slots");
+      free.innerHTML = "";
+      seat.free.forEach(function (k) {
+        var d = doc.createElement("div");
+        d.className = "slot " + k;
+        free.appendChild(d);
+      });
+
+      var support = doc.querySelector("[data-pop='support'] .slots");
+      support.innerHTML = "";
+      seat.support.forEach(function (k) {
+        var d = doc.createElement("div");
+        d.className = "slot " + k;
+        support.appendChild(d);
+      });
+
+      var mrow = doc.querySelector("[data-pop='minions'] .minions-row");
+      mrow.innerHTML = "";
+      for (var m = 0; m < seat.minions; m++) {
+        var wrap = doc.createElement("div");
+        wrap.className = "minion";
+        wrap.innerHTML = '<div class="slot s"></div><span class="mtag">' + seat.name + "</span>";
+        mrow.appendChild(wrap);
+      }
+      if (!seat.minions) {
+        var none = doc.createElement("span");
+        none.className = "bandnote";
+        none.textContent = "No minions in play.";
+        mrow.appendChild(none);
+      }
+    });
+  }
+
+  document.querySelectorAll("[data-detach]").forEach(function (btn) {
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      var who = btn.dataset.detach;
+      noteDetach("Opening " + who + "'s board…", true);   // proves the click landed
+      var i = seatIndexByName(who);
+      if (i < 0) { noteDetach("No seat named " + who + "."); return; }
+      if (detached[i] && !detached[i].closed) {
+        detached[i].close();
+        delete detached[i];
+        noteDetach("Closed " + who + "'s window.", true);
+        renderA();
+        return;
+      }
+      detachSeat(i);
+    });
+  });
+
+  // A reload would orphan the children, so take them with us.
+  window.addEventListener("beforeunload", function () {
+    Object.keys(detached).forEach(function (k) {
+      if (detached[k] && !detached[k].closed) detached[k].close();
+    });
+  });
+
+  document.getElementById("decide").addEventListener("click", function () {
+    dIdx = (dIdx + 1) % DECISIONS.length;
+    renderA();
+  });
+
+  document.getElementById("elim").addEventListener("click", function () {
+    var qwer = OPPS[2];
+    qwer.out = !qwer.out;
+    this.textContent = qwer.out ? "Restore qwer" : "Eliminate qwer";
+    renderA();
+  });
+
+  /* ---- piles: a discard runs to 40 cards, which is where a grid finally wins ---- */
+  var pileView = document.getElementById("a-pile");
+  var pileGrid = document.getElementById("a-pilegrid");
+
+  function fillPile(n) {
+    pileGrid.innerHTML = "";
+    if (!n) {
+      var empty = document.createElement("span");
+      empty.className = "pileempty";
+      empty.textContent = "Nothing here yet.";
+      pileGrid.appendChild(empty);
+      return;
+    }
+    for (var i = 0; i < n; i++) {
+      var el = document.createElement("div");
+      el.className = "slot";
+      pileGrid.appendChild(el);
+    }
+  }
+
+  document.querySelectorAll(".pilebtn").forEach(function (btn) {
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      document.getElementById("a-pilewho").textContent = btn.dataset.who;
+      var tabs = document.querySelectorAll("#a-piletabs .ptab");
+      tabs.forEach(function (t, i) { t.classList.toggle("on", i === 0); });
+      fillPile(parseInt(tabs[0].dataset.n, 10));
+      pileView.hidden = false;
+    });
+  });
+
+  document.querySelectorAll("#a-piletabs .ptab").forEach(function (tab) {
+    tab.addEventListener("click", function () {
+      document.querySelectorAll("#a-piletabs .ptab").forEach(function (t) { t.classList.remove("on"); });
+      tab.classList.add("on");
+      fillPile(parseInt(tab.dataset.n, 10));
+    });
+  });
+
+  document.getElementById("a-pileclose").addEventListener("click", function () {
+    pileView.hidden = true;
+  });
+
+  /* ---- zoom: anchored to the far side, so it never sits under the pointer ---- */
+  var zoom = document.createElement("div");
+  zoom.className = "zoom";
+  zoom.innerHTML = "<span>card preview</span>";
+  wireA.appendChild(zoom);
+
+  wireA.addEventListener("mouseover", function (e) {
+    // Sites are .site, not .slot, and they preview on their side like they sit.
+    // A pending site has nothing to preview — nobody has played it yet.
+    var card = e.target.closest(".slot, .site");
+    if (!card || card.classList.contains("pending")) {
+      zoom.classList.remove("on");
+      return;
+    }
+    var isSite = card.classList.contains("site");
+    zoom.classList.toggle("landscape", isSite);
+    zoom.querySelector("span").textContent = isSite
+      ? "Site " + card.querySelector(".snum").textContent.trim().split(" ")[0] +
+        " · " + card.querySelector(".sowner").textContent
+      : "card preview";
+
+    var wire = wireA.getBoundingClientRect();
+    var rect = card.getBoundingClientRect();
+    var pointerLeft = (rect.left + rect.width / 2) < (wire.left + wire.width / 2);
+    zoom.classList.toggle("at-right", pointerLeft);
+    zoom.classList.toggle("at-left", !pointerLeft);
+    zoom.classList.add("on");
+  });
+  wireA.addEventListener("mouseleave", function () { zoom.classList.remove("on"); });
+
+  /* ---- phases: minions exist only from the shadow phase to regroup ---- */
+  // A full turn, including a second move. Minions are discarded only on the stay
+  // branch, so moving again carries every survivor into the next shadow phase.
+  var PHASES = [
+    { name: "Fellowship",  move: 1, minions: [0, 0, 0, 0, 0], note: "None can be in play until the shadow phase." },
+    { name: "Shadow",      move: 1, minions: [0, 2, 1, 0, 1] },
+    { name: "Assignment",  move: 1, minions: [0, 3, 1, 2, 1] },
+    { name: "Skirmish",    move: 1, minions: [0, 2, 1, 1, 1] },
+    { name: "Regroup — moving again", move: 1, minions: [0, 2, 1, 1, 1] },
+    { name: "Shadow",      move: 2, minions: [0, 3, 2, 2, 1] },
+    { name: "Skirmish",    move: 2, minions: [0, 1, 1, 1, 0] },
+    { name: "Regroup — staying", move: 2, minions: [0, 0, 0, 0, 0], note: "Discarded on the stay branch — the turn is ending." }
+  ];
+  var pIdx = 2;
+
+  document.getElementById("phase").addEventListener("click", function () {
+    pIdx = (pIdx + 1) % PHASES.length;
+    var phase = PHASES[pIdx];
+    document.getElementById("a-phase").textContent = phase.name;
+    document.getElementById("a-move").textContent = "Move " + phase.move + " / 4";
+    SEATS.forEach(function (seat, i) { seat.minions = phase.minions[i]; });
+    renderA();
+  });
+
+  renderA();
+</script>

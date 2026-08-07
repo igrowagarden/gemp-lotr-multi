@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>old vs new</title>
+<link rel="stylesheet" href="../styles/board.css">
+<style>
+  body { font-family: ui-monospace, Consolas, monospace; font-size: 12px; padding: 8px; }
+  #board { position: absolute; left: -10000px; top: 0; width: 1400px; height: 900px; }
+  iframe { position: absolute; left: -10000px; top: 0; width: 1400px; height: 900px; border: 0; }
+  .ok { color: #6E9B7A; } .bad { color: #FF5240; } .warn { color: #C89A3C; }
+  pre { margin: 2px 0; white-space: pre-wrap; }
+</style></head>
+<body>
+<div id="board"></div>
+<iframe id="old" src="./oldharness.html"></iframe>
+<pre id="out">running…</pre>
+
+<script type="module">
+/**
+ * Differential test: the old client is the source of truth.
+ *
+ * Both clients are fed the SAME recorded game, event by event, and stopped at
+ * every decision. At each stop we ask both the same two questions:
+ *
+ *   contract   what answers does this decision permit?
+ *   reachable  what could a player actually click?
+ *
+ * and compare. The old client has had thousands of real games played through
+ * it; where the two disagree, the new one is presumed wrong.
+ *
+ *   diff.html?replayId=<player>$<id>&max=40&login=asdf&password=asdf
+ *
+ * `max` bounds the decisions examined -- a full game is ~200 and the old client
+ * is not fast.
+ */
+import { createStore } from "../state/store.js";
+import { decodeEvents } from "../net/protocol.js";
+import { createBoard } from "../view/board.js";
+import { createPicker } from "../view/picker.js";
+import { createPathPanel } from "../view/panels.js";
+import { contractOffers, reachableOffers } from "./probe.js";
+
+const q = new URLSearchParams(location.search);
+const out = document.getElementById("out");
+const lines = [];
+const say = (t, cls) => lines.push(cls ? `<span class="${cls}">${t}</span>` : t);
+const flush = () => { out.innerHTML = lines.join("\n"); };
+
+const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+async function ready(frame) {
+  for (let i = 0; i < 200; i++) {
+    if (frame.contentWindow?.OLD) return frame.contentWindow.OLD;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  throw new Error("old harness never came up");
+}
+
+try {
+  if (q.get("login")) {
+    await fetch("/gemp-lotr-server/login", {
+      method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ login: q.get("login"), password: q.get("password") ?? "" })
+    });
+  }
+
+  const replayId = q.get("replayId");
+  const maxDecisions = parseInt(q.get("max") ?? "40", 10);
+  const player = replayId.split("$")[0];
+
+  const xml = await (await fetch("/gemp-lotr-server/replay/" + replayId,
+                                 { credentials: "same-origin" })).text();
+
+  const OLD = await ready(document.getElementById("old"));
+  OLD.boot({ gameId: "1", participantId: player });
+  const oldEvents = OLD.parseEvents(xml);
+
+  // The new client, driven through its real board so reachability is honest.
+  const boardEl = document.getElementById("board");
+  const store = createStore(player);
+  const board = createBoard(boardEl, store, { onAnswer: () => {} });
+  const picker = createPicker(boardEl, { onAnswer: () => {} });
+  // The path panel must exist and be OPEN: sites are drawn only there, so
+  // without it every site action looks unreachable and the comparison lies.
+  const path = createPathPanel(boardEl, store, { onAnswer: () => {} });
+  path.open();
+  const newEvents = decodeEvents(xml);
+  store.subscribe((s) => {
+    path.paint(s);
+    const d = s.decision;
+    if (d && d.decisionType === "ARBITRARY_CARDS" && d.forPlayer === s.viewerId) picker.show(d);
+    else picker.hide();
+  });
+
+  say(`replay ${replayId} — ${oldEvents.length} events, comparing up to ${maxDecisions} decisions`);
+  if (oldEvents.length !== newEvents.length) {
+    say(`  DECODE MISMATCH: old sees ${oldEvents.length} events, new sees ${newEvents.length}`, "bad");
+  }
+
+  let at = 0, seen = 0, mismatches = 0, compared = 0;
+  const byType = {};
+
+  while (seen < maxDecisions) {
+    const step = OLD.feedUntilDecision(oldEvents, at);
+    if (step.done) break;
+
+    // Feed the new client the identical slice.
+    store.dispatchAll(newEvents.slice(at, step.at + 1));
+    at = step.at + 1;
+    seen++;
+
+    const d = store.getState().decision;
+    const dec = step.decision;
+    // Only decisions addressed to this seat are answerable by either client.
+    if (!d || d.forPlayer !== player) continue;
+    compared++;
+    byType[dec.type] = (byType[dec.type] ?? 0) + 1;
+
+    const oldOffer = OLD.offers();
+    const contract = contractOffers(d);
+
+    // Negative control. "Agree" means nothing until the comparison is shown to
+    // be capable of disagreeing, so `?sabotage=actionids` re-introduces the
+    // exact bug this client shipped with -- answering CARD_ACTION_CHOICE with
+    // card ids instead of action indices. A run with it MUST report mismatches;
+    // if it does not, the check is measuring nothing.
+    if (q.get("sabotage") === "actionids" && dec.type === "CARD_ACTION_CHOICE") {
+      contract.answers = (contract.detail ?? []).map((x) => String(x.cardId)).sort();
+    }
+    const reach = reachableOffers(boardEl, d);
+
+    const problems = [];
+
+    // 1. Same shape of thing being offered?
+    const shapeMap = { CARD_ACTION_CHOICE: "cardAction", CARD_SELECTION: "cardSelection",
+                       ARBITRARY_CARDS: "arbitrary", ASSIGN_MINIONS: "assign" };
+    const wantShape = shapeMap[dec.type] ?? "button";
+    if (contract.shape !== wantShape) {
+      problems.push(`new treats ${dec.type} as ${contract.shape}, expected ${wantShape}`);
+    }
+
+    // 2. For card actions, the ANSWERS must match exactly -- this is where a
+    //    client sends a card id instead of an action index.
+    if (dec.type === "CARD_ACTION_CHOICE") {
+      const oldAnswers = oldOffer.options.map((o) => String(o.actionId)).sort();
+      if (!eq(oldAnswers, contract.answers)) {
+        problems.push(`answers differ: old ${JSON.stringify(oldAnswers)} vs new ${JSON.stringify(contract.answers)}`);
+      }
+      const oldCards = [...new Set(oldOffer.options.map((o) => o.cardId).filter(Boolean))].sort();
+      const newReach = [...new Set(reach.ids)].sort();
+      // A card the old client lights up but the new one never draws is an
+      // option the player cannot take, whatever the contract says.
+      const missing = oldCards.filter((c) => !newReach.includes(c));
+      if (missing.length && !contract.detail.some((x) => x.virtual)) {
+        problems.push(`cards old offers but new does not light: ${missing.join(",")}`);
+      }
+    }
+
+    if (dec.type === "CARD_SELECTION") {
+      const oldCards = oldOffer.options.map((o) => o.cardId).filter(Boolean).sort();
+      if (oldCards.length && !eq(oldCards, contract.answers)) {
+        problems.push(`selection differs: old ${JSON.stringify(oldCards)} vs new ${JSON.stringify(contract.answers)}`);
+      }
+    }
+
+    if (problems.length) {
+      mismatches++;
+      say(`#${seen} ${dec.type} "${dec.text}"`, "bad");
+      for (const p of problems) say("     " + p, "bad");
+      say(`     old: ${JSON.stringify(oldOffer).slice(0, 240)}`);
+      say(`     new: ${JSON.stringify(contract).slice(0, 240)}`);
+      if (mismatches > 12) { say("… stopping after 12 mismatches", "warn"); break; }
+    }
+    if (seen % 25 === 0) flush();
+  }
+
+  say("");
+  say(`decisions walked: ${seen}, addressed to ${player}: ${compared}`);
+  say(`by type: ${JSON.stringify(byType)}`);
+  const oldErrors = OLD.errors();
+  if (oldErrors.length) say(`old client errors: ${oldErrors.length} — ${oldErrors[0]}`, "warn");
+  say(mismatches ? `RESULT: ${mismatches} MISMATCH of ${compared}` : `RESULT: AGREE on all ${compared}`,
+      mismatches ? "bad" : "ok");
+} catch (e) {
+  say("DRIVER THREW: " + (e?.message ?? e), "bad");
+  say(String(e?.stack ?? "").split("\n").slice(0, 4).join("\n"));
+  say("RESULT: ERROR", "bad");
+}
+flush();
+document.title = "diff-done";
+</script>
+</body></html>

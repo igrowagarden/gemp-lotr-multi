@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>GEMP multi-window spike</title>
+<style>
+  :root {
+    --ground: #0D0B0A; --surface: #17130F; --sunken: #070605;
+    --ink: #E8E0D4; --ink-2: #A79A88; --ink-3: #7A6E60;
+    --rule: #2C241D; --rule-2: #3F332A;
+    --brass: #C89A3C; --free: #6E9B7A; --shadow: #C2564A; --shared: #6E8CA8;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
+  }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: system-ui, sans-serif; font-size: 14px;
+  }
+  .page { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p.sub { color: var(--ink-2); margin: 0 0 20px; font-size: 13px; max-width: 70ch; }
+  code { font-family: var(--mono); font-size: .9em; color: var(--brass); }
+
+  .bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
+  button.act {
+    font-family: var(--mono); font-size: 12px; padding: 5px 12px; cursor: pointer;
+    background: transparent; color: var(--brass); border: 1px solid var(--brass); border-radius: 3px;
+  }
+  button.act:hover { background: rgba(200,154,60,.14); }
+  .phase { font-family: var(--mono); font-size: 12px; color: var(--ink-2); }
+
+  .seats { display: flex; gap: 6px; margin-bottom: 14px; }
+  .seat {
+    flex: 1; position: relative; padding: 6px 8px;
+    background: var(--surface); border: 1px solid var(--rule-2); border-radius: 3px;
+  }
+  .seat.fp { border-left: 3px solid var(--free); }
+  .seat.sh { border-left: 3px solid var(--shadow); }
+  .seat.you { box-shadow: inset 0 0 0 1px var(--brass); }
+  .seat .nm { font-family: var(--mono); font-size: 11px; color: var(--ink-2); display: block; }
+  .seat .vt { font-family: var(--mono); font-size: 10px; color: var(--ink-3); }
+  .seat.detached { border-color: var(--brass); }
+  .pop {
+    position: absolute; top: 5px; right: 5px; width: 20px; height: 20px; padding: 0;
+    font-family: var(--mono); font-size: 12px; cursor: pointer; border-radius: 3px;
+    background: transparent; color: var(--ink-3); border: 1px solid var(--rule-2);
+  }
+  .pop:hover { color: var(--brass); border-color: var(--brass); }
+
+  .zone {
+    background: var(--surface); border: 1px solid var(--rule-2); border-radius: 3px;
+    padding: 6px 8px; margin-bottom: 8px;
+  }
+  .zone .lbl {
+    font-family: var(--mono); font-size: 10px; text-transform: uppercase;
+    letter-spacing: .1em; color: var(--ink-3); display: block; margin-bottom: 5px;
+  }
+  .zone.free { background: color-mix(in srgb, var(--free) 12%, var(--surface)); }
+  .zone.shad { background: color-mix(in srgb, var(--shadow) 12%, var(--surface)); }
+  .row { display: flex; gap: 5px; align-items: flex-end; min-height: 64px; }
+  .card {
+    width: 46px; height: 64px; border-radius: 2px;
+    background: color-mix(in srgb, var(--ink) 16%, var(--surface));
+    border: 1px solid color-mix(in srgb, var(--ink) 28%, var(--surface));
+  }
+  .card.f { background: color-mix(in srgb, var(--free) 42%, var(--surface)); border-color: color-mix(in srgb, var(--free) 62%, var(--surface)); }
+  .card.s { background: color-mix(in srgb, var(--shadow) 42%, var(--surface)); border-color: color-mix(in srgb, var(--shadow) 62%, var(--surface)); }
+  .minion { display: flex; flex-direction: column; gap: 3px; align-items: center; }
+  .tag { font-family: var(--mono); font-size: 9px; color: var(--ink-3); }
+  .empty { font-family: var(--mono); font-size: 11px; color: var(--ink-3); }
+
+  .log {
+    font-family: var(--mono); font-size: 11px; color: var(--ink-2);
+    background: var(--sunken); border: 1px solid var(--rule); border-radius: 3px;
+    padding: 8px 10px; margin-top: 16px; white-space: pre-wrap; min-height: 40px;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Multi-window spike — detachable opponent boards</h1>
+  <p class="sub">
+    Proves the one thing the design depends on: several windows rendering the same
+    game state, with only the main window owning a connection. Press <code>⧉</code> on a
+    seat to open that opponent's board in its own window, then press <b>Next phase</b> —
+    every open window repaints from the same store. Nothing here talks to a server; the
+    point is the view topology, not the data.
+  </p>
+
+  <div class="bar">
+    <button class="act" id="phase">Next phase</button>
+    <button class="act" id="closeall">Close detached</button>
+    <span class="phase" id="phaseName"></span>
+  </div>
+
+  <div class="seats" id="seats"></div>
+
+  <div class="zone shad">
+    <span class="lbl" id="minionLbl">Minions in play</span>
+    <div class="row" id="minions"></div>
+  </div>
+
+  <div class="log" id="log">ready</div>
+</div>
+
+<script>
+/* ------------------------------------------------------------------ store --
+   One source of truth. Views subscribe; nothing else knows about the network.
+   In the real client this is fed by the event decoder, and the transport lives
+   only in this window: LotroGameMediator throws SubscriptionConflictException
+   if a second client claims a player's channel (HTTP 409).                   */
+const store = {
+  state: null,
+  views: new Set(),
+  set(next) { this.state = next; this.emit(); },
+  subscribe(fn) { this.views.add(fn); fn(this.state); return () => this.views.delete(fn); },
+  emit() { for (const fn of [...this.views]) { try { fn(this.state); } catch (e) { this.views.delete(fn); } } }
+};
+
+const SEATS = [
+  { name: "carol",     side: "fp",     free: 3, support: 2 },
+  { name: "dave",      side: "shadow", free: 4, support: 1 },
+  { name: "qwer",      side: "shadow", free: 3, support: 0 },
+  { name: "Librarian", side: "shadow", free: 4, support: 2 },
+  { name: "asdf",      side: "shadow", free: 3, support: 1, you: true }
+];
+
+const PHASES = [
+  { name: "Fellowship", minions: [0, 0, 0, 0, 0] },
+  { name: "Shadow",     minions: [0, 2, 1, 0, 1] },
+  { name: "Assignment", minions: [0, 3, 1, 2, 1] },
+  { name: "Skirmish",   minions: [0, 2, 1, 1, 1] },
+  { name: "Regroup — staying", minions: [0, 0, 0, 0, 0] }
+];
+
+let pIdx = 2;
+function publish() {
+  const p = PHASES[pIdx];
+  store.set({
+    phase: p.name,
+    seats: SEATS.map((s, i) => ({ ...s, minions: p.minions[i] }))
+  });
+}
+
+function log(msg) {
+  document.getElementById("log").textContent =
+    new Date().toLocaleTimeString() + "  " + msg;
+}
+
+/* ------------------------------------------------------------- main window */
+function cards(n, kind) {
+  return Array.from({ length: n }, () => `<div class="card ${kind}"></div>`).join("");
+}
+
+const seatsEl = document.getElementById("seats");
+seatsEl.innerHTML = SEATS.map((s, i) => `
+  <div class="seat ${s.side === "fp" ? "fp" : "sh"} ${s.you ? "you" : ""}" data-seat="${i}">
+    <span class="nm">${s.name}${s.you ? " — you" : ""}</span>
+    <span class="vt" data-vitals></span>
+    <button class="pop" data-detach="${i}" title="Open in its own window">&#x29C9;</button>
+  </div>`).join("");
+
+store.subscribe(state => {
+  if (!state) return;
+  document.getElementById("phaseName").textContent = state.phase;
+  state.seats.forEach((s, i) => {
+    seatsEl.querySelector(`[data-seat="${i}"] [data-vitals]`).textContent =
+      s.side === "fp" ? "Free Peoples" : `minions ${s.minions}`;
+  });
+
+  const total = state.seats.reduce((a, s) => a + s.minions, 0);
+  document.getElementById("minionLbl").textContent =
+    total ? `Minions in play · ${total} from ${state.seats.filter(s => s.minions).length} seats`
+          : "Minions in play";
+  document.getElementById("minions").innerHTML = total
+    ? state.seats.flatMap((s, i) =>
+        Array.from({ length: s.minions }, () =>
+          `<div class="minion"><div class="card s"></div><span class="tag">${i + 1} ${s.name}</span></div>`)).join("")
+    : `<span class="empty">No minions in play.</span>`;
+});
+
+/* --------------------------------------------------------- detached views --
+   A child window is a VIEW, never a second client. It gets a copy of the
+   stylesheet (styles do not follow a node across documents) and a subscription
+   to the same store. It opens no connection of its own.                      */
+const detached = new Map();
+
+function detach(i) {
+  const seat = SEATS[i];
+  let win;
+  try {
+    win = window.open("", "gemp-seat-" + i, "width=420,height=560");
+  } catch (err) {
+    log("window.open threw " + err.name);
+    return;
+  }
+  if (!win) { log("Popup blocked — allow popups for this page and retry."); return; }
+
+  try {
+    win.document.head.innerHTML = `<title>${seat.name} — board</title>`;
+    document.querySelectorAll("style").forEach(tag =>
+      win.document.head.appendChild(tag.cloneNode(true)));
+    const extra = win.document.createElement("style");
+    extra.textContent =
+      "body{padding:12px;box-sizing:border-box}" +
+      ".who{font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--brass);margin-bottom:10px}";
+    win.document.head.appendChild(extra);
+    win.document.body.innerHTML = `
+      <div class="who"></div>
+      <div class="zone free"><span class="lbl">Free characters</span><div class="row" data-free></div></div>
+      <div class="zone shad"><span class="lbl">Minions</span><div class="row" data-minions></div></div>
+      <div class="zone"><span class="lbl">Support area</span><div class="row" data-support></div></div>`;
+  } catch (err) {
+    log("Popup opened but its document is unreachable (" + err.name + ").");
+    try { win.close(); } catch (ignore) {}
+    return;
+  }
+
+  const unsubscribe = store.subscribe(state => {
+    if (!state || win.closed) return;
+    const s = state.seats[i];
+    const d = win.document;
+    d.querySelector(".who").textContent =
+      `${s.name} — ${s.side === "fp" ? "Free Peoples" : "shadow"} — ${state.phase}`;
+    d.querySelector("[data-free]").innerHTML = cards(s.free, "f");
+    d.querySelector("[data-support]").innerHTML = cards(s.support, "");
+    d.querySelector("[data-minions]").innerHTML = s.minions
+      ? Array.from({ length: s.minions }, () =>
+          `<div class="minion"><div class="card s"></div><span class="tag">${s.name}</span></div>`).join("")
+      : `<span class="empty">No minions in play.</span>`;
+  });
+
+  win.addEventListener("pagehide", () => {
+    unsubscribe();
+    detached.delete(i);
+    paintSeatChips();
+    log(`${seat.name}'s window closed.`);
+  });
+
+  detached.set(i, { win, unsubscribe });
+  paintSeatChips();
+  log(`Opened ${seat.name}'s board. ${detached.size} window(s) detached, 1 connection.`);
+}
+
+function paintSeatChips() {
+  seatsEl.querySelectorAll("[data-seat]").forEach(el => {
+    el.classList.toggle("detached", detached.has(Number(el.dataset.seat)));
+  });
+}
+
+seatsEl.addEventListener("click", e => {
+  const btn = e.target.closest("[data-detach]");
+  if (!btn) return;
+  const i = Number(btn.dataset.detach);
+  const open = detached.get(i);
+  if (open && !open.win.closed) {
+    open.win.close();
+    open.unsubscribe();
+    detached.delete(i);
+    paintSeatChips();
+    log("Closed " + SEATS[i].name + "'s window.");
+    return;
+  }
+  detach(i);
+});
+
+document.getElementById("phase").addEventListener("click", () => {
+  pIdx = (pIdx + 1) % PHASES.length;
+  publish();
+  log("Phase → " + PHASES[pIdx].name + "; repainted " + store.views.size + " view(s).");
+});
+
+document.getElementById("closeall").addEventListener("click", () => {
+  detached.forEach(({ win, unsubscribe }) => { unsubscribe(); if (!win.closed) win.close(); });
+  detached.clear();
+  paintSeatChips();
+  log("Closed all detached windows.");
+});
+
+// A reload would orphan the children.
+window.addEventListener("beforeunload", () => {
+  detached.forEach(({ win }) => { if (!win.closed) win.close(); });
+});
+
+window.addEventListener("error", e => log("Script error: " + e.message + " (line " + e.lineno + ")"));
+
+publish();
+</script>
+</body>
+</html>
