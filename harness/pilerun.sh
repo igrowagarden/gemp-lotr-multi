@@ -29,6 +29,10 @@ CHROME="/c/Program Files/Google/Chrome/Application/chrome.exe"
 BASE="http://localhost:17002/gemp-lotr/newclient/dev/pilefuzz.html"
 TMP="${TMPDIR:-/tmp}/pilerun.$$"
 mkdir -p "$TMP"
+# Cleaned on ANY exit, not just a clean one: `baseline` returns early and a
+# killed run never reaches the tail, which is how these piled up in Temp.
+# Registered rather than trapped -- see harnesslock.sh, bash has one EXIT trap.
+harness_at_exit 'rm -rf "$TMP"'
 
 # Same CDN block as fuzzrun, for the same reason: Chrome's virtual clock is
 # paused while any request is pending, so unresolved card art freezes the run.

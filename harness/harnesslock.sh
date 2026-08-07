@@ -24,16 +24,35 @@
 
 HARNESS_LOCKDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/.harness-locks"
 
-# Take the lock for this shell, and release it however the shell ends.
+# Extra cleanup to run when the shell ends, registered by the harness.
+#
+# THIS EXISTS BECAUSE BASH HAS ONE EXIT TRAP. A runner doing its own
+# `trap 'rm -rf "$TMP"' EXIT` after harness_lock would REPLACE the trap that
+# releases the lock, and the lock would leak on every run -- after which sync.sh
+# refuses for ever and the cure is worse than the disease. So cleanup is
+# composed here rather than trapped there.
+HARNESS_CLEANUP=()
+
+# harness_at_exit "<shell command>" -- run on any exit, in registration order.
+harness_at_exit() { HARNESS_CLEANUP+=("$1"); }
+
+_harness_cleanup() {
+  rm -f "$HARNESS_LOCKDIR/$$"
+  local c
+  for c in ${HARNESS_CLEANUP+"${HARNESS_CLEANUP[@]}"}; do eval "$c" || true; done
+}
+
+# Take the lock for this shell, and release it -- with any registered cleanup --
+# however the shell ends.
 harness_lock() {
   mkdir -p "$HARNESS_LOCKDIR"
   printf '%s\t%s\n' "${1:-harness}" "$(date '+%Y-%m-%d %H:%M:%S')" \
     > "$HARNESS_LOCKDIR/$$"
   # INT and TERM as well as EXIT: a Ctrl-C'd run that left its file behind
   # would make the next sync.sh refuse for a reason that no longer exists.
-  trap 'rm -f "$HARNESS_LOCKDIR/$$"' EXIT
-  trap 'rm -f "$HARNESS_LOCKDIR/$$"; exit 130' INT
-  trap 'rm -f "$HARNESS_LOCKDIR/$$"; exit 143' TERM
+  trap '_harness_cleanup' EXIT
+  trap '_harness_cleanup; exit 130' INT
+  trap '_harness_cleanup; exit 143' TERM
 }
 
 # Print one line per LIVE holder; silently reap the dead ones. Empty output

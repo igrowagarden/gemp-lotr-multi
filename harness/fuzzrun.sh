@@ -35,6 +35,10 @@ CHROME="/c/Program Files/Google/Chrome/Application/chrome.exe"
 BASE="http://localhost:17002/gemp-lotr/newclient/dev/decisionfuzz.html"
 TMP="${TMPDIR:-/tmp}/fuzzrun.$$"
 mkdir -p "$TMP"
+# Cleaned on ANY exit, not just a clean one: `baseline` returns early and a
+# killed run never reaches the tail, which is how these piled up in Temp.
+# Registered rather than trapped -- see harnesslock.sh, bash has one EXIT trap.
+harness_at_exit 'rm -rf "$TMP"'
 
 # BLOCK THE CARD-ART CDN. Chrome's virtual clock is PAUSED while any request is
 # pending, so unresolved image loads freeze it and the run never finishes -- the

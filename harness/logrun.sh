@@ -26,6 +26,10 @@ CHROME="/c/Program Files/Google/Chrome/Application/chrome.exe"
 BASE="http://localhost:17002/gemp-lotr/newclient/dev/logfuzz.html"
 TMP="${TMPDIR:-/tmp}/logrun.$$"
 mkdir -p "$TMP"
+# Cleaned on ANY exit, not just a clean one: `baseline` returns early and a
+# killed run never reaches the tail, which is how these piled up in Temp.
+# Registered rather than trapped -- see harnesslock.sh, bash has one EXIT trap.
+harness_at_exit 'rm -rf "$TMP"'
 
 CDN='--host-resolver-rules=MAP i.lotrtcgpc.net 127.0.0.1, MAP lotrtcg2e.club 127.0.0.1, EXCLUDE localhost'
 
