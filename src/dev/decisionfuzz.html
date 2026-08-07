@@ -631,8 +631,15 @@ function runCase(c) {
     try {
       const $ = $old();
       return `done=${$("#Done").length}/vis=${$("#Done").filter(":visible").length} ` +
-             `sel=${$(".selectableCard").length} chosen=${$(".selectedCard").length} ` +
-             `btns=${$(".alertButtons button").length}`;
+             `sel=${$(".selectableCard").length} act=${$(".actionableCard").length} ` +
+             `chosen=${$(".selectedCard").length} ` +
+             `btns=${$(".alertButtons button").length} ` +
+             // Card-actions light `actionableCard`, not `selectableCard`, so a
+             // probe counting only the latter cannot see whether the card is lit
+             // at all -- and `selectionFunction` is what a click actually
+             // reaches (gameUi.js:842). Without both, "the old client sent
+             // nothing" has no explanation attached to it.
+             `selFn=${typeof OLD.ui?.selectionFunction}`;
     } catch (e) { return "probe failed: " + e.message; }
   })();
   const oSend = drive.old(arg, targets, c);
