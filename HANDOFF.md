@@ -1573,12 +1573,20 @@ correctly while **yes/no reported zero options** -- the commonest decision shape
 in the game, measured through the broken path. It now asks `ui.smallDialog` for
 its own buttons.
 
-### Per-type status: 47/47
+### Per-type status: 48/48
 
     CARD_SELECTION     13/13 (2 reference-wrong)   CARD_ACTION_CHOICE  11/11
-    ARBITRARY_CARDS     7/7                        ASSIGN_MINIONS       5/5
+    ARBITRARY_CARDS     8/8  (1 reference-wrong)   ASSIGN_MINIONS       5/5
     INTEGER             5/5                        MULTIPLE_CHOICE      5/5
     ACTION_CHOICE       1/1
+
+**Three cases are `oracleWrong`** -- the reference sends an answer the engine
+refuses and this client does not. All three are the same defect: a selection
+whose `max` is 0, submitted with a card in it. `cardSelectionDecision` and
+`arbitraryCardsDecision` both test `< min` and never `max`, while the engine
+throws on either bound. Written up in
+`gemp_multiplayer/docs/GEMP_CARD_SELECTION_MAX0.md` (untracked, for that project
+to triage).
 
 Every type compares OFFERS and the exact string SENT, and all nine of the
 reference's `decisionFunction` call sites are reached.
