@@ -282,8 +282,32 @@
 								select: choose(item,side(freeps),not(memory(chosenPoss)))
 							}
 							{
+								// The "let it get discarded" branch: this
+								// condition discards the possession it chose, so
+								// the player performing it is THIS CARD'S
+								// controller, not a fixed Shadow seat.
+								//
+								// NOT the same family as 4_256 / 57_190 despite
+								// being filed with them -- its printed text is
+								// "the Free Peoples player may exert bearer or
+								// discard another Free Peoples item", so the FP
+								// player pays their own cost and no Shadow player
+								// is made to do anything. Only this third branch
+								// carries a player token at all.
+								//
+								// `owner`, not `you`: Choice wraps its branches
+								// in a context delegated to whoever `player:`
+								// names, which here is `freeps` -- so `you` would
+								// resolve to the Free Peoples player and have
+								// them discard their own possession on the
+								// Shadow card's behalf. `owner` reads
+								// getSource().getOwner() and Choice's delegate
+								// passes the source through untouched.
+								//
+								// No scoping needed: the select is already
+								// pinned to the remembered possession.
 								type: Discard
-								player: shadow
+								player: owner
 								select: memory(chosenPoss)
 							}
 						]

@@ -36,13 +36,42 @@
 				}
 				effect: 
 				{
+					// RULED: "The Free Peoples player may make YOU wound a
+					// companion to prevent this."
+					//
+					// The FREE PEOPLES PLAYER is always the one offered the
+					// chance -- `player: freeps` below, unchanged and correct.
+					// What they buy is having THIS MINION'S CONTROLLER wound one
+					// of the FREE PEOPLES PLAYER'S OWN companions.
+					//
+					// Two things were wrong above two players, and the offer was
+					// not one of them:
+					//
+					//   player: shadow  -> getFirstShadowPlayer, routinely some
+					//                      other seat than the one who played
+					//                      this minion. Shadow players always
+					//                      control their own minions, so the
+					//                      minion's owner IS "you".
+					//   choose(companion) -> unscoped, and at five seats every
+					//                      seat has its own companions on the
+					//                      table, so the wound could land on a
+					//                      player the card never names.
+					//
+					// `owner`, not `you`: this sits in a prevent COST, and
+					// PreventableEffectAppender appends the cost in a context
+					// delegated to whoever ACCEPTED -- the Free Peoples player.
+					// `owner` reads getSource().getOwner() and the delegate
+					// passes the source through untouched.
+					//
+					// Same sentence, same ruling and same pair of fixes as
+					// 4_256 Southron Troop.
 					type: preventable
 					player: freeps
 					cost: {
 						type: wound
-						player: shadow
+						player: owner
 						times: 1
-						select: choose(companion)
+						select: choose(ownedByFreePeoplesPlayer,companion)
 					}
 					text: Make the Shadow player wound a companion to prevent adding a threat?
 					effect: {
