@@ -508,13 +508,38 @@
 					}
 				]
 				effect: {
+					// "A MINION IN THIS SKIRMISH may exert to prevent this."
+					//
+					// RULED: the actor is the minion, and the player who acts is
+					// the one who controls it. Every other prevention in the
+					// pool names a seat ("any Shadow player may..."); this one
+					// names a card, and at two players those coincide because
+					// the only minion in the skirmish belongs to the only
+					// opponent. Above two they do not: the Free Peoples player
+					// assigns from every opponent's minions at once, so one
+					// skirmish can hold minions belonging to different Shadow
+					// players.
+					//
+					// It was `player: shadow` with an unscoped select, so a
+					// fixed seat was asked and could exert somebody else's
+					// minion.
+					//
+					// NO ENGINE CHANGE IS NEEDED, and the reason is worth
+					// knowing: PreventableEffectAppender only offers to
+					// candidates who can actually pay
+					// (PreventableEffectAppender.java:50), evaluating the cost
+					// in a context delegated to each candidate. Scoping the cost
+					// to `your` therefore does the filtering for free -- a
+					// Shadow player with no minion in this skirmish cannot pay,
+					// so they are skipped rather than asked. The offer lands on
+					// exactly the controllers of the minions in the skirmish.
 					type: preventable
-					player: shadow
+					player: anyShadow
 					text: Would you like to exert a minion in skirmish to prevent cancelling skirmish involving {oldBearer}?
 					cost: {
 						type: exert
-						player: shadow
-						select: choose(minion,inSkirmish)
+						player: you
+						select: choose(your,minion,inSkirmish)
 					}
 					effect: {
 						type: cancelSkirmish
