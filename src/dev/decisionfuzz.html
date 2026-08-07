@@ -639,7 +639,13 @@ function runCase(c) {
              // at all -- and `selectionFunction` is what a click actually
              // reaches (gameUi.js:842). Without both, "the old client sent
              // nothing" has no explanation attached to it.
-             `selFn=${typeof OLD.ui?.selectionFunction}`;
+             `selFn=${typeof OLD.ui?.selectionFunction} ` +
+             // The click gate (gameUi.js:827-832) needs the event target to
+             // carry `.actionArea` AND `successfulDrag` to be false. Everything
+             // upstream of it is already known good, so these two are what is
+             // left. `areas` is counted on the card this case actually targets.
+             `drag=${OLD.ui?.successfulDrag} ` +
+             `areas=${targets[0] != null ? $(`.card:cardId(${targets[0]}) .actionArea`).length : "-"}`;
     } catch (e) { return "probe failed: " + e.message; }
   })();
   const oSend = drive.old(arg, targets, c);
