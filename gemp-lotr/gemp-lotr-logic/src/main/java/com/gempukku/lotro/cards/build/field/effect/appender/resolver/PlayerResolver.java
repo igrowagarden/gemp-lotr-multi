@@ -11,6 +11,7 @@ import com.gempukku.lotro.logic.GameUtils;
 import com.gempukku.lotro.logic.PlayOrder;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -31,6 +32,13 @@ public class PlayerResolver {
      * is a superset of resolvePlayer rather than a separate vocabulary.
      */
     public static PlayersSource resolvePlayers(String type) throws InvalidCardDefinitionException {
+        if (type.equalsIgnoreCase("eachPlayer") || type.equalsIgnoreCase("allPlayers")) {
+            // Everyone at the table including the Free Peoples player, in
+            // seating order. This is what ForEachPlayer did before it took a
+            // player field at all, so it stays that appender's default.
+            return (actionContext) ->
+                    Arrays.asList(GameUtils.getAllPlayers(actionContext.getGame()));
+        }
         if (type.equalsIgnoreCase("anyShadow") || type.equalsIgnoreCase("eachShadow")) {
             return (actionContext) -> {
                 final LotroGame game = actionContext.getGame();
