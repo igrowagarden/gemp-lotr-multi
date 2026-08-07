@@ -1201,6 +1201,21 @@ public class GameState {
         return count;
     }
 
+    /**
+     * Every card in play, whoever owns it and whether or not it is currently
+     * active.
+     *
+     * Deliberately NOT filtered to active cards. Elimination cleanup has to
+     * reach a losing player's cards, and {@link #stopAffectingCardsForCurrentPlayer}
+     * deactivates cards between turns -- so an "active only" view would silently
+     * miss some of exactly the cards that must be removed.
+     *
+     * A copy, so callers may remove cards while iterating it.
+     */
+    public List<PhysicalCard> getCardsInPlay() {
+        return new LinkedList<>(_inPlay);
+    }
+
     public List<PhysicalCard> getAttachedCards(PhysicalCard card) {
         List<PhysicalCard> result = new LinkedList<>();
         for (PhysicalCardImpl physicalCard : _inPlay) {

@@ -306,13 +306,80 @@ public class DefaultLotroGame implements LotroGame {
                     // "_allowSpectators || _playersPlaying.contains(name)", so dropping
                     // them there would throw PrivateInformationException at the next
                     // poll and lock a player out of the game they were in.
-                    if (_gameState.getPlayerOrder().eliminatePlayer(playerId))
+                    if (_gameState.getPlayerOrder().eliminatePlayer(playerId)) {
                         _gameState.sendMessage(playerId + " is now observing; "
                                 + _gameState.getPlayerOrder().getPlayerCount()
                                 + " players remain");
+                        removeEliminatedPlayersCardsFromPlay(playerId);
+                    }
                 }
             }
         }
+    }
+
+    /**
+     * "Remove his player marker and all of his cards from play (and discard any
+     * opponent's cards that were on them)."
+     *
+     * Runs only when at least two other players remain -- with one left the
+     * game is already over and the branch above has ended it.
+     *
+     * THE TWO VERBS ARE DIFFERENT AND THE RULE MEANS THEM DIFFERENTLY. His own
+     * cards are REMOVED: he is out of the game and nothing should be able to
+     * fish them back out of a discard pile afterwards. Cards belonging to
+     * somebody still playing that happened to be sitting on his -- an attached
+     * possession, a stacked card -- are DISCARDED, so they land in their own
+     * owner's discard pile where that owner's cards can still reach them.
+     *
+     * SITES ARE NOT TOUCHED HERE. The rule handles them separately: removed in
+     * numerical order, then replaced one apiece by each opponent from their own
+     * adventure deck. That is a decision sequence rather than a state change and
+     * is built separately.
+     *
+     * WHY IT IS SAFE TO DO THIS INLINE. playerLost is reached from
+     * checkRingBearerAlive, which TurnProcedure only calls inside an
+     * UnrespondableEffect appended AFTER the required and optional response
+     * windows of the batch that killed the Ring-bearer. So the kill has fully
+     * resolved and every response to it has been played out before anything is
+     * taken off the table.
+     */
+    private void removeEliminatedPlayersCardsFromPlay(String playerId) {
+        List<PhysicalCard> theirs = new LinkedList<>();
+        for (PhysicalCard card : _gameState.getCardsInPlay()) {
+            if (card.getZone() == Zone.ADVENTURE_PATH)
+                continue;
+            if (playerId.equals(card.getOwner()))
+                theirs.add(card);
+        }
+        if (theirs.isEmpty())
+            return;
+
+        // Anything of somebody else's resting on one of his cards. Collected
+        // BEFORE anything moves, because removing the bearer would otherwise
+        // change what getAttachedCards reports.
+        List<PhysicalCard> othersOnThem = new LinkedList<>();
+        for (PhysicalCard card : theirs) {
+            for (PhysicalCard attached : _gameState.getAttachedCards(card))
+                if (!playerId.equals(attached.getOwner()) && !othersOnThem.contains(attached))
+                    othersOnThem.add(attached);
+            for (PhysicalCard stacked : _gameState.getStackedCards(card))
+                if (!playerId.equals(stacked.getOwner()) && !othersOnThem.contains(stacked))
+                    othersOnThem.add(stacked);
+        }
+
+        if (!othersOnThem.isEmpty()) {
+            _gameState.removeCardsFromZone(playerId, othersOnThem);
+            for (PhysicalCard card : othersOnThem)
+                _gameState.addCardToZone(this, card, Zone.DISCARD);
+        }
+
+        _gameState.removeCardsFromZone(playerId, theirs);
+        for (PhysicalCard card : theirs)
+            _gameState.addCardToZone(this, card, Zone.REMOVED);
+
+        _gameState.sendMessage(playerId + "'s cards are removed from play ("
+                + theirs.size() + " removed, " + othersOnThem.size()
+                + " returned to their owners' discard piles)");
     }
 
     public void requestCancel(String playerId) {
