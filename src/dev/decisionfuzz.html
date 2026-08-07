@@ -437,13 +437,19 @@ const DRIVE = {
       // selection is made, and the submit is simply never reached, because every
       // OTHER picker case submits through auto-accept (`length == max`) and only
       // max=0 actually needs the button.
-      if (!oldFinish()) {
-        const $ = $old();
-        const done = $("button").filter(function () {
-          return /^\s*Done\s*$/.test($(this).text());
-        });
-        if (done.length) done.eq(0).trigger("click");
-      }
+      // PRESS DONE DIRECTLY, and do NOT gate it on `oldFinish()` failing.
+      //
+      // `oldFinish` tries `#Done` (an id the picker's button does not have) and
+      // then the first `:visible` dialog button in document order -- which is
+      // not necessarily Done. It clicks SOMETHING, returns true, and the
+      // fallback behind `if (!oldFinish())` therefore never ran. The button was
+      // there the whole time: a census dumped
+      // `"Done"@ui-dialog-title-2`, present and visible.
+      const $ = $old();
+      const done = $("button").filter(function () {
+        return /^\s*Done\s*$/.test($(this).text());
+      });
+      if (done.length) done.eq(0).trigger("click"); else oldFinish();
       return true;
     }),
     new: (want = 1) => newSends(() => {
@@ -739,8 +745,16 @@ function runCase(c) {
              // "the pane is not created" from "it is created and my selector is
              // wrong" -- the two remaining explanations for a Done that cannot
              // be pressed.
-             `allBtn=${$("button").length} pane=${$(".ui-dialog-buttonpane").length} ` +
-             `dlg=${$(".ui-dialog").length} ` +
+             // NAME THEM. Counting said the pane exists; it did not say which
+             // buttons, in which dialog, or whether any is visible. Filtering
+             // blind for "Done" and watching it fail is what produced a wrong
+             // claim about the DOM. Dump the actual list instead.
+             `btns=[${$("button").map(function () {
+                var d = $(this).closest(".ui-dialog");
+                return JSON.stringify($(this).text().trim()) +
+                       (d.length ? "@" + (d.attr("aria-labelledby") || "dlg") : "@none") +
+                       ($(this).is(":visible") ? "" : "(hidden)");
+              }).get().join(" ")}] ` +
              // The click gate (gameUi.js:827-832) needs the event target to
              // carry `.actionArea` AND `successfulDrag` to be false. Everything
              // upstream of it is already known good, so these two are what is

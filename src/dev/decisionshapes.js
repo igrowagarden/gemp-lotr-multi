@@ -356,44 +356,26 @@ export const CASES = [
   // `.alertButtons` and `#smallDialog`, which the picker does not use. The
   // buttonpane fallback added for this does not appear to connect either.
   //
-  // MEASURED, and the question is now fully characterised as a HARNESS gap.
-  // Instrumenting both entry points gives, for this case:
+  // MEASURED, and the reference is wrong here too. With the picker's Done
+  // actually pressed:
   //
-  //     selectionFunction 1x, decisionFunction 0x
+  //     selectionFunction 1x, decisionFunction 1x
+  //     old sent "temp0"   new sent ""
   //
-  // The click lands, the reference's selection logic runs, and the submit is
-  // never reached. Every OTHER picker case shows `decisionFunction 1x` because
-  // they submit through AUTO-ACCEPT (`selectedCardIds.length == max`), which by
-  // definition cannot fire at max=0 -- so this is the only case that needs the
-  // Done button.
+  // `"temp0"` is one card for a decision whose only legal answer is the empty
+  // string: `ArbitraryCardsSelectionDecision:92` throws on
+  // `cardIds.length > _maximum`, and 1 > 0. The same defect as
+  // `cardSelectionDecision` and from the same omission -- `finishChoice`
+  // (gameUi.js:2394) tests `< min` and never `max`.
   //
-  // CORRECTION. This note previously said the dialog's button pane is never
-  // materialised. That was inferred from two selectors failing, and it is
-  // wrong: a census at drive time reports `pane=1 allBtn=4 dlg=14`. The pane
-  // exists and there are buttons in the document, so this is a TARGETING
-  // problem, not a missing pane -- fourteen dialogs are present and the Done
-  // being pressed, if any, may belong to another of them.
-  //
-  // Next: dump the four buttons' text and their owning dialog rather than
-  // filtering blind. Two selectors failing is not evidence about the DOM;
-  // counting is.
-  //
-  // So: the reference's behaviour here is UNMEASURED, and will stay so until the
-  // can opener renders dialog button panes. It is not evidence of anything about
-  // the reference, and the case is not marked `oracleWrong`. What IS established:
-  // this client sends "", the only legal answer.
-  //
-  // ATTEMPTED AND STILL OPEN. The driver now also presses
-  // `.ui-dialog-buttonpane button`, and it changes nothing: every other picker
-  // case submits through AUTO-ACCEPT (`selectedCardIds.length == max`), which by
-  // definition never fires at max=0, so this is the one case that truly needs
-  // the button -- and the dialog's button pane is not rendered in the can opener
-  // at all. Settling it needs the pane to exist headlessly, or a different way
-  // in that is still the client's own submit path rather than a call to
-  // `finishChoice` (which would be teaching the client, not watching it).
-  //
-  // What IS established: this client sends "", the only legal answer.
+  // Six rounds were spent not seeing this, and the blocker was never the
+  // reference: the driver wrote `if (!oldFinish()) { pressDone() }`, and
+  // `oldFinish` clicks the first visible dialog button in document order, which
+  // is not Done. It clicked something, returned true, and the fallback never
+  // ran. Every intermediate conclusion drawn from that silence -- the click does
+  // not land, the pane is not materialised -- was inference from a harness bug.
   { name: "max=0 with cards still selectable", type: "ARBITRARY_CARDS",
+    oracleWrong: "reference sends a card id where only \"\" is legal (measured)",
     note: "Zero cards wanted, cards still offered. Only \"\" is legal. The " +
           "reference has no `max` test in finishChoice (gameUi.js:2394) and the " +
           "engine throws on `cardIds.length > _maximum` " +
