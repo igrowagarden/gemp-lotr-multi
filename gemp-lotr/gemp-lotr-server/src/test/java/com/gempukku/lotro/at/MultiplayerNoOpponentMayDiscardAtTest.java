@@ -20,11 +20,11 @@ import static org.junit.Assert.*;
  * rather than a card-shape match:
  *
  *   1. `player: shadow` -- the shipped bug. Only one opponent is stopped.
- *   2. DELETING the token -- which is what PLAN.md recorded as the fix, and it
- *      over-applies. CantDiscardFromPlayModifier skips its player check
- *      entirely when bannedPlayer is null, so a missing token bans EVERYBODY
- *      including the card's own controller. Pippin would then stop you
- *      discarding your own tales.
+ *   2. DELETING the token -- the obvious-looking fix, and it over-applies.
+ *      CantDiscardFromPlayModifier skips its player check entirely when
+ *      bannedPlayer is null, so a missing token bans EVERYBODY including the
+ *      card's own controller. Pippin would then stop you discarding your own
+ *      tales.
  *
  * The second is the one no fixture built around opponents alone would catch,
  * so the owner assertion is not decoration -- it is half the measurement.
@@ -40,7 +40,7 @@ import static org.junit.Assert.*;
  * it matters precisely here: a tale can be discarded on ANY player's turn, and
  * anyShadow is relative to getCurrentPlayerId(). On an opponent's turn it would
  * name Pippin's own controller among the banned and leave the current player
- * free. The third case below pins that by rotating the turn.
+ * free. The second test below is what pins that.
  */
 public class MultiplayerNoOpponentMayDiscardAtTest {
 

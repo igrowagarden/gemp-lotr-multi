@@ -26,9 +26,9 @@ import static org.junit.Assert.*;
  * card's controller.
  *
  * WHAT THE ENGINE ACTUALLY DOES WITH THE WRONG TOKEN HAD NOT BEEN MEASURED.
- * An earlier draft of HANDOFF.md asserted a consequence off a code read and had
- * to be retracted; this test exists so the next person has a measurement instead
- * of a story. It was written as a PROBE that pinned the bug, then INVERTED when
+ * An earlier write-up of this asserted a consequence off a code read and had to
+ * be retracted; this test exists so the next person has a measurement instead of
+ * a story. It was written as a PROBE that pinned the bug, then INVERTED when
  * 5_3 was converted -- so both boards have been run, and that inversion is the
  * control behind the fix rather than a separate patched-card sweep.
  *

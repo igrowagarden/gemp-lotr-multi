@@ -146,7 +146,8 @@ public class MultiplayerPreventionCostAtTest {
      * the source. The card says "an opponent may exert A MINION twice", with no
      * "his or her" -- and at two players every minion belongs to the only
      * opponent, so the text never had to disambiguate. Left as it is, and
-     * recorded, rather than guessed at. See HANDOFF.md.
+     * pinned by this test, rather than guessed at -- so that a future ruling has
+     * something concrete to change.
      */
     @Test
     public void everyOpponentIsOfferedIt_becauseTheCostIsNotScopedToThePayer() throws Exception {

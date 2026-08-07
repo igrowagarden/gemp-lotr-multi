@@ -24,9 +24,10 @@ import static org.junit.Assert.*;
  * Measuring the second one is not redundant. 18_95 proves the tokens behave in
  * an ACTIVATED ability; this proves them in a TRIGGER, where the action is built
  * by the trigger machinery rather than by a player choosing to use a card, and
- * where the branch has already been surprised once -- see 103_38 in errors.log,
- * whose trigger turned out to have neither the controller as performing player
- * nor the card as `getSource().getOwner()`.
+ * where this work has already been surprised once: 103_38's trigger turned out
+ * to have neither the controller as performing player nor the card as
+ * `getSource().getOwner()`, so an appender that behaves one way in an activated
+ * ability cannot be assumed to behave the same way in a trigger.
  *
  * The skirmish is deliberately against the DEFAULT opponent's minion while the
  * OTHER opponent is chosen for the wound, so the skirmish's own damage can never

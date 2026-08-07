@@ -985,8 +985,8 @@
 				// and leave the current player free to discard them -- exactly
 				// backwards. opponentsOfOwner is turn-independent.
 				//
-				// And NOT by deleting the token, which is what PLAN.md recorded
-				// as the fix: CantDiscardFromPlayModifier treats a null player
+				// And NOT by deleting the token, which looks like the fix and is
+				// not: CantDiscardFromPlayModifier treats a null player
 				// as EVERYBODY, so that would stop the card's own controller
 				// discarding their own tales too.
 				player: opponentsOfOwner

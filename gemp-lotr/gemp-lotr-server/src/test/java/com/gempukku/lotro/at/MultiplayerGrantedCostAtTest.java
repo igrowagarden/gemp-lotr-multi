@@ -41,8 +41,8 @@ import static org.junit.Assert.*;
  *     player: shadow   -> getFirstShadowPlayer() -> a fixed Shadow seat
  *
  * All three name somebody who is not playing the Orc. The context never sees
- * the Orc at all, so this is a bucket-3 gap in the sense of PLAN.md: the card
- * cannot express what its printed text says, whatever token is written.
+ * the Orc at all. The card therefore cannot express what its printed text says,
+ * whatever token is written -- the gap is in the engine, not in the data.
  *
  * Two seats' worth of state tell the readings apart, so the fixture puts the
  * Orc in the hand of the Shadow player getFirstShadowPlayer does NOT name --
@@ -75,7 +75,7 @@ public class MultiplayerGrantedCostAtTest {
     // MultiplayerTable puts ONE copy of each named card into every seat's deck,
     // so a five-card fixture is a five-card deck. Nothing here draws 8, but
     // regroup reconciliation does draw, and an empty deck changes what the walk
-    // can do. Filler is cheap insurance -- see the fixture rules in HANDOFF.md.
+    // can do. Filler is cheap insurance.
     private static final String[] FILLER = {
             "1_133", "1_144", "1_151", "1_177", "4_165",
             "7_193", "1_143", "12_157", "1_294", "1_312",

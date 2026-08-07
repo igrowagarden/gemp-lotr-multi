@@ -73,7 +73,7 @@ public class ForEachPlayer implements EffectAppenderProducer {
              * Shadow player MAY do X" -- one player with an empty draw deck
              * would stop everybody -- but it is only consulted when something
              * nesting this appender checks playability, and changing it is a
-             * separate change with its own control. See HANDOFF.md.
+             * separate change needing its own control.
              */
             @Override
             public boolean isPlayableInFull(ActionContext actionContext) {
