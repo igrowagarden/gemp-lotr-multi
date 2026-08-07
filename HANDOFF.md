@@ -582,10 +582,9 @@ untested detection rather than proven detection.
    `FPCLASH=1` is a diagnostic only. It makes a `badcard` run print CLEAN --
    correctly, since a phantom is not a problem -- so never leave it set.
 
-1. **Play a hand yourself as a seated player.** Everything is verified by
-   machine; nothing has been driven by a human through the real UI. Sit at
-   `live.html?...&participantId=asdf` and play a card, use a card with two
-   abilities, and reach an assignment.
+1. ~~**Play a hand yourself as a seated player.**~~ **BACKLOGGED** -- see the
+   Open section, which carries the list of what to click and why the machine
+   cannot do it.
 2. ~~**`git init` here.**~~ **Done.** See "Version control, finally".
 3. ~~**Auto-pass**~~ — **Done.** See above; the entry's premise was wrong.
 4. **Parallel differential runs.** Games are independent, but all five seats use
@@ -1712,6 +1711,39 @@ inventing a verdict — read the SKIP line, it names which.
 ---
 
 ## Open
+
+- **BACKLOGGED: nobody has ever played this client by hand.** Everything is
+  verified by machine. Every differential drives both clients through their own
+  functions; no human has moved a mouse through the real UI, and a whole class
+  of fault lives where the machine does not look -- a control that is present
+  and correct but unreachable, unreadable, or two pixels under something else.
+
+      bash harness/sync.sh
+      bash harness/seat_table.sh 3 asdf qwer Librarian     # note the gameId
+      # then, in a browser:
+      http://localhost:17002/gemp-lotr/newclient/live.html?gameId=NN&participantId=asdf&login=asdf&password=asdf
+      # and drive the other two seats so the game moves:
+      cd harness && python play_bots.py --players qwer,Librarian --game NN --seconds 600 --play
+
+  What to exercise, chosen because each is either load-bearing or has never
+  been touched by a person:
+
+  - play a card; use a card with **two abilities** (the action menu, which only
+    appears when one card offers more than one action);
+  - reach an **assignment** and assign a minion by dragging;
+  - open the **piles** for your own seat and for an opponent's -- the tab set
+    should differ, and your own draw deck should be there;
+  - **right click** a card for its modifiers, and **left click** a card name in
+    the game log, which should open the same panel without querying;
+  - the **Auto-pass** panel: tick Shadow, confirm the Shadow prompts stop;
+  - **Cancel game** and **Concede** (concede last, it ends the game);
+  - a **detached board**, which has no reference counterpart and so has no
+    differential at all -- this is the only way it is ever checked;
+  - in a replay: the **speed buttons**, the scrubber, and step-back.
+
+  Not automatable in any honest way: the point is the parts a headless run
+  cannot see. Needs a person at a browser, which is why it is parked rather
+  than half-done.
 
 - **BACKLOGGED: a nightly over the whole harness set.** Everything is controlled
   now and the lock makes concurrent runs safe, so an unattended run would
