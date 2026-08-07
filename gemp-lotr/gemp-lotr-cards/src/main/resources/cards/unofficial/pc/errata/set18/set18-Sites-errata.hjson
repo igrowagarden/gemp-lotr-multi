@@ -24,20 +24,30 @@
 					type: movesTo
 					filter: self
 				}
-				effect: [
-					{
+				// "EACH PLAYER wounds two of THEIR characters." The errata twin
+				// of 18_134, and it carried the identical two-halves bug that
+				// card was fixed for: an FP half plus a Shadow half is the same
+				// sentence only while there are exactly two players. Above two,
+				// the Shadow half fired once for whichever seat
+				// getFirstShadowPlayer named and every other opponent was
+				// skipped -- and `side(shadow)` is not scoping, so that one seat
+				// chose from every opponent's characters at once.
+				//
+				// Same fix as 18_134, which is measured by
+				// MultiplayerEachPlayerAtSiteAtTest with 2 controls: `your`
+				// inside forEachPlayer resolves to
+				// Filters.owner(performingPlayer) and each iteration runs with
+				// that player performing, so it scopes for free.
+				effect: {
+					type: forEachPlayer
+					player: eachPlayer
+					effect: {
 						type: wound
-						player: freeps
+						player: you
+						select: choose(your,character)
 						count: 2
-						select: choose(side(freeps),character)
 					}
-					{
-						type: wound
-						player: shadow
-						count: 2
-						select: choose(side(shadow),character)
-					}
-				]
+				}
 			}
 			{
 				type: PermanentSiteModifier

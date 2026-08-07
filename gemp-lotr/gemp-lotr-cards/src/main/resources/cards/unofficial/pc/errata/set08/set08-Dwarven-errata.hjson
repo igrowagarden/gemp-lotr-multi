@@ -88,8 +88,23 @@
 				},
 				effect: [
 					{
+						type: ChooseOpponent
+						memorize: opponent
+					}
+					{
+						// "make AN OPPONENT hinder X Shadow cards" -- singular,
+						// so the errata twin of 8_3 wants the same
+						// choose-an-opponent treatment its original already got.
+						// Hinder's `player:` is the HINDERING player: it is both
+						// who is asked to choose the cards and who performs the
+						// hinder (HinderCardsInPlay.java:41,47).
+						//
+						// side(shadow) stays and is NOT player scoping -- at five
+						// seats every opponent's cards are shadow-side. The text
+						// has no owner word, so the selection is left unscoped,
+						// exactly as on 8_3.
 						type: Hinder
-						player: shadow
+						player: fromMemory(opponent)
 						select: choose(side(shadow))
 						count: {
 							type: forEachKeywordOnCardInMemory

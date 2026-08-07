@@ -48,6 +48,19 @@ public class MultiplayerEachPlayerAtSiteAtTest {
     private static final String DOORWAY = "18_134";     // wounds two each
     private static final String MITHLOND = "18_136";    // heals each
 
+    /**
+     * The pc errata of Doorway to Doom, and the reason it is here.
+     *
+     * 18_134 was fixed and measured; its twin kept the two-halves form for
+     * several sittings afterwards, in a different file, because the prose
+     * buckets are per-card and the batches never crossed N_M against (N+50)_M.
+     * That is the same gap this branch already recorded on The Faithful Stone --
+     * MultiplayerPreventionAtTest exercises the original 18_50 and NOTHING
+     * exercises 68_50 -- so the twin is run through the identical assertions
+     * here rather than being trusted because the original passes.
+     */
+    private static final String DOORWAY_ERRATA = "68_134";
+
     private static final String GANDALF = "6_30";       // vitality 4
     private static final String KNIGHT = "5_35";        // vitality 2
     // A different minion per seat: the same unique card on two seats is
@@ -113,7 +126,26 @@ public class MultiplayerEachPlayerAtSiteAtTest {
      */
     @Test
     public void everySeatWoundsTwoOfItsOwnCharacters() throws Exception {
-        var scn = TableWalkingOnto(DOORWAY);
+        woundsTwoOfEachSeatsOwn(DOORWAY);
+    }
+
+    /**
+     * The errata twin, through the identical assertions.
+     *
+     * Not a copy for tidiness -- 68_134 shipped the two-halves form long after
+     * 18_134 was fixed and measured, so "the original passes" had already been
+     * demonstrated to say nothing about the twin. It also differs from the
+     * original in ways that could have mattered and turned out not to: a Left
+     * direction rather than Right, and a CantReplaceSite modifier the original
+     * does not carry.
+     */
+    @Test
+    public void theErrataTwinWoundsTwoOfEachSeatsOwnCharacters() throws Exception {
+        woundsTwoOfEachSeatsOwn(DOORWAY_ERRATA);
+    }
+
+    private void woundsTwoOfEachSeatsOwn(String siteId) throws Exception {
+        var scn = TableWalkingOnto(siteId);
         var gandalf = scn.GetCardFor(P1, "gandalf");
         var knight = scn.GetCardFor(P1, "knight");
 

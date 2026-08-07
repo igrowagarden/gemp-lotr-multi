@@ -453,14 +453,34 @@
 						text: Choose a Dwarven card from your discard pile to take into hand
 					}
 					{
+						// "The first time YOUR OPPONENT plays an Orc each turn …
+						// THE Shadow player may discard the bottom 2 cards of
+						// their draw deck to prevent this." The trigger names one
+						// opponent and the definite article refers back to them,
+						// so this is the 2_17 / 51_36 shape -- that opponent, not
+						// the table. Not `anyShadow`.
+						//
+						// This card was HALF converted: the cost already read
+						// ownerFromMemory(playedOrc) while the offer still went to
+						// getFirstShadowPlayer, so above two players the wrong
+						// seat was asked and the right seat's deck would have paid.
+						// A twin check that only asks "does it still say shadow"
+						// would have graded it the same as the other two.
 						type: preventable
-						player: shadow
+						player: ownerFromMemory(playedOrc)
 						text: Would you like to discard the bottom 2 cards of your draw deck to prevent the Free Peoples player taking {chosenCard} into hand from their discard pile?
 						cost: {
 							type: discardBottomCardsFromDeck
 							count: 2
 							forced: false
-							deck: ownerFromMemory(playedOrc)
+							// `you`, not ownerFromMemory(playedOrc): identical
+							// today because the offer names exactly that player,
+							// but PreventableEffectAppender delegates the cost's
+							// context to whoever accepted, so this stays correct
+							// by construction if the offer is ever widened. The
+							// four cards that had an anyShadow offer with a
+							// fixed-seat cost are why this is written structurally.
+							deck: you
 						}
 						effect: {
 							type: putCardsFromDiscardIntoHand
