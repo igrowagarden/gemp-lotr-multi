@@ -20,7 +20,9 @@ DECISION SHAPES rather than over games. It found four real client bugs in an
 afternoon, after 400 games overnight found none. Read "The decision-space
 differential" before running another soak: the lesson is that volume and
 coverage are different things, and this project had been buying the wrong one.
-It also leaves two decision types NOT COMPLETING -- see the same section.
+All seven decision types now pass -- 47 cases, offers AND the exact string
+sent, with three controls proven to fire. `bash harness/fuzzrun.sh` is the one
+command.
 
 **This header used to say "no client code written yet" and was a full session
 out of date.** If you are reading this after a crash, trust file mtimes over
@@ -308,20 +310,9 @@ obvious next move.
 
 **Next**, in the order they are worth doing:
 
-0. **Unbreak the fuzzer's BUTTON driver.** `MULTIPLE_CHOICE` and `ACTION_CHOICE`
-   do not complete; the hang is the first case through it. Revert `clickAny`
-   and re-test `yes/no` -- one change, one question. See "The decision-space
-   differential / KNOWN BROKEN". Until this is closed, do not trust
-   `oldharness.html` for a live run either: it is the same oracle.
-
-0b. **Close the last two answer call sites.** `cardActionChoiceDecision` (2523)
-   and the bare-pass path (2478) are the only ones never driven to send. The
-   lead: it calls `attachSelectionFunctions(cardIds, false)` where
-   `cardSelectionDecision` passes `true`. After that every decision type has an
-   end-to-end answer comparison and "0 diffs" starts meaning what it sounds like.
-
-0c. **A per-type runner.** `harness/fuzzrun.sh`, looping `?only=<TYPE>` and
-   aggregating -- the 47-case run no longer fits one browser pass.
+0. ~~**The fuzzer's BUTTON driver, the last two answer call sites, and a
+   per-type runner.**~~ **All done.** 47/47 across seven types, three controls
+   firing in scope, `harness/fuzzrun.sh`. See "The decision-space differential".
 
 0d. **Make rejection counts trustworthy.** Decision ids are not unique -- 22 call
    sites pass `1` -- so "a warning arrived AND the same decision id was asked
