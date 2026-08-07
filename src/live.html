@@ -33,6 +33,7 @@
   <span class="dot" id="dot"></span>
   <span id="status">starting</span>
   <span id="detail"></span>
+  <button type="button" id="settings" title="Which phases auto-pass">Auto-pass</button>
   <button type="button" id="concede" title="Leave this game">Concede</button>
 </div>
 
@@ -64,6 +65,8 @@ import { createCardInfo } from "./view/cardinfo.js";
 import { createPreGame } from "./view/pregame.js";
 import { createPileViewer, createZoom } from "./view/piles.js";
 import { createDetacher } from "./view/detach.js";
+import { createSettingsPanel } from "./view/settings.js";
+import { shouldClientAutoPass, effectivePhases, PASS } from "./model/autopass.js";
 import { loadImageTable } from "./model/images.js";
 import { closeTopmost, allFlyouts } from "./view/flyout.js";
 
@@ -82,6 +85,7 @@ function show(status, detail) {
 }
 
 let answeredId = null;
+let autoPassed = null;   // the decision object the arm answered, not its id
 let lastSite = null;
 let seenFirstSite = false;
 const store = createStore(participantId);
@@ -188,6 +192,19 @@ createZoom(boardEl);
 // was asking. Left click already means "choose this card" during a decision.
 createCardInfo(boardEl, { fetchInfo: (cardId) => transport.cardInfo(cardId) });
 
+// Which phases the SERVER skips for you when you have nothing playable. The
+// panel writes a cookie the engine re-reads on every poll; it does not pass
+// anything itself. See model/autopass.js -- the client's part in this is
+// smaller than the name suggests.
+const settings = createSettingsPanel(boardEl, {
+  onClientArm: (on) => {
+    detailEl.textContent = on
+      ? "passing no-action choices instantly (the reference does not)"
+      : "instant pass off";
+  }
+});
+document.getElementById("settings").addEventListener("click", () => settings.toggle());
+
 // Conceding was implemented in the transport and wired to nothing, so a player
 // could not leave a game at all. Confirmed first: it is irreversible.
 document.getElementById("concede").addEventListener("click", async () => {
@@ -212,6 +229,27 @@ store.subscribe((s) => {
   if (d && d.decisionType === "ARBITRARY_CARDS" && !s.spectating &&
       d.forPlayer === s.viewerId) picker.show(d);
   else picker.hide();
+
+  // The client-side arm, off unless asked for. The store repaints more than
+  // once per decision, so this needs a guard or it sends a second POST against
+  // a decision the server has already closed.
+  //
+  // The guard is the decision OBJECT, not its id. Decision ids are not unique
+  // -- 22 call sites pass `1` -- so remembering "we passed id 1" would sit out
+  // the next unrelated decision that also came in as 1. The reducer builds a
+  // fresh object per DECISION event (reduce.js:271) and every other event
+  // spreads the old state, carrying the same reference through, which makes
+  // identity mean exactly "this decision, still the one we answered".
+  if (settings.clientArm && d && !s.spectating && d.forPlayer === s.viewerId &&
+      d !== autoPassed &&
+      shouldClientAutoPass(d, s.phase, {
+        enabled: true, phases: effectivePhases(document.cookie)
+      })) {
+    autoPassed = d;
+    transport.answer(d.id, PASS);
+    detailEl.textContent = `auto-passed ${d.id} in ${s.phase}`;
+  }
+
   // Unread counts PEOPLE talking. The game log is a running commentary on every
   // action -- counting it meant the badge was permanently lit and told you
   // nothing, so a real message could not stand out.

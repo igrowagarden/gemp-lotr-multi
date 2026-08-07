@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>autopass check</title>
+<link rel="stylesheet" href="../styles/board.css">
+<style>body{font-family:ui-monospace,Consolas,monospace;font-size:13px;padding:10px}
+#host{position:relative;height:40vh;border:1px solid #333;margin-bottom:8px}
+.pass{color:#6E9B7A}.fail{color:#FF5240}.note{color:#B08D57}</style></head>
+<body><div id="host"></div><div id="out"></div>
+<script type="module">
+/**
+ * Auto-pass, checked.
+ *
+ * Two halves, and they are not the same kind of thing:
+ *
+ *  - The pure half asserts the encoding, the precedence and the client-side
+ *    predicate against `model/autopass.js`. Deterministic, no server.
+ *  - The MEASURED half asks the live server a question the source can only
+ *    suggest an answer to: does a cookie set at the page's own path reach
+ *    `/gemp-lotr-server`, and does one set at `/` reach it? That is the whole
+ *    justification for diverging from the reference on the `path` attribute,
+ *    and this project does not accept an inferred justification.
+ *
+ * The measurement works by poisoning the cookie. `GameRequestHandler.java:253`
+ * does `Phase.valueOf(phase)` on every name in `autoPassPhases`, so a name
+ * that is not a Phase throws inside the handler. A request that reaches the
+ * server carrying a poisoned cookie therefore fails in a way a request that
+ * does not carry it cannot -- the cookie's arrival is observable as a status
+ * code, with no server change and no game state to read.
+ *
+ * It needs a real game id: `getGameById` 404s at :222 BEFORE the cookie is
+ * read at :225, so a made-up id proves nothing. Pass one in, with a login:
+ *
+ *   .../newclient/dev/autopasscheck.html?gameId=7&participantId=watcher
+ *       &login=watcher&password=qwer
+ *
+ * Without `gameId` the measured half is SKIPPED and says so. A skipped
+ * measurement is reported, never counted as a pass -- that is the failure mode
+ * this project keeps re-learning.
+ */
+import {
+  PHASES, SERVER_DEFAULT, SEPARATOR,
+  encodePhases, decodePhases, readCookie, effectivePhases, phaseName,
+  cookieWrites, shouldClientAutoPass, PASS
+} from "../model/autopass.js";
+import { createSettingsPanel } from "../view/settings.js";
+
+const out = document.getElementById("out");
+let pass = 0, fail = 0, skipped = 0;
+const ok = (l, c, d) => { const e = document.createElement("div");
+  e.className = c ? "pass" : "fail";
+  e.textContent = (c ? "PASS  " : "FAIL  ") + l + (c || !d ? "" : "  -> " + d);
+  out.appendChild(e); c ? pass++ : fail++; };
+const skip = (l, why) => { const e = document.createElement("div");
+  e.className = "note";
+  e.textContent = "SKIP  " + l + "  -> " + why;
+  out.appendChild(e); skipped++; };
+const note = (t) => { const e = document.createElement("div");
+  e.className = "note"; e.textContent = "      " + t; out.appendChild(e); };
+
+// ------------------------------------------------------------------ encoding
+
+ok("phases join with \"0\", not a comma",
+   encodePhases(["FELLOWSHIP", "SHADOW"]) === "FELLOWSHIP0SHADOW",
+   encodePhases(["FELLOWSHIP", "SHADOW"]));
+
+ok("the encoding is order-normalised, so a set has one spelling",
+   encodePhases(["REGROUP", "FELLOWSHIP"]) === encodePhases(["FELLOWSHIP", "REGROUP"]),
+   encodePhases(["REGROUP", "FELLOWSHIP"]));
+
+ok("it round-trips", decodePhases(encodePhases(SERVER_DEFAULT)).join() === SERVER_DEFAULT.join());
+
+ok("an unknown name is dropped rather than thrown on",
+   decodePhases("FELLOWSHIP0NOSUCHPHASE0REGROUP").join() === "FELLOWSHIP,REGROUP",
+   decodePhases("FELLOWSHIP0NOSUCHPHASE0REGROUP").join());
+
+ok("a repeat collapses", decodePhases("SHADOW0SHADOW").join() === "SHADOW");
+
+ok("the seven offered are exactly the reference's seven",
+   PHASES.join() === "FELLOWSHIP,SHADOW,MANEUVER,ARCHERY,ASSIGNMENT,SKIRMISH,REGROUP");
+
+ok("SHADOW and SKIRMISH are the two outside the server default",
+   PHASES.filter((p) => !SERVER_DEFAULT.includes(p)).join() === "SHADOW,SKIRMISH");
+
+// ----------------------------------------------------------------- precedence
+// A mirror of GameRequestHandler.getAutoPassPhases. If this drifts from the
+// server the panel lies about what is in effect, which is worse than no panel.
+
+ok("no cookie means the server's default set",
+   effectivePhases("").join() === SERVER_DEFAULT.join(), effectivePhases("").join());
+
+ok("autoPassPhases is honoured",
+   effectivePhases("autoPassPhases=SHADOW0SKIRMISH").join() === "SHADOW,SKIRMISH");
+
+ok("autoPass=false alone means nothing auto-passes",
+   effectivePhases("autoPass=false").length === 0);
+
+ok("autoPassPhases WINS over autoPass=false, as the server reads them in order",
+   effectivePhases("autoPass=false; autoPassPhases=REGROUP").join() === "REGROUP",
+   effectivePhases("autoPass=false; autoPassPhases=REGROUP").join());
+
+ok("a cookie of the same name elsewhere in the string is not confused for it",
+   effectivePhases("notAutoPassPhases=SHADOW; autoPassPhases=REGROUP").join() === "REGROUP",
+   effectivePhases("notAutoPassPhases=SHADOW; autoPassPhases=REGROUP").join());
+
+ok("readCookie returns null for one that is absent",
+   readCookie("autoPassPhases", "other=1") === null);
+
+// --------------------------------------------------------------- the writes
+// The empty set is the one that matters: `autoPassPhases=` would make
+// Phase.valueOf("") throw on EVERY game request, so "none" has to be said with
+// the flag and the phases cookie actively removed.
+
+const empty = cookieWrites([]);
+ok("choosing nothing never writes an empty autoPassPhases value",
+   !empty.some((w) => /^autoPassPhases=;\s*expires=(?!Thu, 01 Jan 1970)/.test(w)),
+   empty.join(" | "));
+ok("choosing nothing EXPIRES the phases cookie",
+   empty.some((w) => w.startsWith("autoPassPhases=") && w.includes("01 Jan 1970")),
+   empty.join(" | "));
+ok("choosing nothing sets autoPass=false",
+   empty.some((w) => w.startsWith("autoPass=false")), empty.join(" | "));
+
+const some = cookieWrites(["SHADOW"]);
+ok("choosing something clears the autoPass flag, which would otherwise linger",
+   some.some((w) => w.startsWith("autoPass=") && w.includes("01 Jan 1970")),
+   some.join(" | "));
+ok("every write is scoped to path=/ so it reaches /gemp-lotr-server",
+   [...empty, ...some].every((w) => w.includes("; path=/")),
+   some.join(" | "));
+
+// ------------------------------------------------------- the client-side arm
+
+const noAction = { decisionType: "CARD_ACTION_CHOICE", parameters: { cardId: [] } };
+const withCards = { decisionType: "CARD_ACTION_CHOICE", parameters: { cardId: ["12"] } };
+
+ok("off by default, exactly as the reference leaves settingsAutoPass",
+   shouldClientAutoPass(noAction, "FELLOWSHIP") === false);
+
+ok("armed, it fires on a choice offering no cards",
+   shouldClientAutoPass(noAction, "FELLOWSHIP", { enabled: true }) === true);
+
+ok("it never fires when a card IS offered",
+   shouldClientAutoPass(withCards, "FELLOWSHIP", { enabled: true }) === false);
+
+ok("it stays out of phases the user did not choose",
+   shouldClientAutoPass(noAction, "SHADOW", { enabled: true }) === false);
+
+ok("it fires in a chosen phase outside the server default",
+   shouldClientAutoPass(noAction, "SHADOW", { enabled: true, phases: ["SHADOW"] }) === true);
+
+ok("it never fires during a replay",
+   shouldClientAutoPass(noAction, "FELLOWSHIP", { enabled: true, replay: true }) === false);
+
+ok("it ignores decision types that are not CARD_ACTION_CHOICE",
+   shouldClientAutoPass({ decisionType: "CARD_SELECTION", parameters: { cardId: [] } },
+                        "FELLOWSHIP", { enabled: true }) === false);
+
+ok("a missing parameters block is treated as no cards, not as a crash",
+   shouldClientAutoPass({ decisionType: "CARD_ACTION_CHOICE" }, "FELLOWSHIP",
+                        { enabled: true }) === true);
+
+ok("the pass answer is the empty string", PASS === "");
+
+// The wire spells phases the HUMAN-READABLE way -- live_capture.xml has
+// phase="Regroup" -- while the cookie the server parses wants REGROUP. Compared
+// raw, the arm never fires, and a control that never fires looks exactly like
+// one with nothing to find. These are the assertions that catch that.
+
+ok("phaseName maps the wire's spelling onto the enum's",
+   phaseName("Regroup") === "REGROUP", phaseName("Regroup"));
+
+ok("and handles the multi-word phases the same way Phase.findPhase does",
+   phaseName("Play starting fellowship") === "PLAY_STARTING_FELLOWSHIP",
+   phaseName("Play starting fellowship"));
+
+ok("phaseName passes null through rather than making a string of it",
+   phaseName(null) === null);
+
+ok("the arm fires on the phase AS THE WIRE SPELLS IT, not only as the cookie does",
+   shouldClientAutoPass(noAction, "Fellowship", { enabled: true }) === true);
+
+ok("it fires on the enum spelling too, so either source works",
+   shouldClientAutoPass(noAction, "FELLOWSHIP", { enabled: true }) === true);
+
+ok("a wire phase outside the chosen set still does not fire",
+   shouldClientAutoPass(noAction, "Shadow", { enabled: true }) === false);
+
+ok("and does fire once that phase is chosen",
+   shouldClientAutoPass(noAction, "Shadow", { enabled: true, phases: ["SHADOW"] }) === true);
+
+// Every phase name the wire can carry for the seven, checked against the set,
+// because one mis-mapped name is a silently dead phase.
+const HUMAN = {
+  FELLOWSHIP: "Fellowship", SHADOW: "Shadow", MANEUVER: "Maneuver",
+  ARCHERY: "Archery", ASSIGNMENT: "Assignment", SKIRMISH: "Skirmish",
+  REGROUP: "Regroup"
+};
+const unmapped = PHASES.filter((p) => phaseName(HUMAN[p]) !== p);
+ok("all seven wire spellings map back to their enum name", unmapped.length === 0,
+   unmapped.join(","));
+
+// ------------------------------------------------------------------- the panel
+// Driven against a fake cookie jar, so the suite does not have to write real
+// cookies to prove the panel reads the server's view rather than its own.
+
+const jar = { cookie: "" };
+const fakeDoc = {
+  createElement: (t) => document.createElement(t),
+  get cookie() { return jar.cookie; },
+  set cookie(v) {
+    // Enough of a jar to model set-and-expire, which is all the panel does.
+    const [pair] = v.split(";");
+    const eq = pair.indexOf("=");
+    const name = pair.slice(0, eq), value = pair.slice(eq + 1);
+    const kept = jar.cookie.split("; ").filter((c) => c && !c.startsWith(name + "="));
+    if (!v.includes("01 Jan 1970")) kept.push(`${name}=${value}`);
+    jar.cookie = kept.join("; ");
+  }
+};
+
+let armSeen = null;
+const settings = createSettingsPanel(document.getElementById("host"), {
+  doc: fakeDoc, onClientArm: (on) => { armSeen = on; }
+});
+settings.open();
+
+const boxes = () => [...settings.panel.body.querySelectorAll(".settings-list input")];
+ok("the panel offers all seven phases", boxes().length === 7, String(boxes().length));
+
+ok("it opens showing the server's default, with nothing yet stored",
+   boxes().filter((b) => b.checked).length === SERVER_DEFAULT.length,
+   boxes().filter((b) => b.checked).length + " ticked");
+
+ok("SHADOW starts unticked, because the server does not pass it",
+   boxes()[PHASES.indexOf("SHADOW")].checked === false);
+
+// Tick SHADOW: the panel must now show the six the server would apply.
+boxes()[PHASES.indexOf("SHADOW")].click();
+ok("ticking SHADOW writes it into the cookie",
+   effectivePhases(jar.cookie).includes("SHADOW"), jar.cookie);
+ok("and does not lose the phases that were already in effect",
+   SERVER_DEFAULT.every((p) => effectivePhases(jar.cookie).includes(p)), jar.cookie);
+ok("the panel repaints from the cookie, not from the click",
+   boxes().filter((b) => b.checked).length === 6,
+   boxes().filter((b) => b.checked).length + " ticked");
+
+// Untick everything: the empty-set representation is the one that can break a
+// game outright, so it is worth asserting through the panel and not only
+// through cookieWrites.
+for (const b of boxes()) if (b.checked) b.click();
+ok("unticking all seven leaves no autoPassPhases cookie at all",
+   readCookie("autoPassPhases", jar.cookie) === null, jar.cookie);
+ok("and says so with autoPass=false instead",
+   readCookie("autoPass", jar.cookie) === "false", jar.cookie);
+ok("which the server would read as the empty set",
+   effectivePhases(jar.cookie).length === 0, jar.cookie);
+
+const arm = settings.panel.body.querySelector(".settings-arm input");
+ok("the instant-pass switch starts off", arm.checked === false);
+arm.click();
+ok("and reports when it is armed", armSeen === true && settings.clientArm === true);
+
+// A cookie the browser refuses must show as unsaved rather than as a tick. The
+// jar is made read-only to model exactly that.
+const before = jar.cookie;
+Object.defineProperty(fakeDoc, "cookie", {
+  get: () => before, set: () => {}, configurable: true
+});
+settings.setPhases(["REGROUP"]);
+ok("a refused cookie is reported, not shown as saved",
+   !!settings.panel.body.querySelector(".settings-warn"),
+   settings.panel.body.textContent.slice(0, 80));
+
+// ------------------------------------------------- MEASURED: does it arrive?
+
+const q = new URLSearchParams(location.search);
+const gameId = q.get("gameId");
+const participantId = q.get("participantId") ?? "watcher";
+
+if (q.get("login")) {
+  await fetch("/gemp-lotr-server/login", {
+    method: "POST", credentials: "same-origin",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ login: q.get("login"), password: q.get("password") ?? "" })
+  });
+}
+
+/** The GET the server reads the cookie on (GameRequestHandler.java:214-225). */
+const probe = async () => {
+  const res = await fetch(
+    `/gemp-lotr-server/game/${encodeURIComponent(gameId)}?participantId=${encodeURIComponent(participantId)}`,
+    { method: "GET", credentials: "same-origin", headers: { Accept: "text/xml" } });
+  return res.status;
+};
+
+const POISON = "NOTAPHASE";
+const clear = (path) => {
+  document.cookie = `autoPassPhases=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=${path}`;
+};
+
+if (!gameId) {
+  skip("does a cookie at path=/ reach /gemp-lotr-server?", "no ?gameId= given");
+  skip("does a cookie at the page's own path reach it?", "no ?gameId= given");
+} else {
+  clear("/");
+  clear("/gemp-lotr");
+  clear("/gemp-lotr/newclient/dev");
+  const clean = await probe();
+
+  if (clean !== 200) {
+    skip("the poison probe", `the clean request is ${clean}, not 200 -- bad gameId, or not logged in`);
+    skip("does a cookie at the page's own path reach it?", "the clean request did not succeed");
+  } else {
+    // 1. path=/ -- what this client writes.
+    document.cookie = `autoPassPhases=${POISON}; path=/`;
+    const atRoot = await probe();
+    clear("/");
+    ok("a cookie at path=/ REACHES the server (the poison is rejected)",
+       atRoot !== 200, `clean ${clean}, poisoned ${atRoot}`);
+    note(`path=/ : clean ${clean} -> poisoned ${atRoot}`);
+
+    // 2. the page's own directory -- what $.cookie leaves the reference with.
+    //    The reference's page sits at /gemp-lotr/, this one deeper, but both
+    //    are under /gemp-lotr and neither is under /gemp-lotr-server.
+    document.cookie = `autoPassPhases=${POISON}`;
+    const atPage = await probe();
+    clear("/gemp-lotr/newclient/dev");
+    ok("a cookie at the PAGE's own path does NOT reach it -- hence path=/",
+       atPage === 200, `clean ${clean}, poisoned ${atPage}`);
+    note(`page path : clean ${clean} -> poisoned ${atPage}`);
+
+    // 3. EXACTLY what the reference is left with. Its game page is
+    //    /gemp-lotr/game.html, so $.cookie's default lands the cookie at
+    //    Path=/gemp-lotr. The probe above used this page's own deeper path,
+    //    which is not the same string -- and the claim being made is about
+    //    /gemp-lotr specifically, so /gemp-lotr is what gets measured.
+    document.cookie = `autoPassPhases=${POISON}; path=/gemp-lotr`;
+    const atRef = await probe();
+    clear("/gemp-lotr");
+    ok("nor does one at /gemp-lotr, where the reference's own $.cookie puts it",
+       atRef === 200, `clean ${clean}, poisoned ${atRef}`);
+    note(`/gemp-lotr : clean ${clean} -> poisoned ${atRef}`);
+    if (atRef === 200) {
+      note("=> the reference's auto-pass checkboxes are INERT: $.cookie writes them");
+      note("   at /gemp-lotr and /gemp-lotr-server never sees them. MEASURED.");
+      note("   Every reference game therefore runs on _autoPassDefault.");
+    }
+  }
+  clear("/");
+  clear("/gemp-lotr");
+  clear("/gemp-lotr/newclient/dev");
+}
+
+const r = document.createElement("div");
+r.id = "result"; r.className = fail === 0 ? "pass" : "fail";
+r.textContent = fail === 0
+  ? `RESULT: ALL PASS (${pass})` + (skipped ? ` — ${skipped} SKIPPED` : "")
+  : `RESULT: ${fail} FAILED of ${pass + fail}`;
+document.body.appendChild(r);
+</script></body></html>

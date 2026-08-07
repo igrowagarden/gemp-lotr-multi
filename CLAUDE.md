@@ -69,6 +69,15 @@ DOCKER=/c/Users/emers/AppData/Local/Programs/DockerDesktop/resources/bin/docker.
   broke another for hours. Gate anything type-specific behind an opt-in flag.
 - **A grep for `FAIL` or `RESULT:` matches the pages' own source.** Use
   `RESULT: ALL PASS \([0-9]+\)`.
+- **Never run `sync.sh` while a harness is running.** It does `rm -rf "$DST"/*`
+  before copying, so a run in flight fetches ES modules from a directory being
+  emptied. The pages die and produce no `RESULT` line — which `fuzzrun.sh`
+  prints as `CONTROL DID NOT FIRE`, an exact impersonation of a real regression.
+  Tell them apart by the empty `RESULT` field before the arrow.
+- **Never pipe a harness through `tail`.** It buffers to EOF, so nothing is
+  visible while it runs *and* the baseline section is lost. Redirect to a file
+  and append the exit code: `bash harness/fuzzrun.sh > out.txt 2>&1; echo
+  "EXIT=$?" >> out.txt` — through a pipe, `$?` is the pipe's, not the script's.
 
 ## Responding
 
@@ -82,6 +91,8 @@ says what would unblock it.
 
 This project runs across many sessions and the queue has to be readable at a
 glance without re-reading the whole answer to reconstruct it.
+
+Always continue working on item #1 without human prompting. Document and flag issues needed human guidance and intervention. When an item is complete remove it from the next steps list.
 
 ## Working rules
 

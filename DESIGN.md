@@ -478,6 +478,62 @@ Both were found by `src/dev/decisionfuzz.html`, which enumerates decision shapes
 rather than sampling games. The reference gets both wrong at `max=0`; see
 HANDOFF.
 
+## Auto-pass is a server feature
+
+Nothing a client does can auto-pass, because the decision is never sent. The
+engine tests it at three sites and skips the decision outright:
+
+- `PlayerPlaysPhaseActionsUntilPassesGameProcess.java:34`
+- `PlayersPlayPhaseActionsInOrderGameProcess.java:56`
+- `SkirmishActionProcedureAction.java:70` (SKIRMISH only)
+
+each `playableActions.isEmpty() && game.shouldAutoPass(playerId, phase)`. The
+per-player set comes from a **cookie**, re-read on every game request — the GET
+handshake (`GameRequestHandler.java:225`) and every POST poll or answer (`:91`):
+
+    autoPassPhases=FELLOWSHIP0MANEUVER0...   -> exactly that set
+    autoPass=false  (and no autoPassPhases)  -> the empty set
+    neither                                  -> _autoPassDefault (:50-54)
+
+So the client's whole part is **choosing the set**, in `view/settings.js` over
+`model/autopass.js`. Three consequences, each read out of the server:
+
+1. **This client already auto-passed and nobody knew.** With no cookie the
+   default applies: FELLOWSHIP, MANEUVER, ARCHERY, ASSIGNMENT, REGROUP. SHADOW
+   and SKIRMISH are the two it never covered.
+2. **The empty set cannot be spelled `autoPassPhases=`.** The server does
+   `value().split("0")` then `Phase.valueOf` (`:250-253`); `"".split("0")` is
+   `[""]` in Java and `Phase.valueOf("")` throws, so an empty value breaks every
+   game request rather than passing nothing. "None" is `autoPass=false` with the
+   phases cookie *removed* — it is checked first and wins.
+3. **`Path=/`, and this is a deliberate divergence.** `$.cookie` with no `path`
+   lets the browser default it to the setting page's directory
+   (`jquery.cookie.js:30,73`), which for the reference is `/gemp-lotr`. The API
+   is at `/gemp-lotr-server`, which does not path-match — the prefix has to end
+   on a `/` boundary and `-server` does not (RFC 6265 §5.1.4).
+
+Point 3 is **measured, not reasoned**, in `dev/autopasscheck.html`. A cookie
+value that is not a `Phase` makes the handler throw, so the cookie's arrival is
+visible as a status code against the live endpoint:
+
+| cookie path | clean | poisoned |
+|---|---|---|
+| `/`           | 200 | **500** — arrives |
+| `/gemp-lotr`  | 200 | 200 — never arrives |
+| the page's own directory | 200 | 200 — never arrives |
+
+The `/` row is the control: it is what makes the other two mean *did not
+arrive* rather than *the probe does not work*. It also establishes a third
+reference-client bug — its auto-pass checkboxes are inert, and every reference
+game runs on `_autoPassDefault` whatever the boxes say.
+
+The client-side arm (`shouldClientAutoPass`) reproduces the reference's
+`gameUi.js:2477` branch and is **off by default**, because that branch is dead
+code: `settingsAutoPass` is declared `false` at `gameUi.js:84` and assigned
+nowhere. On by default it would answer decisions the reference sits on, which
+the differential would rightly call a divergence. It is worth having only for
+SHADOW and SKIRMISH, where the server will not act for you.
+
 ## Open
 
 - `GameEvent.side` unpopulated and unserialised — blocks filtering opponents'

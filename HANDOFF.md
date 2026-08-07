@@ -52,6 +52,56 @@ nothing:
 | **`min`/`max` unenforced when sending** | both clients LIGHT the card, because the engine still lists it. Only driving the answer exposes it. |
 | the picker's Confirm/Pass bounds | same defect, same blind spot |
 
+### Auto-pass: done, and it was not what it looked like
+
+**Auto-pass is a server feature.** The engine skips the decision entirely
+(`playableActions.isEmpty() && game.shouldAutoPass(...)`, three call sites) and a
+client cannot participate by answering faster — there is nothing to answer. All
+a client chooses is the phase set, and it says so in a **cookie** the server
+re-reads on every game request.
+
+Three things that reading the server settled, none of them guessable:
+
+1. **This client has always auto-passed.** No cookie means `_autoPassDefault` =
+   FELLOWSHIP, MANEUVER, ARCHERY, ASSIGNMENT, REGROUP. The gap was never the
+   behaviour, it was the control over it, plus SHADOW and SKIRMISH.
+2. **An empty `autoPassPhases` cookie breaks every game request** —
+   `Phase.valueOf("")` throws. "Pass nothing" is `autoPass=false` with the
+   phases cookie removed.
+3. **The cookie must be written at `Path=/`.** At the page's own path it never
+   reaches `/gemp-lotr-server`. **Measured** — see below.
+
+`model/autopass.js` + `view/settings.js` + the "Auto-pass" button on the status
+bar; `dev/autopasscheck.html` is the suite, **50 assertions** (47 without a
+`gameId`, and it says SKIP rather than counting the measurement as passed).
+
+The client-side arm — the reference's `gameUi.js:2477` — is implemented and
+**off by default**, because in the reference it is dead code (`settingsAutoPass`
+is `false` at `gameUi.js:84` and assigned nowhere). Default-on would answer
+decisions the reference sits on, and the differential would correctly call that
+a divergence.
+
+### THREE reference bugs now, and the third is the auto-pass UI itself
+
+The reference's seven auto-pass checkboxes are **inert**. `$.cookie` is called
+with no `path`, so the browser defaults it to the setting page's directory
+(`/gemp-lotr`), and the API at `/gemp-lotr-server` does not path-match it. Every
+reference game runs on `_autoPassDefault` regardless of what the boxes say.
+
+Measured against the live endpoint, not reasoned. The trick is that a cookie
+value which is not a `Phase` makes the handler throw, so arrival is a status
+code:
+
+| cookie path | clean | poisoned |
+|---|---|---|
+| `/`                      | 200 | **500** — arrives |
+| `/gemp-lotr`             | 200 | 200 — never arrives |
+| the page's own directory | 200 | 200 — never arrives |
+
+**The `/` row is the control.** Without it, two 200s are indistinguishable from
+a probe that does nothing — which is this project's most-repeated failure, and
+the reason the measurement was built this way rather than as two assertions.
+
 ### Two REFERENCE bugs found, and written up for the engine project
 
 The reference client sends an answer the engine refuses whenever a selection
@@ -322,12 +372,15 @@ is an explicit requirement, not a preference.
 
 **Where it stands.** The client plays a real five-player game end to end. Every
 decision type is implemented and verified against the old client with the engine
-judging the answers. **Twelve assertion suites, all passing** -- re-run at the
-end of this session:
+judging the answers. **Thirteen assertion suites, all passing** -- re-run at the
+end of this session, plus `tests.html` at 197:
 
     wirecheck 12   actioncheck 19   assigncheck 6    pickcheck 17
     pathcheck 9    navcheck 9       flipcheck 4      zoomcheck 6
     chatcheck 18   cardstatecheck 18  pregamecheck 14   statcheck (report)
+    autopasscheck 50  <- 47 of them without a ?gameId=, and it SKIPs the rest
+                         rather than passing them. Needs a live game to measure
+                         the cookie path; see "Auto-pass" above for the URL.
 
 Two things to know before you read a red result. `statcheck` prints MEASUREMENTS
 (badge geometry as percentages), not assertions -- it has no RESULT line and
@@ -376,8 +429,9 @@ obvious next move.
    Nothing compares any of it against the reference, and it is the larger half
    of "does the new client match the old". `decisionfuzz.html` is the template.
 
-0b. **Auto-pass.** The reference auto-passes a CARD_ACTION_CHOICE with no
-   eligible cards; at five players you pass constantly. Small and still open.
+0b. ~~**Auto-pass.**~~ **Done**, and the premise in this queue was wrong: the
+   reference does NOT auto-pass, the SERVER does, and this client had it all
+   along via `_autoPassDefault`. See "Auto-pass: done" above.
 
 0c. **A nightly.** All three harnesses are controlled now, so an unattended run
    accumulates evidence rather than unverified green. `fuzzrun.sh` is ~6 min and
@@ -395,8 +449,7 @@ obvious next move.
    `live.html?...&participantId=asdf` and play a card, use a card with two
    abilities, and reach an assignment.
 2. ~~**`git init` here.**~~ **Done.** See "Version control, finally".
-3. **Auto-pass** — the reference auto-passes a CARD_ACTION_CHOICE with no
-   eligible cards. In a five-player game you pass constantly.
+3. ~~**Auto-pass**~~ — **Done.** See above; the entry's premise was wrong.
 4. **Parallel differential runs.** Games are independent, but all five seats use
    the same five accounts and one session per account means concurrent games
    fight over channels. Needs a second pool of registered accounts; worth ~4x on
@@ -1394,6 +1447,25 @@ cd /c/Users/emers/OneDrive/Documents/gemp_gui/src
 Expect `RESULT: ALL PASS`. It must be served over http — ES modules do not load
 from `file://`.
 
+`autopasscheck` is the one suite that wants the DEPLOYED origin and a live game,
+because half of it measures whether a cookie reaches `/gemp-lotr-server` at all.
+Without `?gameId=` it still runs its 39 pure assertions and reports the rest as
+SKIP:
+
+```bash
+bash harness/sync.sh
+GID=$(cd harness && source ./gemp_api.sh && C=$(login watcher qwer) \
+      && hall watcher "$C" | grep -o 'gameId="[0-9]*"' | head -1 | grep -o '[0-9]*')
+"/c/Program Files/Google/Chrome/Application/chrome.exe" --headless --disable-gpu \
+  --user-data-dir="$(mktemp -d)/cr" --dump-dom --virtual-time-budget=25000 \
+  "http://localhost:17002/gemp-lotr/newclient/dev/autopasscheck.html?gameId=$GID&participantId=watcher&login=watcher&password=qwer" \
+  2>/dev/null | sed -e 's/<[^>]*>/\n/g' | grep -E "^(FAIL|SKIP|RESULT)"
+```
+
+Expect `RESULT: ALL PASS (50)`. A `gameId` that is not actually playing makes
+the clean probe return something other than 200, and the suite SKIPs rather than
+inventing a verdict — read the SKIP line, it names which.
+
 ---
 
 ## Traps, all paid for
@@ -1452,6 +1524,33 @@ from `file://`.
    every card, because the vitality ball is *dark* red and reads as frame. The
    numerals are white, high-luminance and near-zero saturation, and they are
    also the thing a badge has to line up with. `scratchpad/measure2.py`.
+9. **`sync.sh` and a running harness are mutually exclusive.** `sync.sh` opens
+   with `rm -rf "${DST:?}"/*`, so a `fuzzrun`/`diffrun` in flight resolves its
+   ES module imports against a directory that is being emptied and refilled.
+   The pages die, emit no `RESULT` line, and `fuzzrun.sh` reports
+   `<-- CONTROL DID NOT FIRE; this type's pass proves nothing` — which is
+   indistinguishable, at a glance, from the real gap that message was written
+   for. **Tell them apart by the empty `RESULT` field before the arrow:** a
+   control that genuinely did not fire still prints `RESULT: ALL PASS (n)`,
+   whereas a killed page prints nothing at all. Cost a 15-minute run and a
+   false regression report. If this happens twice, make `sync.sh` refuse while
+   a lock file exists.
+10. **Do not pipe a harness through `tail`.** It buffers until EOF, so there is
+   no progress while it runs and the baseline section — the half that actually
+   catches regressions — is discarded. Worse, `$?` afterwards is the pipe's
+   status, not the script's, so a non-zero exit is silently swallowed.
+   Redirect and stamp instead:
+   `bash harness/fuzzrun.sh > out.txt 2>&1; echo "EXIT=$?" >> out.txt`.
+11. **The same concept can arrive in two alphabets, and comparing them fails
+   silently.** A phase is `REGROUP` in the auto-pass cookie the server parses
+   and `Regroup` on the wire — `GAME_PHASE_CHANGE` carries
+   `Phase.getHumanReadable()`, which `live_capture.xml` confirms. Compared raw,
+   the client-side auto-pass arm could never fire *once*, in any phase, and
+   from outside that is indistinguishable from "there was nothing to pass".
+   Caught only by writing an assertion in the wire's spelling. The engine's own
+   normaliser is `Phase.findPhase` (Phase.java:37-39) and `phaseName()` mirrors
+   it. **When a value crosses a boundary, check the spelling on BOTH sides
+   against real captured data, not against the enum you happen to be holding.**
 
 ---
 
