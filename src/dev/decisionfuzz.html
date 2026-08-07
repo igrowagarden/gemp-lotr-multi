@@ -624,9 +624,22 @@ function runCase(c) {
 
   } else {
     // MULTIPLE_CHOICE / ACTION_CHOICE: buttons, answered with an INDEX.
-    if (oldN.buttons.length !== (contract.answers ?? []).length) {
-      rec.findings.push(["DIFF", `option count: old ${oldN.buttons.length} ` +
-                                 `(${JSON.stringify(oldN.buttons)}) vs new ${contract.answers.length}`]);
+    // COUNT WHAT WAS OFFERED, however it was presented. MULTIPLE_CHOICE gives
+    // the reference buttons or a dropdown; ACTION_CHOICE gives it a dialog of
+    // fabricated `temp<i>` CARDS, which `offers()` correctly files under
+    // `cards`, not `buttons`. Comparing only buttons therefore read "old 0 vs
+    // new 2" for a decision the reference presented perfectly well -- a
+    // difference in mechanism reported as a difference in substance. The two
+    // clients answer it identically ("0" from both); only the surface differs,
+    // and the surface is a deliberate choice on our side.
+    const oldOptionCount = oldN.buttons.length || oldN.cards.length;
+    if (oldOptionCount !== (contract.answers ?? []).length) {
+      rec.findings.push(["DIFF", `option count: old ${oldOptionCount} ` +
+                                 `(${JSON.stringify(oldN.buttons.length ? oldN.buttons : oldN.cards)}) ` +
+                                 `vs new ${contract.answers.length}`]);
+    } else if (!oldN.buttons.length && oldN.cards.length) {
+      rec.notes.push(`presented differently: reference used ${oldN.cards.length} ` +
+                     `dialog card(s), this client used prompt buttons`);
     }
     // What each client SENDS is compared by the generic drive step below, the
     // same way as every other type. This branch used to do its own clicking
