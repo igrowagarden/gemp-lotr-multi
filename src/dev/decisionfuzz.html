@@ -40,6 +40,10 @@
  *   decisionfuzz.html?only=CARD_SELECTION  one decision type
  *   decisionfuzz.html?sabotage=dropoffer   NEGATIVE CONTROL -- must report DIFFs
  *   decisionfuzz.html?sabotage=phantom     NEGATIVE CONTROL -- must report DIFFs
+ *   decisionfuzz.html?sabotage=answer      NEGATIVE CONTROL -- the only one that
+ *                                          reaches every type; the other two
+ *                                          cannot fire on INTEGER,
+ *                                          MULTIPLE_CHOICE or ACTION_CHOICE
  *
  * It must be served from the GEMP origin, because oldharness.html loads the old
  * client from /gemp-lotr/js/. `harness/sync.sh` puts it there. It does NOT need
@@ -727,6 +731,22 @@ function runCase(c) {
   rec.notes.push(`old after drive:  ${after}`);
   const nSend = drive.new(arg, targets, c);
   rec.notes.push(`old before drive: ${before}`);
+  // THIRD NEGATIVE CONTROL, and the only one that can reach every type.
+  //
+  // `dropoffer` and `phantom` mutate card-id lists, which INTEGER,
+  // MULTIPLE_CHOICE and ACTION_CHOICE do not compare -- so both controls came
+  // back ALL PASS on those three, meaning their clean runs had never been shown
+  // capable of failing. This project has already shipped one control that could
+  // not fire and briefly read its silence as confirmation.
+  //
+  // Every type now has an ANSWER comparison, so perturbing the answer is the one
+  // mutation that reaches all of them.
+  if (sabotage === "answer" && nSend.value != null) {
+    const n = parseInt(nSend.value, 10);
+    nSend.value = (!Number.isNaN(n) && String(n) === nSend.value)
+      ? String(n + 1)                 // an index or a number: off by one
+      : nSend.value + ",999999";      // a card-id list: one id too many
+  }
   rec.notes.push(`sent — old ${JSON.stringify(oSend.value)}, new ${JSON.stringify(nSend.value)}` +
                  (oSend.error || nSend.error ? ` (old:${oSend.error ?? "-"} new:${nSend.error ?? "-"})` : ""));
   if (oSend.clicked && nSend.clicked && oSend.value !== nSend.value) {
