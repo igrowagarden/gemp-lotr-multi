@@ -356,10 +356,23 @@ export const CASES = [
   // `.alertButtons` and `#smallDialog`, which the picker does not use. The
   // buttonpane fallback added for this does not appear to connect either.
   //
-  // NEXT MEASUREMENT: instrument `decisionFunction` the same way
-  // `selectionFunction` was, and count entries. That separates "Done was never
-  // pressed" from "Done was pressed and the submit path failed" -- the last
-  // distinction not yet measured here.
+  // MEASURED, and the question is now fully characterised as a HARNESS gap.
+  // Instrumenting both entry points gives, for this case:
+  //
+  //     selectionFunction 1x, decisionFunction 0x
+  //
+  // The click lands, the reference's selection logic runs, and the submit is
+  // never reached. Every OTHER picker case shows `decisionFunction 1x` because
+  // they submit through AUTO-ACCEPT (`selectedCardIds.length == max`), which by
+  // definition cannot fire at max=0 -- so this is the only case that needs the
+  // Done button, and the picker's Done is a jQuery-UI dialog button whose pane
+  // is never materialised in the can opener. Pressing it by class and by text
+  // both find nothing in the document.
+  //
+  // So: the reference's behaviour here is UNMEASURED, and will stay so until the
+  // can opener renders dialog button panes. It is not evidence of anything about
+  // the reference, and the case is not marked `oracleWrong`. What IS established:
+  // this client sends "", the only legal answer.
   //
   // ATTEMPTED AND STILL OPEN. The driver now also presses
   // `.ui-dialog-buttonpane button`, and it changes nothing: every other picker

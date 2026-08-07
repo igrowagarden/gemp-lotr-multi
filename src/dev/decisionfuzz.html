@@ -431,7 +431,19 @@ const DRIVE = {
       // Deliberately NOT folded into `oldFinish`: that helper is shared by four
       // drivers, and widening a shared thing to suit one caller is the mistake
       // that broke the replay differential earlier today.
-      if (!oldFinish()) oldClickAny(".ui-dialog-buttonpane button", 0);
+      // BY TEXT, because the picker's Done is a jQuery-UI dialog button and the
+      // class-based selectors miss it. Confirmed necessary by instrumentation:
+      // `selectionFunction 1x, decisionFunction 0x` -- the click lands, the
+      // selection is made, and the submit is simply never reached, because every
+      // OTHER picker case submits through auto-accept (`length == max`) and only
+      // max=0 actually needs the button.
+      if (!oldFinish()) {
+        const $ = $old();
+        const done = $("button").filter(function () {
+          return /^\s*Done\s*$/.test($(this).text());
+        });
+        if (done.length) done.eq(0).trigger("click");
+      }
       return true;
     }),
     new: (want = 1) => newSends(() => {
@@ -744,8 +756,23 @@ function runCase(c) {
       return origSelFn.apply(this, arguments);
     };
   }
+  // AND THE SUBMIT PATH. `selectionFunction` running tells us the click arrived;
+  // it says nothing about whether the answer was ever submitted. Counting
+  // `decisionFunction` separates "Done was never pressed" from "Done was pressed
+  // and the submit failed" -- the two are indistinguishable from "sent nothing",
+  // and guessing between them cost four rounds on the picker's max=0 case.
+  let decFnCalls = 0;
+  const origDecFn = OLD.ui && OLD.ui.decisionFunction;
+  if (typeof origDecFn === "function") {
+    OLD.ui.decisionFunction = function () {
+      decFnCalls++;
+      return origDecFn.apply(this, arguments);
+    };
+  }
   const oSend = drive.old(arg, targets, c);
-  rec.notes.push(`selectionFunction entered ${selFnCalls}x during the old drive`);
+  rec.notes.push(`selectionFunction ${selFnCalls}x, decisionFunction ${decFnCalls}x ` +
+                 `during the old drive`);
+  if (typeof origDecFn === "function") OLD.ui.decisionFunction = origDecFn;
   // AND THE STATE AFTER. Everything measured so far was pre-click, which says
   // the decision rendered correctly but nothing about what the click did. If
   // `chosen` or `done` moved, the click landed and the submit step is at fault;
