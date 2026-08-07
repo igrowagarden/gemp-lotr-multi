@@ -114,6 +114,15 @@ window.OLD = (function () {
     // looks like a crash rather than a question. Answering "yes" is what a
     // player driving the same click would do, and it is the only value that
     // lets the decision be observed at all.
+    // SOUND IS A WIRE TO THE OUTSIDE WORLD TOO. `PlaySound` reaches for an
+    // <audio> element that game.html provides and this page does not, so it
+    // throws on a null. It fires AFTER `decisionFunction`, so the answer is
+    // already sent and the throw is harmless -- but it propagates back through
+    // `.trigger("click")` into the driver, which reported three correctly
+    // answered ASSIGN_MINIONS cases as errors. It is also the source of the
+    // "2 benign errors" every case has carried since the beginning.
+    ui.PlaySound = function () {};
+
     window.confirm = function () { return true; };
     window.alert = function () {};
     window.prompt = function () { return null; };
