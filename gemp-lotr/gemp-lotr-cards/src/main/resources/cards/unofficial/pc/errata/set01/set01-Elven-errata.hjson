@@ -94,9 +94,17 @@
 				select: choose(elf)
 			}
 			effect: [
+				// The errata twin of 1_36, which was converted and this was
+				// not. Same reading: "an opponent's hand ... THAT PLAYER may
+				// discard" is one opponent named twice, so it is
+				// choose-an-opponent and NOT the anyShadow prevention shape.
+				{
+					type: ChooseOpponent
+					memorize: opponent
+				}
 				{
 					type: RevealRandomCardsFromHand
-					hand: shadow
+					hand: fromMemory(opponent)
 					memorize: revealedCards
 					forced: true
 					count: 4
@@ -122,12 +130,27 @@
 					}
 					true: [
 						{
+							// Offered to the SAME opponent whose hand was
+							// revealed -- "that player", not "any Shadow
+							// player".
+							//
+							// The cost must say `you`, not
+							// fromMemory(opponent): a cost is registered as a
+							// PLAY REQUIREMENT, so every source in it has to
+							// pre-evaluate, and fromMemory's PlayerSource
+							// returns canPreEvaluate() == false.
+							// EffectUtils.validatePreEvaluate rejects the card
+							// outright -- "Can't pre-evaluate a cost", card
+							// fails to load. `you` is correct as well as
+							// legal: inside a prevention cost it names
+							// whoever accepted, and here only one player is
+							// ever offered.
 							type: preventable
-							player: shadow
+							player: fromMemory(opponent)
 							cost: {
 								type: discardFromHand
-								hand: shadow
-								player: shadow
+								hand: you
+								player: you
 								forced: false
 								count: {
 									type: FromMemory
@@ -264,12 +287,21 @@
 				filter: your,elf
 			}
 			effect: {
+				// "ANY Shadow player may discard a card from hand to prevent
+				// this." Missed by the anyShadow sweep, like 51_68 below.
+				//
+				// Note the ORIGINAL 1_43 is a different card: its text says
+				// "choose an opponent to discard a card from hand", so it was
+				// correctly given ChooseOpponent instead. The errata rewrote
+				// the ability, so matching the twin's fix would have been
+				// wrong -- each errata needs its own reading.
 				type: preventable
-				player: shadow
+				player: anyShadow
 				cost: {
+					// `you` is whoever accepted. See 5_20 for the mechanism.
 					type: discardFromHand
-					hand: shadowPlayer
-					player: shadowPlayer
+					hand: you
+					player: you
 					forced: false
 					count: 1
 				}
@@ -815,12 +847,24 @@
 					text: Choose a minion to exert
 				}
 				{
+					// A plain miss of the anyShadow sweep: "AN OPPONENT may
+					// discard a card from hand to prevent this" is the same
+					// shape as the sixteen already converted, and this errata
+					// was passed over with the rest of its file.
+					//
+					// Both halves, not just the offer. `you` inside a
+					// prevention cost is whoever ACCEPTED -- the cost is
+					// appended in a context delegated to them -- while
+					// `shadow` would bill the first Shadow player however many
+					// were asked. That is the defect 9eae98752 fixed on four
+					// other cards, and shipping the offer without the cost
+					// would reintroduce it here.
 					type: preventable
-					player: shadow
+					player: anyShadow
 					cost: {
 						type: discardFromHand
-						hand: shadow
-						player: shadow
+						hand: you
+						player: you
 						forced: false
 						count: 1
 					}

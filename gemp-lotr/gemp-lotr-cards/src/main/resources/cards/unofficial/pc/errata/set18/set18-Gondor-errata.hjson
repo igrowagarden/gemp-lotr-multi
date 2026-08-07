@@ -114,8 +114,17 @@
 						text: Choose a minion to prevent from skirmishing until the Regroup phase.
 					}
 					{
+						// "ANY Shadow player may remove (2) to prevent this."
+						// This is the errata of The Faithful Stone (18_50) --
+						// the very card MultiplayerPreventionAtTest uses to
+						// prove the offer goes round the table. The original
+						// was converted; its errata was not, and no test
+						// touches the errata.
+						//
+						// The cost is removeTwilight, which belongs to nobody,
+						// so there is no accepting-player cost to redirect.
 						type: preventable
-						player: shadowPlayer
+						player: anyShadow
 						text: Would you like to remove (2) to allow {chosenMinion} to skirmish?
 						cost: {
 							type: removeTwilight

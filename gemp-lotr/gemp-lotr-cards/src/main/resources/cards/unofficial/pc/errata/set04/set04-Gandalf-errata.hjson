@@ -138,7 +138,16 @@
 					select: choose(title(Gandalf))
 				}
 				text: Would you like to wound a minion to prevent Gandalf from being unable to take wounds?
-				player: shadowPlayer
+				// "ANY Shadow player may make you wound a minion to prevent
+				// this." Missed by the anyShadow sweep that converted the
+				// original 4_97.
+				//
+				// The cost stays `player: freeps` and is NOT changed to `you`:
+				// "make YOU wound a minion" addresses the card's controller,
+				// who is the Free Peoples player whichever opponent accepts.
+				// This is the one prevention cost on the branch where the
+				// fixed token is the correct one.
+				player: anyShadow
 				cost: {
 					type: wound
 					select: choose(minion)

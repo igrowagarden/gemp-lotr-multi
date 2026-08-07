@@ -80,20 +80,32 @@
 				type: winsSkirmish
 				filter: elf,archer
 			}
-			effect: {
-				type: preventable
-				player: shadowPlayer
-				effect: {
-					type: discard
-					player: shadowPlayer
-					select: choose(minion)
+			effect: [
+				// NOT anyShadow. "make AN OPPONENT choose a minion to discard.
+				// THAT OPPONENT may remove (3) to prevent this" -- the offer
+				// goes to the one opponent the card already named, not round
+				// the table. The `preventable` bucket's anyShadow reading
+				// applies to "ANY Shadow player may...", which this is not.
+				{
+					type: ChooseOpponent
+					memorize: opponent
 				}
-				text: Would you like to remove (3) to prevent discarding a minion?
-				cost: {
-					type: removeTwilight
-					amount: 3
+				{
+					type: preventable
+					player: fromMemory(opponent)
+					effect: {
+						// "choose A minion", no owner word -- unscoped.
+						type: discard
+						player: fromMemory(opponent)
+						select: choose(minion)
+					}
+					text: Would you like to remove (3) to prevent discarding a minion?
+					cost: {
+						type: removeTwilight
+						amount: 3
+					}
 				}
-			}
+			]
 		}
 		gametext: <b>Response:</b> If an Elf archer wins a skirmish, make an opponent choose a minion to discard. That opponent may remove (3) to prevent this.
 		lore: "Reeling from the bite of an arrow, the Cave Troll became enraged trying to strike the nimble Elf."
