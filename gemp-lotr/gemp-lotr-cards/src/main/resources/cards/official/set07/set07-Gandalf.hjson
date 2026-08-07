@@ -232,16 +232,42 @@
 			},
 			effect: [
 				{
+					type: ChooseOpponent
+					memorize: opponent
+				}
+				// A READING, and the only card in this group whose second half
+				// is `all(...)` rather than `choose(...)`. Everywhere else on
+				// this branch, "no owner word" leaves the selection unscoped,
+				// which merely lets the chosen opponent reach further. Here an
+				// unscoped sweep would DISCARD the conditions of Shadow players
+				// the card never names -- four of them at five seats -- turning
+				// "make AN OPPONENT discard" into a table-wide effect and
+				// quadrupling the card. So both halves are scoped to the one
+				// opponent the text names.
+				//
+				// Both halves, not one: scoping only the sweep would let the
+				// opponent spare two of somebody else's conditions and still
+				// lose every one of their own.
+				//
+				// Not the same shape as 12_1 Argument Ready to Hand, whose
+				// sweep IS deliberately unscoped -- its text says "Discard from
+				// play all minions of all other races" as its own sentence,
+				// with no opponent as the subject.
+				//
+				// To reverse if the Players Council rules the sweep is
+				// table-wide: drop ownedByPlayerFromMemory(opponent) from both
+				// selects and keep the player redirection.
+				{
 					type: chooseActiveCards
-					player: shadow
+					player: fromMemory(opponent)
 					text: Choose Shadow conditions to spare, all others will be discarded
-					select: choose(side(shadow),condition)
+					select: choose(ownedByPlayerFromMemory(opponent),side(shadow),condition)
 					count: 2
 					memorize: chosenConditions
 				}
 				{
 					type: discard
-					select: all(side(shadow),condition,not(memory(chosenConditions)))
+					select: all(ownedByPlayerFromMemory(opponent),side(shadow),condition,not(memory(chosenConditions)))
 				}
 			]
 		}
@@ -571,6 +597,13 @@
 					filter: culture(rohan),companion
 					memorize: spotCount
 				}
+				// OUTSIDE the repeat, as measured on Eowyn (10_72): inside, the
+				// Free Peoples player is asked afresh for every repetition and
+				// may switch victims mid-effect. "An opponent" is chosen once.
+				{
+					type: ChooseOpponent
+					memorize: opponent
+				}
 				{
 					type: repeat
 					times: {
@@ -578,8 +611,9 @@
 						memory: spotCount
 					}
 					effect: {
+						// "exert A minion", no owner word -- unscoped.
 						type: exert
-						player: shadow
+						player: fromMemory(opponent)
 						select: choose(minion)
 					}
 				}

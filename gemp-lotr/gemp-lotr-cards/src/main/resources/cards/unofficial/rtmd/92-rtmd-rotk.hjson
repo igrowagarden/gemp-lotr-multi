@@ -1280,11 +1280,18 @@
 				select: choose(elf,companion)
 				count: 2
 			}
-			effect: {
-				type: Discard
-				player: shadow
-				select: choose(side(shadow),condition)
-			}
+			effect: [
+				{
+					type: ChooseOpponent
+					memorize: opponent
+				}
+				{
+					// "discard A Shadow condition", no owner word -- unscoped.
+					type: Discard
+					player: fromMemory(opponent)
+					select: choose(side(shadow),condition)
+				}
+			]
 		}
 		gametext: Fellowship: Exert two Elf companions to make a Shadow player discard a Shadow condition.
 		lore: ""

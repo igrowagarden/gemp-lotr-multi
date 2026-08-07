@@ -996,8 +996,14 @@
 			}
 			effect: [
 				{
+					type: ChooseOpponent
+					memorize: opponent
+				}
+				{
+					// "discard A minion", no owner word -- deliberately
+					// unscoped, as on 4_76, 10_111 and 13_143.
 					type: discard
-					player: shadow
+					player: fromMemory(opponent)
 					select: choose(minion)
 				}
 			]

@@ -133,8 +133,16 @@
 			},
 			effect: [
 				{
+					type: ChooseOpponent
+					memorize: opponent
+				}
+				{
+					// "discard X SHADOW CARDS", no owner word -- unscoped.
+					// side(shadow) stays because the text asks for it, but it
+					// is not player scoping: at five seats every opponent's
+					// cards are shadow-side.
 					type: Discard
-					player: shadow
+					player: fromMemory(opponent)
 					select: choose(side(shadow))
 					count: {
 						type: forEachKeywordOnCardInMemory
