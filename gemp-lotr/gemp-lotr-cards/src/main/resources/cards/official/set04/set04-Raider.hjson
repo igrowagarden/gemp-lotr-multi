@@ -2078,8 +2078,26 @@
 					memorizeFPCharacter: ringBearer
 					preventText: Would you like to make opponent discard a companion to prevent assigning {self} to {ringBearer}?
 					preventCost: {
+						// RULED: spotting 7 companions in the fellowship it faces
+						// lets this minion be assigned to the Ring-bearer, and the
+						// Free Peoples player may buy that off by letting THIS
+						// MINION'S CONTROLLER discard one of the fellowship's
+						// companions instead. So the discarder is the Shadow player
+						// who owns the Troop -- `shadow` was getFirstShadowPlayer,
+						// which above two seats is routinely somebody else.
+						//
+						// `owner`, not `you`: this sits in a prevent COST, and a
+						// prevention cost is appended in a context delegated to
+						// whoever accepted the offer -- the Free Peoples player.
+						// `owner` reads getSource().getOwner() and every delegate
+						// on this branch passes the source through untouched.
+						//
+						// STILL OPEN, and newly identified rather than settled: the
+						// selection is unscoped, and at five seats every seat has
+						// companions on the table. The text means the fellowship
+						// being faced. See HANDOFF item 4.
 						type: discard
-						player: shadow
+						player: owner
 						select: choose(companion,not(ringBearer))
 					}
 				}
