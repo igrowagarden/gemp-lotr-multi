@@ -145,10 +145,22 @@ const seen = preflight.askedAbout.filter((a) => a.selectorFinds > 0).map((a) => 
  */
 function normaliseOld(o) {
   const opts = o.options ?? [];
+  // A FABRICATED DIALOG CARD IS NOT A BOARD CARD. For a virtual action -- one
+  // whose source is in a discard, a deck, or is a trigger added by another card
+  // -- the reference invents a card in its EXTRA zone with a synthetic
+  // `extra<id>` and shows it in a dialog. `offers()` sees a `.card` carrying
+  // action data and reports it, so the board comparison read "old lit extra500,
+  // the new client did not" and "old has a reachable board action, we have
+  // none" -- for an action neither client puts on the board at all.
+  //
+  // Both are the same non-difference. The virtual mechanism is compared on its
+  // own terms a few lines down (dialog cards vs prompt buttons), which is where
+  // it belongs; here it only has to stop polluting the board comparison.
+  const board = opts.filter((x) => !String(x.cardId ?? "").startsWith("extra"));
   return {
     shape: o.shape,
-    cards: uniqSort(opts.map((x) => x.cardId)),
-    actions: uniqSort(opts.filter((x) => x.actionId != null).map((x) => x.actionId)),
+    cards: uniqSort(board.map((x) => x.cardId)),
+    actions: uniqSort(board.filter((x) => x.actionId != null).map((x) => x.actionId)),
     buttons: opts.filter((x) => x.actionId == null && x.text != null).map((x) => x.text)
   };
 }
