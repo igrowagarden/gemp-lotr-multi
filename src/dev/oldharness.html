@@ -187,6 +187,22 @@ window.OLD = (function () {
     // a real finger and pure noise for a driver.
     ui.selectionDebounceMs = 0;
 
+    // THE HAND GROUP IS NEVER BUILT HERE, and unguarded code assumes it is.
+    //
+    // `initializeGameUI` constructs `this.hand` as part of seating a real
+    // player; the can opener never gets that far, so `ui.hand` stays null.
+    // Several paths then call `this.hand.layoutCards()` without a guard --
+    // including the one CARD_ACTION_CHOICE's submit runs through. The throw
+    // happens AFTER finishChoice has torn the decision down and BEFORE
+    // `decisionFunction` reaches `gameDecisionMade`, so the decision vanishes
+    // and no answer is ever sent: "the old client silently refuses every card
+    // action", which is how it read for three rounds.
+    //
+    // Same Proxy trick as `chatBox` above, and for the same reason: a
+    // hand-written method list would have to be kept in step with 3000 lines we
+    // are deliberately not reading in full.
+    if (!ui.hand) ui.hand = new Proxy({}, { get: function () { return function () {}; } });
+
     ui.layoutUI(true);
     return { ok: !!ui, errors: errors.slice() };
   }

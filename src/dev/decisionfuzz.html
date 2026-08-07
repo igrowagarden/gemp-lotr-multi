@@ -238,13 +238,23 @@ function oldFinish() {
 }
 
 /** Click in the old client's document, by selector and index. */
+// Errors thrown INSIDE the old client's click handlers, which these wrappers
+// would otherwise swallow. `window.onerror` never sees them: a synchronous throw
+// from `.trigger("click")` propagates straight back into the caller, so a bare
+// `catch { return false }` turns "the handler exploded" into "there was nothing
+// to click". Those are opposite diagnoses and this page spent three rounds
+// acting on the wrong one.
+const clickErrors = [];
+
 function oldClick(selector, index = 0) {
-  try { return OLD.click(selector, index).clicked; } catch { return false; }
+  try { return OLD.click(selector, index).clicked; }
+  catch (e) { clickErrors.push(`click(${selector}): ${e.message}`); return false; }
 }
 
 /** Click without the `:visible` filter -- for cards inside a jQuery dialog. */
 function oldClickAny(selector, index = 0) {
-  try { return OLD.clickAny(selector, index).clicked; } catch { return false; }
+  try { return OLD.clickAny(selector, index).clicked; }
+  catch (e) { clickErrors.push(`clickAny(${selector}): ${e.message}`); return false; }
 }
 
 /** Everything the old client sent during `fn`, as strings. */
@@ -312,8 +322,17 @@ const DRIVE = {
       oldFinish();
       return true;
     }),
-    new: () => newSends(() => {
-      const card = $new(".card.is-eligible");
+    new: (want, ids = []) => newSends(() => {
+      // BY ID, and `.site` as well as `.card` -- the same two lessons the
+      // selection driver already learned. Taking the first eligible node meant
+      // the two clients chose different ACTIONS on a twelve-action decision
+      // (old 0, new 1), and a site action was unreachable because a site is not
+      // a `.card` node at all.
+      const sel = (id) => `.card.is-eligible[data-card-id="${id}"], ` +
+                          `.site.is-eligible[data-card-id="${id}"]`;
+      let card = null;
+      for (const id of ids) { card = $new(sel(id)); if (card) break; }
+      if (!card) card = $new(".card.is-eligible");
       if (!card) return false;
       card.click();
       const menu = document.querySelector(".actionmenu button, .actionmenu a");
@@ -455,6 +474,7 @@ function runCase(c) {
   // which is what keeps one case's `data("action")` out of the next.
   let oldN;
   const errsBefore = OLD.errors().length;
+  clickErrors.length = 0;
   try {
     OLD.feedBatch(OLD.parseEvents(dxml));
     oldN = normaliseOld(OLD.offers());
@@ -676,6 +696,10 @@ function runCase(c) {
   // Errors THIS case caused, not the running total -- the old client throws a
   // couple of benign ones at boot (a missing audio element) and an absolute
   // count buries a new fault under them.
+  if (clickErrors.length) {
+    rec.findings.push(["ERROR", `old client THREW inside a click handler: ${clickErrors[0]}`]);
+    clickErrors.length = 0;
+  }
   const errs = OLD.errors().slice(errsBefore);
   if (errs.length) rec.notes.push(`old client errors this case: ${errs.length} — ${errs.slice(-1)[0]}`);
   results.push(rec);
