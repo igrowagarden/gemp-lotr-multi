@@ -1004,8 +1004,25 @@
 					player: freeps
 					text: Would you like to liberate a site?
 					effect: {
+						// "YOU may spot 3 Men to prevent this" -- `you` on a
+						// side: Shadow card means the controller.
+						//
+						// `owner`, NOT `you`, and this is the one card in the
+						// group where that distinction bites. This preventable
+						// sits inside `Optional player: freeps`, and Optional
+						// DOES rebind the context: it builds a
+						// DelegateActionContext around its own `player:` and
+						// passes that to its effect appenders (Optional.java:58).
+						// So `you` here would resolve to the FREE PEOPLES
+						// player -- offering the Shadow player's prevention to
+						// the very player it is meant to stop.
+						//
+						// `owner` reads actionContext.getSource().getOwner(),
+						// which a delegate passes through untouched, so it
+						// names Rapt Hillman's controller whatever wrapper it
+						// is nested in.
 						type: preventable
-						player: shadow
+						player: owner
 						text: Would you like to spot 3 Men to prevent liberating site?
 						cost: {
 							type: spot

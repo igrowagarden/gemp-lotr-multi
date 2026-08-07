@@ -28,8 +28,9 @@ import static org.junit.Assert.*;
  * WHAT THE ENGINE ACTUALLY DOES WITH THE WRONG TOKEN HAD NOT BEEN MEASURED.
  * An earlier draft of HANDOFF.md asserted a consequence off a code read and had
  * to be retracted; this test exists so the next person has a measurement instead
- * of a story. It is a PROBE, not a fix: it pins whatever GEMP does today, and
- * the assertion messages dump the whole board so a failure is legible.
+ * of a story. It was written as a PROBE that pinned the bug, then INVERTED when
+ * 5_3 was converted -- so both boards have been run, and that inversion is the
+ * control behind the fix rather than a separate patched-card sweep.
  *
  * The card is Leaping Blaze (5_3), chosen because its effect is the easiest
  * thing in the game to observe -- hand sizes:
@@ -116,16 +117,16 @@ public class MultiplayerShadowMeansMeAtTest {
 
     /**
      * The acting Shadow player plays a card that says "shuffle YOUR hand", and
-     * a DIFFERENT Shadow player is the one whose hand is shuffled.
+     * is the one whose hand is shuffled.
      *
-     * This pins the bug rather than the fix -- see the block comment on the
-     * assertions. The Free Peoples player is never offered the prevention here
-     * because their hand is empty and the cost is "discard 3 cards from hand",
-     * so the effect resolves unprevented; that is why the trace shows no
-     * "prevent" step.
+     * Before 5_3 was converted this asserted the opposite and passed -- see the
+     * block comment on the assertions for both boards. The Free Peoples player
+     * is never offered the prevention here, because their hand is empty and the
+     * cost is "discard 3 cards from hand", so the effect resolves unprevented;
+     * that is why the trace shows no "prevent" step.
      */
     @Test
-    public void theWrongShadowPlayerIsTheOneAffected() throws Exception {
+    public void theActingShadowPlayerIsTheOneAffected() throws Exception {
         var scn = ThreeSeats();
 
         // Cards have to be placed BEFORE the game starts -- placing them
@@ -234,41 +235,41 @@ public class MultiplayerShadowMeansMeAtTest {
                 + " | trace: " + trace;
 
         // ------------------------------------------------------------------
-        // MEASURED BEHAVIOUR, PINNED. These assertions describe a BUG.
+        // These assertions were INVERTED when 5_3 was converted, and the
+        // inversion is the measurement. Both states were run:
         //
-        // The card is not converted yet -- fixing it is the next task -- so
-        // this test asserts what GEMP does today rather than what the card
-        // says. When `player: shadow` becomes `player: you` on 5_3, this test
-        // MUST go red, and the two assertions below simply swap seats. That is
-        // the point: it is the regression net for the fix.
+        //   before the fix (player: shadow)
+        //     acting Shadow Player  hand 1 -> 0   deck 10 -> 10   nothing
+        //     first  Third Player   hand 1 -> 8   deck 13 -> 6    everything
         //
-        // What the first green-decks run measured, at three seats, with the
-        // acting player deliberately NOT the seat getFirstShadowPlayer names:
+        //   after the fix (player: you)
+        //     acting Third Player   hand 1 -> 8   deck 13 -> 5    everything
+        //     first  Shadow Player  hand 1 -> 1   deck 10 -> 10   nothing
         //
-        //   acting Shadow Player  hand 1 -> 0, deck 10 -> 10   (untouched;
-        //                                the hand only drops by the event)
-        //   first  Third Player   hand 1 -> 8, deck 13 -> 6    (13+1 = 14
-        //                                shuffled, 8 drawn, 6 left)
+        // The seating order differs between those two runs -- the acting seat
+        // is Shadow Player in one and Third Player in the other -- which is
+        // the shuffle, and means the result does not depend on which seat drew
+        // which role.
         //
-        // Note what this is NOT. No player's hand went into another player's
-        // deck -- that is not something the game can express, and GEMP does
-        // not do it. The effect stays entirely coherent WITHIN one player; it
-        // is simply applied to the wrong player. The seat that paid the
-        // twilight and spent the card gets nothing at all, and an opponent who
-        // did nothing gets a fresh hand of eight.
+        // Be precise about what the bug was NOT. No player's hand went into
+        // another player's deck; the game cannot express that and GEMP does
+        // not do it. The effect stayed entirely coherent WITHIN one player and
+        // was simply applied to the wrong one -- the seat that paid the
+        // twilight and spent the card got nothing, and an uninvolved opponent
+        // got a fresh hand of eight.
         // ------------------------------------------------------------------
-        assertEquals("BUG, pinned: the seat getFirstShadowPlayer names is the one"
-                + " shuffled and redrawn to 8, not the player who played the card."
-                + " Flip this to `actingAfter` when 5_3 gets `player: you`. " + dump,
-                8, firstAfter);
-        assertEquals("BUG, pinned: the ACTING player's hand is not redrawn at all --"
-                + " it only loses the event itself. " + dump,
-                actingBefore - 1, actingAfter);
+        assertEquals("the ACTING Shadow player is the one shuffled away and redrawn"
+                + " to 8 -- the card says \"shuffle YOUR hand\", and on a side: Shadow"
+                + " card \"your\" is the controller. " + dump,
+                8, actingAfter);
+        assertEquals("the other Shadow player is untouched -- getFirstShadowPlayer no"
+                + " longer decides who this card affects. " + dump,
+                firstBefore, firstAfter);
 
-        // Guard against the assertion being vacuous: if the affected seat had
+        // Guard against the assertion being vacuous: if the acting seat had
         // already held 8, "redrew to 8" would prove nothing.
-        assertNotEquals("fixture is blind: the affected seat already held 8 cards, so"
+        assertNotEquals("fixture is blind: the acting seat already held 8 cards, so"
                         + " redrawing to 8 is indistinguishable from doing nothing. " + dump,
-                8, firstBefore);
+                8, actingBefore);
     }
 }

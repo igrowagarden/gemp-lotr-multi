@@ -172,6 +172,24 @@
 				source: side(Free Peoples)
 				//method omitted since we want both hinder and discard
 				effect: {
+					// LEFT AS `shadow` DELIBERATELY -- this is a Shadow-side
+					// card, so the token is wrong above two players like the
+					// rest of its group, but neither replacement works and
+					// guessing a third would be worse than leaving it.
+					//
+					// Measured, not assumed: `player: you` and `player: owner`
+					// were each tried and each broke the SAME two existing
+					// tests -- Card_V3_038_Tests
+					// .OneIllTurnHindersCompanionWhenSelfHinderedByFP and
+					// .OneIllTurnHindersFPConditionWhenSelfDiscardedByFP --
+					// with the Shadow player no longer asked anything
+					// (ShadowChooseCard got a null decision).
+					//
+					// So inside a SelfRemovedFromPlayTrigger neither the
+					// performing player nor getSource().getOwner() is the
+					// card's controller, which is its own question about that
+					// trigger's action context rather than about the
+					// Shadow-side reading. See errors.log.
 					type: Hinder
 					player: shadow
 					select: choose(side(Free Peoples), condition)

@@ -856,8 +856,15 @@
 						text: Choose another {Isengard} Orc to shuffle into its owner's draw deck.
 					}
 					{
+						// "shuffle another [Isengard] Orc into YOUR draw deck"
+						// -- on a side: Shadow card that is the controller. A
+						// sibling effect at the top of the activated ability,
+						// so the context is the original one; the
+						// `player: freeps` on the ChooseActiveCards above
+						// decides who PICKS the Orc and does not wrap its
+						// siblings.
 						type: ShuffleCardsFromPlayIntoDrawDeck
-						player: shadow
+						player: you
 						select: memory(shuffledOrc)
 					}
 					{

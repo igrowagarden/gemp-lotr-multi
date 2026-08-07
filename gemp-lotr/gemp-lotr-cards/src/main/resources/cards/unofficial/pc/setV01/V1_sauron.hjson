@@ -178,8 +178,17 @@
 			{
 				type: event
 				effect: {
+					// "...to CHOOSE ONE" -- the Shadow player who played this
+					// event picks, not whichever seat getFirstShadowPlayer
+					// names. The choice is a top-level effect of the event, so
+					// the context is the original one and `you` is the player
+					// performing the action.
+					//
+					// Neither branch needs a player of its own: both are
+					// addModifier, and Choice delegates the branch effects to
+					// whoever `player:` names anyway.
 					type: choice
-					player: shadowPlayer
+					player: you
 					texts: [
 						Make the move limit -1
 						Make the free peoples player choose to move again

@@ -1402,7 +1402,18 @@
 								effects: [
 									{
 										type: revealTopCardsOfDrawDeck
-										deck: shadow
+										// The "Reveal card from YOUR deck" branch, on a
+										// side: Shadow card -- so `deck: shadow` meant the
+										// controller's own deck, and above two players it
+										// named a DIFFERENT Shadow player's. The other
+										// branch says `deck: fp`, which stays correct at any
+										// seat count -- there is only one Free Peoples player.
+										//
+										// NOT fixed here: the card says "any draw deck" but
+										// offers a two-option fork, so above two players it
+										// cannot reach the other opponents' decks at all.
+										// That is its own task.
+										deck: you
 										memorize: revealedCard
 									}
 									{
@@ -1410,7 +1421,7 @@
 										text: Would you like to put {revealedCard} beneath your deck?
 										effect: {
 											type: putCardsFromDeckOnBottomOfDeck
-											deck: shadow
+											deck: you
 											select: memory(revealedCard)
 											reveal: true
 										}

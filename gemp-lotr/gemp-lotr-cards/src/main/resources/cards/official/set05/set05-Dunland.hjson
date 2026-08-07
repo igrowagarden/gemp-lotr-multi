@@ -138,14 +138,31 @@
 						count: 3
 					}
 					effect: [
+						// "shuffle YOUR hand into YOUR draw deck and draw 8" --
+						// on a side: Shadow card, `shadow` was written to mean
+						// the controller, and getFirstShadowPlayer names a seat
+						// counter-clockwise from the Free Peoples player
+						// without ever consulting the controller.
+						//
+						// MEASURED at three seats before this fix
+						// (MultiplayerShadowMeansMeAtTest): the whole effect
+						// landed on the seat the token named, so the player who
+						// paid the twilight got nothing and an uninvolved
+						// opponent was dealt a fresh hand of eight.
+						//
+						// `you` is safe HERE specifically: PreventableEffectAppender
+						// passes the original actionContext to the effect
+						// appenders and only builds a delegate for the COST and
+						// INSTEAD branches. Contrast 15_90, whose prevention
+						// sits inside an Optional that does rebind the context.
 						{
 							type: shuffleHandIntoDrawDeck
-							player: shadow
+							player: you
 						}
 						{
 							type: drawCards
 							count: 8
-							player: shadow
+							player: you
 						}
 					]
 				}

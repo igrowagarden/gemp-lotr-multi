@@ -188,8 +188,15 @@
 				type: activated
 				phase: shadow
 				cost: {
+					// "Shadow: Remove a companion in the dead pile from the
+					// game to control a site" -- on a side: Shadow card, the
+					// actor is the bearer's controller. `player:` names who
+					// performs, not whose dead pile; the companions belong to
+					// the Free Peoples player either way.
+					//
+					// A cost, so the token must pre-evaluate. `you` does.
 					type: removeCardsInDeadPileFromGame
-					player: shadow
+					player: you
 					select: choose(companion)
 				}
 				effect: {
@@ -787,8 +794,15 @@
 				type: activated
 				phase: maneuver
 				cost: {
+					// "Liberate a site YOU CONTROL" -- on a side: Shadow card
+					// that is the controller, not whichever seat
+					// getFirstShadowPlayer names. At five seats `shadow` would
+					// let Ted Sandyman liberate a site ANOTHER Shadow player
+					// controls, and pay for his own bonus with their board.
+					//
+					// The only `controller:` token in the whole card pool.
 					type: liberateSite
-					controller: shadow
+					controller: you
 				}
 				effect: {
 					type: modifyStrength
