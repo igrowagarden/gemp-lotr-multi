@@ -269,9 +269,16 @@
 			{
 				type: modifier
 				modifier: {
+					// "in ANY Shadow player's hand" -- a group, not a seat.
+					// `hand: shadowPlayer` protected only whichever seat
+					// getFirstShadowPlayer named, so above two players the
+					// other opponents' hands stayed as readable as before.
+					//
+					// `player:` stays `fp`: the card restricts one player
+					// from looking, and there is only ever one of those.
 					type: cantLookOrRevealHand
 					player: fp
-					hand: shadowPlayer
+					hand: anyShadow
 				}
 			}
 		]
