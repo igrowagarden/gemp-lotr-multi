@@ -73,7 +73,19 @@
 		effects: {
 			type: responseEvent
 			trigger: {
+				// "If an event is played ... make THAT OPPONENT ..." -- so it
+				// responds to an OPPONENT's event. GEMP never enforced that: the
+				// trigger fired on the controller's own events too, which was
+				// invisible while `player: shadow` sent the consequence to a
+				// fixed seat regardless of who had played anything.
+				//
+				// A READING as well as a fix. At two players this stops the card
+				// responding to your own event, which it could do before. The
+				// printed text supports it and nobody would want the old
+				// behaviour, but it is a rules call rather than a refactor --
+				// flagged for the Players Council.
 				type: played
+				player: anyShadow
 				filter: event
 				memorize: playedEvent
 			}

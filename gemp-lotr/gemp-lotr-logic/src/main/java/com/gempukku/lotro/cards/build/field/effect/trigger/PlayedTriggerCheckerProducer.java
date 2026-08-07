@@ -38,7 +38,15 @@ public class PlayedTriggerCheckerProducer implements TriggerCheckerProducer {
         // Not sure about that assertion.  The vast majority are "when you play this" triggers, which has a "you" but
         // that's an instruction to the acting player and not an assertion that it isn't in force if your opponent
         // somehow plays the card for you.
-        PlayerSource playerSource = player != null ? PlayerResolver.resolvePlayer(player) : null;
+        // `player:` names a GROUP. The Board Is Set (7_32) responds to "an event
+        // is played" and then acts on "that opponent", so it must fire only on
+        // an OPPONENT's event -- and no single token says that above two seats.
+        //
+        // resolvePlayers wraps every single-player token as a one-element list,
+        // so the twenty existing users (eighteen `you`, two `free people`) are
+        // untouched. Same one-word widening as cantLookOrRevealHand and
+        // DefaultActionSource.isValid.
+        PlayersSource playerSource = player != null ? PlayerResolver.resolvePlayers(player) : null;
 
         return new TriggerChecker() {
             @Override
@@ -53,8 +61,9 @@ public class PlayedTriggerCheckerProducer implements TriggerCheckerProducer {
                 if (played) {
                     var playCardResult = (PlayCardResult)actionContext.getEffectResult();
 
-                    String playerId = playerSource != null ? playerSource.getPlayer(actionContext) : null;
-                    if (playerId != null && !playerId.equals(playCardResult.getPerformingPlayerId()))
+                    if (playerSource != null
+                            && !playerSource.getPlayers(actionContext)
+                                    .contains(playCardResult.getPerformingPlayerId()))
                         return false;
 
                     if (exertsRanger && playCardResult instanceof PlayEventResult && !((PlayEventResult) playCardResult).isRequiresRanger())
