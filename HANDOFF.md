@@ -1713,6 +1713,62 @@ inventing a verdict — read the SKIP line, it names which.
 
 ## Open
 
+- **BACKLOGGED: a nightly over the whole harness set.** Everything is controlled
+  now and the lock makes concurrent runs safe, so an unattended run would
+  accumulate evidence instead of one-off green. Not started; this is the recipe
+  so picking it up is assembly rather than rediscovery.
+
+  Deploy once, then run in this order — cheap and deterministic first, so a
+  break is reported in two minutes rather than forty:
+
+      bash harness/sync.sh          # ONCE, before anything. Never during.
+
+      # ~seconds each, no server game needed
+      tests.html + the twelve *check.html suites   (see "Running the tests")
+      bash harness/pilerun.sh
+      bash harness/logrun.sh
+      bash harness/inforun.sh
+      bash harness/zoomrun.sh
+      bash harness/replayrun.sh
+      bash harness/optsrun.sh
+
+      # ~20 min, the long pole
+      bash harness/fuzzrun.sh
+
+      # need the server, bots and recordings
+      bash harness/diffrun.sh 12 40
+      bash harness/livediffrun.sh 4 70
+      SABOTAGE=perturb bash harness/livediffrun.sh 1 60
+      SABOTAGE=badcard bash harness/livediffrun.sh 1 60
+      cd harness && python autopassmeasure.py --game NNN --only C ...
+
+  Every one of those exits non-zero on failure **except** `autopasscheck` and
+  `autopassmeasure`, which need arguments a nightly has to supply:
+
+  - `autopasscheck` needs `?gameId=` and a login or it SKIPs its measured half
+    and still says ALL PASS. Take a live gameId from the hall first.
+  - `autopassmeasure` needs its own fresh game per run (`seat_table.sh 3 asdf
+    qwer Librarian`), because two halves against one game compare different
+    parts of it.
+  - `wirecheck` stalls for ever over HTTP; run it from disk or copy
+    `dev/live_capture.xml` across for the run.
+  - `cardstatecheck` must NOT get the CDN block; every other page must.
+
+  Three things the nightly should assert rather than eyeball, because each has
+  already been mistaken for success in this project:
+
+  1. `RESULT: ALL PASS \([0-9]+\)` — a bare grep for `FAIL` or `RESULT:`
+     matches the pages' own source.
+  2. Controls FIRED. `fuzzrun`, `pilerun`, `inforun` and `optsrun` check their
+     own scope tables; `livediffrun` needs the `CONTROL` lines read — watch for
+     `CONTROL HOLES` and for `CONTROL UNSEEN`, which names types this run did
+     not prove.
+  3. No run produced NO RESULT. A dead page is not a pass, and it is what
+     `sync.sh` running concurrently used to cause.
+
+  Housekeeping it should also do: `harness/cleanhall.sh`, or the hall grows and
+  silently adds minutes per game to `seat_table.sh`.
+
 - **BACKLOGGED: the reference executes `<script>` in a log message.**
   `REFERENCE_SCRIPT_EXECUTION.md` is the write-up, and it is written
   upstream-ready so filing it later is a copy rather than a rewrite.
