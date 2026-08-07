@@ -352,7 +352,13 @@ const DRIVE = {
     old: (want = 1, ids = []) => oldSends(() => {
       let n = 0;
       for (const id of ids.slice(0, want)) {
-        if (oldClick(`.card:cardId(${id}) .actionArea`, 0)) n++;
+        // Unfiltered, exactly as the card-action driver does. HAND cards have no
+        // layout in the can opener -- the hand group is never built -- so
+        // `:visible` rejected every one of them and four cases reported "the old
+        // client could not be driven". The client's own gate is the class, not
+        // visibility (gameUi.js:832), so filtering here was the harness adding a
+        // condition the client does not have.
+        if (oldClickAny(`.card:cardId(${id}) .actionArea`, 0)) n++;
       }
       if (!n) return false;
       oldFinish();
