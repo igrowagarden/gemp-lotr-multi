@@ -12,6 +12,16 @@ behaviour.
 the harness answering a `CARD_SELECTION` that asked for `max=0` cards. Fixed and
 verified. See "The CARD_SELECTION rejections: SOLVED".
 
+**There is now a git repository here.** Two commits. See "Version control,
+finally".
+
+**The newest instrument is `src/dev/decisionfuzz.html`** -- a differential over
+DECISION SHAPES rather than over games. It found four real client bugs in an
+afternoon, after 400 games overnight found none. Read "The decision-space
+differential" before running another soak: the lesson is that volume and
+coverage are different things, and this project had been buying the wrong one.
+It also leaves two decision types NOT COMPLETING -- see the same section.
+
 **This header used to say "no client code written yet" and was a full session
 out of date.** If you are reading this after a crash, trust file mtimes over
 prose: `find . -type f -newermt "<when>" -printf "%TH:%TM %p\n" | sort` is how
@@ -45,9 +55,24 @@ main repo's history, which is more coupling than wanted for now. Both the branch
 and the worktree were removed and `gemp_multiplayer` was restored to exactly the
 state it was found in — `main` at `ad12dfe`, one branch, clean tree.
 
-**There is no version control here.** No history, no undo. That is fine at four
-files and will stop being fine; `git init` in this directory would still keep
-the project separate from both repos, since it would share nothing with either.
+### Version control, finally
+
+**There is a git repository here now**, created after ~50 source files and
+thirteen suites had accumulated with no undo. It shares nothing with either GEMP
+repo, which is the whole point: the project stays detached while stopping being
+unrecoverable.
+
+    4c44d79  Initial commit: five-player GEMP board client, harness and docs
+    f2fb788  Instrument the fuzz loop; localise the button-driver hang
+
+One thing it does NOT buy, and the reason it should have existed sooner: **the
+baseline captures the state at the end of the session that created it**, broken
+driver included. It cannot bisect the regression that prompted it. Half a day
+went into chasing a fault with nothing to diff against; the repository prevents
+the next one, not that one.
+
+Commit before editing `src/dev/oldharness.html`. It is the shared oracle for
+three pages and was edited five times in a single session below.
 
 **We have our own GEMP server.** No coordination needed any more.
 
@@ -281,7 +306,22 @@ obvious next move.
 
 **Next**, in the order they are worth doing:
 
-0. **Make rejection counts trustworthy.** Decision ids are not unique -- 22 call
+0. **Unbreak the fuzzer's BUTTON driver.** `MULTIPLE_CHOICE` and `ACTION_CHOICE`
+   do not complete; the hang is the first case through it. Revert `clickAny`
+   and re-test `yes/no` -- one change, one question. See "The decision-space
+   differential / KNOWN BROKEN". Until this is closed, do not trust
+   `oldharness.html` for a live run either: it is the same oracle.
+
+0b. **Close the last two answer call sites.** `cardActionChoiceDecision` (2523)
+   and the bare-pass path (2478) are the only ones never driven to send. The
+   lead: it calls `attachSelectionFunctions(cardIds, false)` where
+   `cardSelectionDecision` passes `true`. After that every decision type has an
+   end-to-end answer comparison and "0 diffs" starts meaning what it sounds like.
+
+0c. **A per-type runner.** `harness/fuzzrun.sh`, looping `?only=<TYPE>` and
+   aggregating -- the 47-case run no longer fits one browser pass.
+
+0d. **Make rejection counts trustworthy.** Decision ids are not unique -- 22 call
    sites pass `1` -- so "a warning arrived AND the same decision id was asked
    again" counts unrelated warnings as rejections. Match on the decision's
    identity. And **add a negative control per decision type**: today only
@@ -292,9 +332,7 @@ obvious next move.
    machine; nothing has been driven by a human through the real UI. Sit at
    `live.html?...&participantId=asdf` and play a card, use a card with two
    abilities, and reach an assignment.
-2. **`git init` here.** Still no version control, now across ~40 source files
-   and twelve suites. One bad edit or one crashed context loses work that took
-   hours to derive from the engine. It stays separate from both GEMP repos.
+2. ~~**`git init` here.**~~ **Done.** See "Version control, finally".
 3. **Auto-pass** — the reference auto-passes a CARD_ACTION_CHOICE with no
    eligible cards. In a five-player game you pass constantly.
 4. **Parallel differential runs.** Games are independent, but all five seats use
@@ -370,6 +408,7 @@ slightly lively board, not a bug.
 | `src/dev/pregamecheck.html` | pre-game panel, and meta-site modifiers drawn as the site they modify (14) |
 | `src/dev/cardstatecheck.html` | inactive cards, errata marks, and drag-to-reorder within a row (13) |
 | `src/dev/statcheck.html` | stat badge alignment — reports **measured** geometry, not a verdict |
+| `src/dev/decisionfuzz.html` | the decision SHAPE space, against the old client — offers *and* answers. Not an assertion suite: it reports DIFF/KNOWN per shape |
 
 All twelve assertion suites run the same way (see "Running the tests"); expect
 `ALL PASS`. Grep for `RESULT: ALL PASS \([0-9]+\)` rather than `RESULT:` — the
@@ -1124,8 +1163,18 @@ wrong by assumption:
 - **`selectable` is a parallel `"true"`/`"false"` array. Shown is not
   selectable.** "Look at an opponent's hand and discard a Shadow card" shows the
   whole hand and lets you pick part of it; the engine rejects a response naming
-  an unselectable card. Absent entirely, everything shown is selectable — that
-  is the two-argument constructor passing the same collection twice.
+  an unselectable card. **It is never absent.** This file previously claimed that
+  an absent `selectable` means everything shown is selectable, "the two-argument
+  constructor passing the same collection twice". The constructor does pass the
+  collection twice -- but it delegates, `this(id, text, physicalCards,
+  physicalCards, min, max)`, to the six-argument form, and ALL THREE
+  constructors call `setParam("selectable", ...)`. The parameter is always on
+  the wire; the two-argument case arrives as an all-`"true"` array. The old
+  client requires the literal string (`if (selectable[i] == "true")`) and so
+  selects nothing when the array is missing -- correct behaviour for input it
+  cannot receive. Checked in
+  `ArbitraryCardsSelectionDecision.java:17-45` after `decisionfuzz.html`
+  reported a difference on a shape that turned out to be unreachable.
 - **`min`/`max` bound the count**, and outside them the engine throws
   `DecisionResultInvalidException`. An empty answer is legal **only** when min is
   0, so "Pass" must not be offered above it.
@@ -1390,6 +1439,186 @@ from `file://`.
 - **Pile access for spectators** should follow the `discardPublic` flag on the
   `PARTICIPANTS` event, not be hidden wholesale — in formats with public
   discards a spectator may browse them.
+
+---
+
+## The decision-space differential
+
+`src/dev/decisionfuzz.html` + `src/dev/decisionshapes.js`. **No server, no bots,
+no game.** ~15s per decision type, deterministic, from disk state only.
+
+    bash harness/sync.sh
+    # NOTE the CDN block -- see the traps below. Without it the run never ends.
+    chrome --headless --disable-gpu \
+      --host-resolver-rules="MAP i.lotrtcgpc.net 127.0.0.1, MAP lotrtcg2e.club 127.0.0.1, EXCLUDE localhost" \
+      --user-data-dir=SOMEWHERE --dump-dom --virtual-time-budget=25000 \
+      "http://localhost:17002/gemp-lotr/newclient/dev/decisionfuzz.html?only=CARD_SELECTION"
+
+`?only=<TYPE>` runs one type -- **use it**, the full 47-case run no longer fits
+one browser pass. `?sabotage=dropoffer` and `?sabotage=phantom` are the negative
+controls and must report DIFFs (they fired at 23 and 32 against a baseline of 2).
+
+### Why it exists
+
+The overnight soak was 400 games and 2000 decks across all seven formats and came
+back completely clean -- while the `max=0` bug it was meant to confirm was **never
+once exercised**. Measuring afterwards found 59 `CARD_SELECTION` decisions across
+six formats and not one with `max=0`.
+
+That is structural, not bad luck. The GAME state space is astronomical; the
+DECISION SHAPE space is tiny -- eleven parameter names across eight engine
+decision classes. Sampling games to reach shapes buys volume where coverage was
+needed. **Stop sampling game space; enumerate decision space.**
+
+### Where the shapes come from
+
+Not invented. The `setParam` calls in `gemp-lotr-logic/.../logic/decisions/` give
+the complete parameter alphabet -- `actionId actionText blueprintId cardId
+defaultValue freeCharacters max min minions results selectable`, eleven names --
+and the conditionals inside each validator give the boundary cases. `max=0` is
+one of those conditionals; it was in the source the whole time.
+
+**The second axis is PLACEMENT**, and it is what makes this a GUI test rather
+than a protocol test. Actions on ATTACHED cards and actions on SITES were both
+unreachable once, and both were IDENTICAL decision shapes on the wire -- what
+differed was where the card was drawn. `WHERE` in `decisionshapes.js` gives one
+card per placement class: in play, support, minion, attached-to-host, hand, site,
+and one id present nowhere.
+
+### What it found, in an afternoon
+
+Four real client bugs, all fixed and verified end to end:
+
+| bug | evidence |
+|---|---|
+| `defaultValue` ignored on INTEGER | the reference pre-fills from it (`gameUi.js:2079-2081`); we opened on `min`. Invisible to the live differential, whose INTEGER answers are self-compared |
+| Sites never lit for `CARD_SELECTION` | `panels.js` gated eligibility on `isActionChoice(d)`. "action on a SITE" passed while "selects a SITE" did not |
+| Empty `MULTIPLE_CHOICE` offered a dead button | it sent index `"0"` into an empty list -- a control whose only outcome is a rejection |
+| **`min`/`max` unenforced when sending** | Confirm sent `chosen.join(",")` with no bounds check and Pass sent `""` unconditionally, so a `max=0` decision could be answered with a card id and a `min=1` decision with nothing. The engine throws on both (`CardsSelectionDecision:40-49`) |
+
+The last one is the important one. It survived 400 games because an OFFER
+comparison structurally cannot see it: both clients light the card, because the
+engine still lists it. Only driving the answer exposes it.
+
+### Offers are not enough: drive the handlers
+
+The old client's whole answer surface is nine `decisionFunction` call sites across
+seven handlers. Comparing what each client OFFERS catches "the player cannot reach
+the answer"; it does not catch "the player reaches it and we encode it wrong", and
+three of the seven types answer with something other than the card ids picked.
+
+**Seven of nine call sites are now confirmed reached by observed sends.**
+Remaining: `cardActionChoiceDecision` (2523) and the bare-pass path (2478). The
+lead on the first is that it calls `attachSelectionFunctions(cardIds, false)`
+where `cardSelectionDecision` passes `true`.
+
+Two rules the drivers had to learn, both of which manufactured false findings
+first:
+
+- **Point both clients at the same card ID.** Taking "the first eligible card" on
+  each side picks a DIFFERENT card, because the two lay the board out
+  differently. That alone produced a column of "ANSWERS DIFFER".
+- **A design difference must never excuse an ENCODING difference.** The
+  assignment cases were marked `expect: "design"` for how they are drawn, and
+  that marking was quietly covering a different string going on the wire.
+
+### `expect` vs `equivalent`
+
+`expect` means "these differ by intent" -- presentation only. `equivalent` means
+"these send different strings and the ENGINE parses both to the same thing", and
+it requires a source citation. The report refuses to mark an `ANSWERS DIFFER`
+finding as known unless the case carries `equivalent`.
+
+The one case carrying it: assignment answers, where the reference sends
+`"120 110,101"` (a group per companion, assigned or not) and we send `"120 110"`.
+`PlayerAssignMinionsDecision:36-53` splits on `,` then ` ` and gives a lone
+companion id an empty minion set, so both build the same assignment. Not a bug --
+but only checking said so.
+
+### KNOWN BROKEN
+
+`MULTIPLE_CHOICE` and `ACTION_CHOICE` **do not complete**. The hang is the first
+case through the shared `BUTTON` driver (`MULTIPLE_CHOICE — yes/no`); the per-case
+progress line in the run output names it. Both passed earlier in the session. The
+debounce override was excluded by reverting it, so the suspect is `clickAny` or
+the driver itself.
+
+Green: `ASSIGN_MINIONS` 5/5, `INTEGER` 5/5, `ARBITRARY_CARDS` 6/7,
+`CARD_SELECTION` 9/13 -- the four are hand cards, which the old client does not
+respond to clicks on in this harness. An environment limit, not a difference.
+
+### Five edits to the shared oracle, and why each was needed
+
+`oldharness.html` is the oracle for `diff.html`, `livediff.html` AND
+`decisionfuzz.html`. **Do not run a live differential until the hang above is
+resolved.** The first three are well-evidenced fixes that made it more faithful;
+the last two are the suspects.
+
+1. **`offers()` ignored the client's own click gate.** It read `data("action")`;
+   `gameUi.js:832` acts on a click only when the card carries `selectableCard` or
+   `actionableCard`. `clearSelection` nulls the data only on elements still
+   carrying one of those classes, so a host card with an attachment kept a stale
+   action array for ever and the oracle INVENTED offers. Live runs rarely hit it,
+   because board events between decisions recreate the elements.
+2. **`offers()` could not see the dropdown.** `multipleChoiceDecision` switches to
+   a `<select>` above two options (`gameUi.js:2121`), so counting buttons reported
+   "1 option" for a ten-way choice.
+3. **Native modals were an uncut wire.** `assignMinionsDecision`'s Done calls
+   `confirm(...)` when a minion is unassigned (`gameUi.js:2892`). Headless nobody
+   answers and the page stops dead -- `--dump-dom` returns ZERO BYTES, which reads
+   as a crash rather than as a question.
+4. **`clickAny`**, an unfiltered click. jQuery calls an element visible only when
+   it has layout, and cards inside `cardActionDialog` have none headlessly, so
+   every `CARD_ACTION_CHOICE` and `ARBITRARY_CARDS` card was refused.
+5. **`selectionDebounceMs = 0`.** `gameUi.js:834-840` ignores a repeat click on
+   the same card id within a window, to stop a touch device double-firing. Cases
+   run milliseconds apart reusing the same card, so it swallowed most clicks and
+   the run read as "the old client sent nothing".
+
+### Traps this page paid for
+
+- **Block the card-art CDN or the run never ends.** Chrome's virtual clock is
+  paused while any request is pending, so unresolved image loads freeze it -- the
+  same trap as the long poll and `handshake=1`, in a new place.
+- **But do NOT use that flag for `cardstatecheck.html`.** Blocked images change
+  card geometry and that suite measures drag distances in pixels; it fails 2 of 18
+  under the flag and passes without it. **The flag is per-suite.** Two failures
+  were briefly blamed on a client change that had nothing to do with them.
+- **"Reset choice" sits BEFORE "Done".** `processButtons` (`gameUi.js:2815`)
+  appends them in that order, so clicking `alertButtons` by index CLEARS the
+  selection instead of submitting it. Target `#Done` by id.
+- **`boot()` is not idempotent.** It resets by assigning `#main`'s innerHTML to
+  itself, which after the first boot re-parses the GENERATED UI. Booting per case
+  gave 2 errors on the first and 22 on every one after, with the oracle offering
+  nothing from case two onward -- every "DIFF" in that run was the harness
+  breaking its own oracle. Boot once; `feedBatch` already runs `cleanupDecision`
+  before every event.
+- **`targetType` is not optional in a fixture.** `EventSerializer` writes it in
+  the same branch as `targetCardId` (`:37-40`) and the reducer sets `attachedTo`
+  only on `type === "attached"`. Written without it the attached card had no host
+  and the suite reported "the new client never lights an attached card" for three
+  cases. That was the fixture. Same lesson as the sites that carried
+  `blueprintId="site_1"`.
+- **PREFLIGHT, ALWAYS.** The page refuses to report anything unless the oracle
+  demonstrably holds the board, because "old offers nothing, new offers something"
+  reads exactly like the new client inventing options. The first run of this page
+  produced ~40 confident findings that were all the harness breaking its oracle.
+
+### The honest measure
+
+`decisionfuzz` covers decision SHAPES. It does not cover:
+
+- whether an answer would be **accepted** -- no engine in the loop. That stays
+  `livediffrun.sh`'s job. Breadth here, verdict there; neither replaces the other.
+- branches INSIDE the seven handlers.
+- everything that is not a decision -- piles, zoom, card info, chat, the game log,
+  replay controls, drag-to-reorder, concede, spectating, detached boards.
+
+And the number that tracks convergence is not the diff count, it is the
+**discovery rate**. 400 games found nothing; the shape catalogue found three bugs
+in an hour; driving the handlers found a fourth immediately. Every new instrument
+has found something within hours of existing. Convergence looks like a new
+instrument coming back empty, and that has not happened yet.
 
 ---
 
