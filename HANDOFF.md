@@ -1535,24 +1535,60 @@ The one case carrying it: assignment answers, where the reference sends
 companion id an empty minion set, so both build the same assignment. Not a bug --
 but only checking said so.
 
-### KNOWN BROKEN
+### It presented as a hang; it was an exception
 
-`MULTIPLE_CHOICE` and `ACTION_CHOICE` **do not complete**. The hang is the first
-case through the shared `BUTTON` driver (`MULTIPLE_CHOICE — yes/no`); the per-case
-progress line in the run output names it. Both passed earlier in the session. The
-debounce override was excluded by reverting it, so the suspect is `clickAny` or
-the driver itself.
+`MULTIPLE_CHOICE` and `ACTION_CHOICE` did not complete for a while, and this
+file previously blamed `clickAny` and the touch debounce. **Both were innocent.**
+The button branch still called `oldClicks`/`newClicks`, helpers replaced by the
+DRIVE table and left behind; `ReferenceError` on the first case killed the loop.
+Because the report only renders once the loop finishes, the page came out
+carrying a passing preflight and nothing else -- which is what a hang looks like
+too.
 
-Green: `ASSIGN_MINIONS` 5/5, `INTEGER` 5/5, `ARBITRARY_CARDS` 6/7,
-`CARD_SELECTION` 9/13 -- the four are hand cards, which the old client does not
-respond to clicks on in this harness. An environment limit, not a difference.
+Two things came out of it, both kept:
+
+- **The loop catches per case.** A case that throws is recorded as `ERR` and the
+  run continues. Losing forty-six results to one bad case is how a suite becomes
+  something people stop running.
+- **A progress line prints BEFORE each case.** It is what finally separated
+  "stopped" from "slow", and it survives in the dumped DOM.
+
+The generalisable bit: **an uncaught error and a hang are indistinguishable from
+outside a headless run.** Three rounds went into reverting the wrong suspects
+because the symptom had already been named "hang" and the name was never
+questioned.
+
+Fixing it exposed a real oracle defect underneath. `multipleChoiceDecision` has
+TWO renderings -- a `<select>` above two options, one `<button>` per option at
+two or fewer (`gameUi.js:2121`). `offers()` found the select by the explicit id
+it carries, but looked for the buttons via `#smallDialog` and `:visible`, and
+neither holds headlessly: the buttons are appended straight into `smallDialog`,
+whose node has no such id and is never visible. So a ten-way choice was read
+correctly while **yes/no reported zero options** -- the commonest decision shape
+in the game, measured through the broken path. It now asks `ui.smallDialog` for
+its own buttons.
+
+### Per-type status
+
+    ASSIGN_MINIONS  5/5     INTEGER  5/5     MULTIPLE_CHOICE  5/5
+    ARBITRARY_CARDS 6/7     CARD_SELECTION  9/13
+    ACTION_CHOICE   0/1     CARD_ACTION_CHOICE  4/11
+
+Controls fire at 11 and 13 over `CARD_SELECTION`'s 13 cases.
+
+`CARD_SELECTION`'s four are hand cards, which the old client does not respond to
+clicks on in this harness -- an environment limit, not a difference. The
+`ARBITRARY_CARDS` one is a marker-tagging cosmetic. **`CARD_ACTION_CHOICE` is the
+real remaining gap** and holds the last unreached answer call site (2523); the
+lead is that it calls `attachSelectionFunctions(cardIds, false)` where every type
+that submits cleanly goes through the `true` path.
 
 ### Five edits to the shared oracle, and why each was needed
 
 `oldharness.html` is the oracle for `diff.html`, `livediff.html` AND
-`decisionfuzz.html`. **Do not run a live differential until the hang above is
-resolved.** The first three are well-evidenced fixes that made it more faithful;
-the last two are the suspects.
+`decisionfuzz.html`. **Re-run `diffrun.sh`'s negative control before trusting a live
+run against it again** -- five edits is enough to want the control seen firing. All five are evidenced fixes; the two that were briefly suspected of
+causing the "hang" above were not responsible for it.
 
 1. **`offers()` ignored the client's own click gate.** It read `data("action")`;
    `gameUi.js:832` acts on a click only when the card carries `selectableCard` or
