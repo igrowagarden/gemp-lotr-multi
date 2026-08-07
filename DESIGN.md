@@ -110,6 +110,26 @@ returns nothing and `EventSerializer` never writes it. Populating and serialisin
 it is small and self-contained. Until then, opponents' support areas render
 unfiltered and say so.
 
+**A filtered band still shows a card carrying SOMEBODY ELSE'S attachment.**
+The filter puts away *the focused seat's own cards*. A Shadow condition on their
+companion is not one of those — it is yours, sitting on theirs — and hiding the
+companion took your own card off the screen at exactly the moment you asked to
+see the shadow side. It cannot be shown detached either: a possession means
+"this, on that", and a condition floating without the companion it afflicts is
+worse than hidden. So the HOST is kept with it, the rest of the band is put away
+as before, and the band says how many.
+
+The rule is deliberately narrow — a rider owned by the host's own player changes
+nothing, so The One Ring on its bearer filters exactly as it always did. It also
+needs no side information, which matters: `ATTACHED` carries `side: null` and
+would otherwise be blocked behind the same `_side` gap as support areas. Owner
+inequality is the whole test.
+
+Found by `src/dev/attachcheck.html`, which was the first thing in this project
+to exercise a cross-side attachment at all — `fixture.js` had none, and every
+attachment in `live_capture.xml` is The One Ring on its own owner's ring-bearer.
+There is no oracle for this: the reference has no such filter.
+
 ### Skirmishes suspend the focus
 
 A skirmish involves minions from several seats at once, so focus is suspended and

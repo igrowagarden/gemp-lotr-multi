@@ -280,9 +280,29 @@ export function createBoard(root, store, options = {}) {
       band.appendChild(el(doc, "span", "band-empty", spec.empty));
       return band;
     }
+    // A filtered band hides its cards -- but NOT one carrying an attachment
+    // that belongs to somebody else.
+    //
+    // The filter's job is to put away the side of the FOCUSED SEAT'S OWN cards
+    // you are not thinking about. A Shadow condition on an enemy companion is
+    // not that seat's card at all; it is yours, sitting on theirs. Hiding the
+    // companion took your own card off the screen at exactly the moment you
+    // asked to see the shadow side, which is backwards.
+    //
+    // It cannot be shown on its own either -- a possession means "this, on
+    // that", and a condition floating without the companion it afflicts is
+    // worse than hidden. So the HOST is kept, and the rest of the band is put
+    // away as before.
+    let hidden = [];
     if (dim) {
-      band.appendChild(el(doc, "span", "band-empty", `${cards.length} hidden`));
-      return band;
+      const carriesForeign = (c) =>
+        (attachedBy?.get(c.cardId) ?? []).some((r) => r.owner !== c.owner);
+      hidden = cards.filter((c) => !carriesForeign(c));
+      cards = cards.filter(carriesForeign);
+      if (!cards.length) {
+        band.appendChild(el(doc, "span", "band-empty", `${hidden.length} hidden`));
+        return band;
+      }
     }
 
     const row = el(doc, "div", "row");
@@ -388,6 +408,12 @@ export function createBoard(root, store, options = {}) {
       }
     }
     band.appendChild(row);
+    // Say what is still put away, or a band showing one companion under a
+    // filter reads as a band with one companion in it.
+    if (hidden.length) {
+      band.appendChild(el(doc, "span", "band-empty",
+        `${hidden.length} hidden — showing what carries another player's card`));
+    }
     return band;
   }
 

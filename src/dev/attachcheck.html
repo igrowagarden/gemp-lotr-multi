@@ -173,14 +173,32 @@ note(`filter -> the cross-side rider: ${JSON.stringify(dimming)}`);
 // so this is this client's own corner case, and it is recorded rather than
 // quietly changed. Changing it is a DESIGN decision (DESIGN.md owns the filter)
 // and needs `_side` or a per-card rule to do properly.
-ok("the filter HIDES a cross-side attachment along with its host",
-   dimming.shadow === "not drawn" && dimming.all === "lit", JSON.stringify(dimming));
-ok("the measurement can report both states, so the table above means something",
-   new Set(Object.values(dimming)).size > 1, JSON.stringify(dimming));
-note("A Shadow condition on an enemy companion vanishes under the Shadow");
-note("filter, because it rides a card in a band the filter hides. Recorded,");
-note("not fixed: the filter's semantics are DESIGN.md's to decide, and doing");
-note("it per-card needs the side info GameEvent._side never populates.");
+// THE RULE, now decided and implemented (DESIGN.md, "Filtering opponents by
+// side"): a filtered band still shows a card CARRYING AN ATTACHMENT OWNED BY
+// SOMEBODY ELSE. The filter puts away the focused seat's OWN cards; a Shadow
+// condition on their companion is not theirs, it is yours, and hiding the
+// companion took your own card off the screen at the moment you asked to see
+// the shadow side. It cannot be shown detached either -- a possession means
+// "this, on that" -- so the host is kept and the rest of the band is put away.
+ok("a cross-side attachment survives EVERY filter setting",
+   Object.values(dimming).every((v) => v !== "not drawn"), JSON.stringify(dimming));
+note("Its host is kept with it: a condition shown without the companion it");
+note("afflicts would be worse than hidden. The rest of the band is still put");
+note("away, and the band says how many.");
+
+// The band must still be FILTERING. If the rule leaked into "never hide
+// anything", this suite would pass while the filter had silently stopped
+// working -- so prove the other companions really are gone.
+board.setFilter("shadow");
+const bandNode = node()?.closest(".band");
+const shown = bandNode ? bandNode.querySelectorAll(".row .card").length : 0;
+const others = allCards(store.getState())
+  .filter((c) => c.zone === "FREE_CHARACTERS" && c.owner === host.owner).length;
+ok("the filter still hides the rest of the band -- the rule is narrow",
+   shown < others + 1, `showing ${shown} of ${others} companions + rider`);
+ok("and the band says how many it put away",
+   /hidden/.test(bandNode?.textContent ?? ""), bandNode?.textContent?.slice(0, 80));
+board.setFilter("all");
 
 // --------------------------------------------------- 5. a host that is absent
 // A rider whose host is not on the board must not appear loose. `shouldDraw`

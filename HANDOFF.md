@@ -1770,7 +1770,12 @@ inventing a verdict — read the SKIP line, it names which.
 
 ## Open
 
-- **A Shadow condition on a companion VANISHES under the Shadow filter.**
+- ~~**A Shadow condition on a companion VANISHES under the Shadow filter.**~~
+  **DECIDED AND FIXED** — a filtered band now keeps a card carrying somebody
+  else's attachment; see `DESIGN.md`, "Filtering opponents by side". The
+  original finding is kept below because the reasoning is the useful part.
+
+  **A Shadow condition on a companion used to VANISH under the Shadow filter.**
   Found by `src/dev/attachcheck.html`, which is the first thing in this project
   ever to exercise a cross-side attachment.
 
@@ -1787,14 +1792,20 @@ inventing a verdict — read the SKIP line, it names which.
   the shadow-side picture loses sight of their OWN condition on an enemy
   companion.
 
-  **Recorded, not changed.** There is no oracle -- the reference has no such
-  filter -- so this is this client's own corner case and the filter's semantics
-  are `DESIGN.md`'s to decide. Doing it per-card rather than per-band needs side
-  information for an ATTACHED card, which is the same `GameEvent._side` gap
-  listed below: `ATTACHED` carries `side: null`, so there is nothing to filter
-  on even if the filter reached individual cards. A rider's side could instead
-  be derived from its own blueprint, which is the cheaper route if this is
-  taken up.
+  **The rule chosen:** the filter puts away the focused seat's OWN cards, and a
+  foreign rider is not one of them. The host is kept with it -- a condition
+  shown without the companion it afflicts is worse than hidden -- and the rest
+  of the band is still put away, with a count.
+
+  Deliberately narrow: a rider owned by the host's own player changes nothing,
+  so The One Ring on its bearer filters exactly as before. And it needs NO side
+  information, which is why it could be done at all -- `ATTACHED` carries
+  `side: null` and a per-card side filter would have been blocked behind the
+  same `GameEvent._side` gap. Owner inequality is the whole test.
+
+  Measured after: `{"auto":"dimmed","fp":"lit","shadow":"dimmed","all":"lit"}`
+  -- drawn under every setting, with `attachcheck` also asserting the band is
+  still hiding everything else, so the rule cannot quietly become "never hide".
 
 
 - **BACKLOGGED: nobody has ever played this client by hand.** Everything is
