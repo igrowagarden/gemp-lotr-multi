@@ -2092,13 +2092,20 @@
 						// `owner` reads getSource().getOwner() and every delegate
 						// on this branch passes the source through untouched.
 						//
-						// STILL OPEN, and newly identified rather than settled: the
-						// selection is unscoped, and at five seats every seat has
-						// companions on the table. The text means the fellowship
-						// being faced. See HANDOFF item 4.
+						// SCOPED to the fellowship this minion is facing.
+						// `choose(companion,...)` was unscoped, and at five seats
+						// every seat has its own companions on the table -- so the
+						// Free Peoples player could buy the assignment off by
+						// feeding the Troop's controller SOMEBODY ELSE's companion.
+						//
+						// Not `your`: DiscardFromPlay re-delegates the filter's
+						// context to whoever `player:` names, which here is the
+						// Shadow player, so `your` would have scoped to exactly the
+						// wrong side -- and silently, since it would still have
+						// found candidates.
 						type: discard
 						player: owner
-						select: choose(companion,not(ringBearer))
+						select: choose(ownedByFreePeoplesPlayer,companion,not(ringBearer))
 					}
 				}
 			}

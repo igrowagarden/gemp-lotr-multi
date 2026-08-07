@@ -216,6 +216,17 @@ public class FilterFactory {
         simpleFilters.put("weapon", (actionContext) -> Filters.weapon);
         simpleFilters.put("wounded", (actionContext) -> Filters.wounded);
         simpleFilters.put("your", (actionContext) -> Filters.owner(actionContext.getPerformingPlayer()));
+        // Owned by the Free Peoples player of the CURRENT turn -- the fellowship
+        // being faced, as distinct from `your`, which is the performing player.
+        // The two are the same thing at two seats and come apart above them:
+        // every seat has its own fellowship and its own companions on the table.
+        //
+        // Southron Troop (4_256) is the first card to need it. Its prevention
+        // lets the minion's controller discard a companion, and `your` there
+        // resolves against whichever player the discard names -- the Shadow
+        // player -- so it would have scoped to exactly the wrong side.
+        simpleFilters.put("ownedbyfreepeoplesplayer",
+                (actionContext) -> Filters.owner(actionContext.getGame().getGameState().getCurrentPlayerId()));
 
         parameterFilters.put("and",
                 (parameter, environment) -> {
