@@ -21,20 +21,27 @@
 					type: movesTo
 					filter: self
 				}
-				effect: [
-					{
+				// "EACH PLAYER wounds two of HIS OR HER characters." Written as
+				// an FP half plus a Shadow half, which is the same sentence only
+				// while there are exactly two players. Above two, the Shadow half
+				// fired once for whichever seat getFirstShadowPlayer named and
+				// the other opponents were skipped entirely -- and its
+				// `side(shadow)` select is not scoping, so that one seat chose
+				// from every opponent's characters.
+				//
+				// `your` inside forEachPlayer does the scoping for free: it
+				// resolves to Filters.owner(performingPlayer) and each iteration
+				// runs with that player performing. See 19_4.
+				effect: {
+					type: forEachPlayer
+					player: eachPlayer
+					effect: {
 						type: wound
-						player: free people
-						select: choose(side(free people),character)
+						player: you
+						select: choose(your,character)
 						count: 2
 					}
-					{
-						type: wound
-						player: shadow
-						select: choose(side(shadow),character)
-						count: 2
-					}
-				]
+				}
 			}
 		]
 		gametext: <b>Mountain</b>. When the fellowship moves to this site, each player wounds two of his or her characters.
@@ -101,18 +108,17 @@
 					type: movesTo
 					filter: self
 				}
-				effect: [
-					{
+				// "EACH PLAYER heals each of HIS OR HER characters." Same shape as
+				// 18_134 above and the same fix; see the note there.
+				effect: {
+					type: forEachPlayer
+					player: eachPlayer
+					effect: {
 						type: heal
-						player: free people
-						select: all(side(free people),character)
+						player: you
+						select: all(your,character)
 					}
-					{
-						type: heal
-						player: shadow
-						select: all(side(shadow),character)
-					}
-				]
+				}
 			}
 		]
 		gametext: <b>River</b>. When the fellowship moves to this site, each player heals each of his or her characters.
