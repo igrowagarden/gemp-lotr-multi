@@ -327,14 +327,26 @@
 			{
 				type: Trigger
 				optional: false
+				// "ITS OWNER discards the top card from HIS OR HER draw deck"
+				// -- the owner of the minion that just lost, not a fixed seat.
+				//
+				// 1_9 Dwarven Axe carries the same sentence and already did this
+				// correctly: memorize the loser on the trigger, then read
+				// ownerFromMemory off it. losesSkirmish supports `memorize:`;
+				// this card simply never used it.
+				//
+				// ownerFromMemory is also the one memory-reading player token
+				// that pre-evaluates, so it stays legal if this ever moves into
+				// a cost.
 				trigger: {
 					type: losesSkirmish
 					filter: minion
 					against: self
+					memorize: losingMinion
 				}
 				effect: {
 					type: discardTopCardsFromDeck
-					deck: shadow
+					deck: ownerFromMemory(losingMinion)
 					forced: true
 				}
 			}

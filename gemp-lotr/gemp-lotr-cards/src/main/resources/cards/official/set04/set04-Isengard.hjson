@@ -1390,6 +1390,16 @@
 					amount: 2
 				}
 				effect: [
+					// OUTSIDE the choice. Choice runs isPlayableInFull over each
+					// branch to decide what to offer, and a `multiple` wrapper is a
+					// MultiEffectAppender, which propagates that check -- so a
+					// ChooseOpponent inside the branch resolves too late and the
+					// reveal throws "Memory not found - opponent". Measured on 1_18,
+					// which broke Card_01_018_Tests exactly that way.
+					{
+						type: ChooseOpponent
+						memorize: opponent
+					}
 					{
 						type: choice
 						texts: [
@@ -1431,9 +1441,15 @@
 							{
 								type: multiple
 								effects: [
+									// "the top card of ANY draw deck" -- `deck: fp` was right
+									// at two players and is not at five: this is a Shadow
+									// card, so its controller has the Free Peoples player
+									// AND the other Shadow players as opponents, and only
+									// one of them was reachable. The choosing happens before
+									// the fork; see the note there.
 									{
 										type: revealTopCardsOfDrawDeck
-										deck: fp
+										deck: fromMemory(opponent)
 										memorize: revealedCard
 									}
 									{
@@ -1441,7 +1457,7 @@
 										text: Would you like to put {revealedCard} beneath their deck?
 										effect: {
 											type: putCardsFromDeckOnBottomOfDeck
-											deck: fp
+											deck: fromMemory(opponent)
 											select: memory(revealedCard)
 											reveal: true
 										}

@@ -695,6 +695,22 @@
 				select: choose(dwarf)
 			}
 			effect: [
+				// OUTSIDE the choice, not inside the opponent branch. Choice calls
+				// isPlayableInFull on each branch to decide which options to offer,
+				// and MultiEffectAppender -- which a `multiple` wrapper is --
+				// propagates that check to its children. So a ChooseOpponent sitting
+				// beside the reveal inside the branch is too late: the reveal's
+				// `deck: fromMemory(opponent)` is resolved during the playability
+				// check, before anything has run, and throws
+				// "Memory not found - opponent".
+				//
+				// Hoisting it costs one question the two-player game never asked --
+				// but only above two players, because ChooseOpponent auto-resolves
+				// with a single opponent. Same placement as Duality (13_47).
+				{
+					type: ChooseOpponent
+					memorize: opponent
+				}
 				{
 					type: choice
 					memorize: revealChoice
@@ -709,11 +725,14 @@
 							memorize: revealedFreepsCards
 							deck: you
 						}
+						// "the top 3 cards of ANY draw deck" -- above two players the
+						// second option has to say WHICH opponent. The choosing
+						// happens before the fork; see the note there.
 						{
 							type: revealTopCardsOfDrawDeck
 							count: 3
 							memorize: revealedShadowCards
-							deck: shadowPlayer
+							deck: fromMemory(opponent)
 						}
 					]
 				}
@@ -760,8 +779,10 @@
 							type: optional
 							text: Would you like to discard 1 Shadow card revealed?
 							effect: {
+								// Same opponent the reveal chose: this If only runs on
+								// that branch, so the memory is always set here.
 								type: discardCardsFromDrawDeck
-								deck: shadow
+								deck: fromMemory(opponent)
 								select: choose(side(shadow),memory(revealedShadowCards))
 								showAll: false
 								shuffle: false
@@ -771,7 +792,7 @@
 						{
 							type: reorderTopCardsOfDrawDeck
 							player: you
-							deck: shadow
+							deck: fromMemory(opponent)
 							count: {
 								type: forEachInMemory
 								memory: revealedShadowCards
