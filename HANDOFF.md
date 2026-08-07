@@ -1750,6 +1750,70 @@ Nothing here is pushed anywhere, because nothing here is in a repository.
 
 ---
 
+## CLOSED: the oracle edit that broke the replay differential
+
+`diffrun.sh` went from clean to **0 of 3 games agreeing**, every mismatch a
+`CARD_ACTION_CHOICE`. Cause, found by bisect: the `ui.smallDialog.find("button")`
+fallback added to `offers()`. That line alone takes a pinned sample from 3-of-3
+agreeing to 0-of-3.
+
+`smallDialog` is a PERSISTENT jQuery UI element that keeps the buttons of earlier
+decisions. Read unconditionally it reports stale options: on a pass-only
+`CARD_ACTION_CHOICE` the reference correctly offers nothing and the fallback
+handed back the previous decision's buttons.
+
+`decisionfuzz.html` genuinely needs it -- it feeds decisions with no board events
+between them and jQuery calls the real dialog invisible headlessly, so yes/no
+reported zero options without it. So it is **opt-in**:
+`OLD.setReadStaleDialogButtons(true)`, set by that page and by nothing else.
+
+### Two methodology failures on the way, both worth more than the bug
+
+**A random sample cannot bisect.** `diffrun.sh` drew three RANDOM recordings per
+run, so "0 of 3" against "1 of 3" compared different games and meant nothing. A
+whole bisect was run on that comparison, and two edits were wrongly cleared by
+it. `diffrun.sh` now takes `SEED=` to pin the shuffle and `IDS=` to name the
+games; **use one of them whenever the question is "did this change break
+something"** rather than "do the clients agree in general".
+
+**The suspect list was written before the file was re-read.** Five candidates
+were listed and ranked; the actual cause was a sixth edit that was simply
+forgotten, and it was the only one that touched what `diff.html` actually
+consumes. Two theories were acted on -- reverting the `actionableCard` class gate
+and disabling the `ui.hand` stub -- before either was tested, and neither was the
+cause. Enumerate from the diff, not from memory.
+
+### The rule this cost twice in one day
+
+**A shared file with three consumers cannot be edited to suit one of them.**
+Every edit to `oldharness.html` was made to make `decisionfuzz.html` work, and
+none was re-checked against the two older pages until the end. When one is
+needed, gate it opt-in.
+
+---
+
+## What this project has left in the other trees
+
+Nothing. That is the intended state and worth re-checking if anything here starts
+depending on those trees.
+
+`gemp_multiplayer` was restored to how it was found. The two branches this
+project created (`gui/board-client`, and a stale `worktree-gui-board` from a
+first attempt) were deleted, the worktree removed, and a stray copy of the spike
+left at `harness/web/multiwindow_spike.html` was cleaned up. That repo has moved
+on under its own project since, so do not expect any particular commit there —
+the claim being made is only that none of the commits are ours.
+
+`vendor/gemp-lotr` was never touched at all. Every claim in `DESIGN.md` about
+GEMP's behaviour was arrived at by **reading** a GEMP tree, never by editing
+one — and the reference-client reading (`gameUi.js`, `CardGroup.js`,
+`game.css`) is done against **our own** copy at `C:\Users\emers\gemp2`, which
+needs no coordination at all. Prefer that copy.
+
+Nothing here is pushed anywhere, because nothing here is in a repository.
+
+---
+
 ## OPEN AND IMPORTANT: today's oracle edits broke the REPLAY differential
 
 `diffrun.sh` reports **0 of 3 games agreeing**, every mismatch a

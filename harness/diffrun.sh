@@ -30,8 +30,21 @@ total=$(wc -l < "$LIST")
 echo "recordings available: $total, sampling $COUNT (max $MAX decisions each)${SABOTAGE:+ [SABOTAGE=$SABOTAGE]}"
 
 # Shuffled, so a run is a random sample rather than always the same games.
+#
+# FIX THE SAMPLE WHEN BISECTING. A random sample is right for "do the clients
+# agree in general" and useless for "did this change break something": two runs
+# draw different games, so 0-of-3 against 1-of-3 compares nothing at all. A whole
+# bisect was run on that comparison before the flaw was noticed. `IDS=` pins the
+# games; `SEED=` pins the shuffle.
 agree=0; mismatch=0; errored=0
-for id in $(shuf -n "$COUNT" "$LIST"); do
+if [ -n "${IDS:-}" ]; then
+  SAMPLE="$IDS"
+elif [ -n "${SEED:-}" ]; then
+  SAMPLE="$(shuf -n "$COUNT" --random-source=<(yes "$SEED") "$LIST")"
+else
+  SAMPLE="$(shuf -n "$COUNT" "$LIST")"
+fi
+for id in $SAMPLE; do
   player="${id%%\$*}"
   url="$BASE?replayId=$id&max=$MAX&login=$player&password="
   # Every seeded account uses one of two passwords.

@@ -122,6 +122,11 @@ const baseEventsNew = decodeEvents(BASE);
  * `cleanupDecision` before every event, which is what stops one decision's
  * `data("action")` leaking into the next.
  */
+// This page feeds decisions with no board events between them, which is the one
+// situation where reading `smallDialog`'s buttons is right. It is wrong for
+// diff.html and livediff.html, where the element retains earlier decisions'
+// buttons -- so it is opt-in and only this page opts in.
+OLD.setReadStaleDialogButtons(true);
 OLD.boot({ gameId: "1", participantId: VIEWER });
 OLD.feedBatch(OLD.parseEvents(BASE));
 

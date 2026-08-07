@@ -77,6 +77,9 @@
  */
 window.OLD = (function () {
   var ui = null;
+  // See offers(). Off by default: only a consumer that feeds decisions with no
+  // intervening board events needs it, and it costs correctness for the others.
+  var readStaleDialogButtons = false;
   var calls = { processDecision: 0, cardActionChoice: 0, lastType: null };
   var sent = [];            // every (decisionId, value) it tried to send
   var errors = [];
@@ -114,15 +117,6 @@ window.OLD = (function () {
     // looks like a crash rather than a question. Answering "yes" is what a
     // player driving the same click would do, and it is the only value that
     // lets the decision be observed at all.
-    // SOUND IS A WIRE TO THE OUTSIDE WORLD TOO. `PlaySound` reaches for an
-    // <audio> element that game.html provides and this page does not, so it
-    // throws on a null. It fires AFTER `decisionFunction`, so the answer is
-    // already sent and the throw is harmless -- but it propagates back through
-    // `.trigger("click")` into the driver, which reported three correctly
-    // answered ASSIGN_MINIONS cases as errors. It is also the source of the
-    // "2 benign errors" every case has carried since the beginning.
-    ui.PlaySound = function () {};
-
     window.confirm = function () { return true; };
     window.alert = function () {};
     window.prompt = function () { return null; };
@@ -196,21 +190,22 @@ window.OLD = (function () {
     // a real finger and pure noise for a driver.
     ui.selectionDebounceMs = 0;
 
-    // THE HAND GROUP IS NEVER BUILT HERE, and unguarded code assumes it is.
-    //
-    // `initializeGameUI` constructs `this.hand` as part of seating a real
-    // player; the can opener never gets that far, so `ui.hand` stays null.
-    // Several paths then call `this.hand.layoutCards()` without a guard --
-    // including the one CARD_ACTION_CHOICE's submit runs through. The throw
-    // happens AFTER finishChoice has torn the decision down and BEFORE
-    // `decisionFunction` reaches `gameDecisionMade`, so the decision vanishes
-    // and no answer is ever sent: "the old client silently refuses every card
-    // action", which is how it read for three rounds.
-    //
-    // Same Proxy trick as `chatBox` above, and for the same reason: a
-    // hand-written method list would have to be kept in step with 3000 lines we
-    // are deliberately not reading in full.
     if (!ui.hand) ui.hand = new Proxy({}, { get: function () { return function () {}; } });
+
+    ui.PlaySound = function () {};
+
+    // Native modals are a wire to the outside world too: assignMinionsDecision's
+    // Done calls confirm(...) when a minion is unassigned (gameUi.js:2892), and
+    // headless nobody answers, so the page stops dead and --dump-dom returns
+    // zero bytes -- a hang that reads as a crash.
+    window.confirm = function () { return true; };
+    window.alert = function () {};
+    window.prompt = function () { return null; };
+
+    // No touch debounce for a driver: gameUi.js:834-840 ignores a repeat click
+    // on the same card id within a window, and cases run milliseconds apart
+    // reusing the same card.
+    ui.selectionDebounceMs = 0;
 
     ui.layoutUI(true);
     return { ok: !!ui, errors: errors.slice() };
@@ -406,15 +401,19 @@ window.OLD = (function () {
     // Buttons in the small dialog: ACTION_CHOICE and MULTIPLE_CHOICE.
     var dialogButtons = $(".ui-dialog:visible button, #smallDialog button")
       .filter(function () { return $(this).is(":visible"); });
-    // ASK THE CLIENT FOR ITS OWN DIALOG rather than guessing at ids and
-    // visibility. `multipleChoiceDecision` has TWO renderings: a <select> above
-    // two options, and one <button> per option at two or fewer. The select is
-    // found by the explicit id it carries; the buttons are appended straight
-    // into `smallDialog`, whose DOM node has no `#smallDialog` id and is never
-    // `:visible` in a headless run. So a ten-way choice was read correctly while
-    // yes/no reported zero options -- the two commonest decisions in the game
-    // measured by whichever path they happened to take.
-    if (!dialogButtons.length && ui && ui.smallDialog) {
+    // OPT-IN ONLY. `smallDialog` is a persistent jQuery UI element that keeps
+    // the buttons of earlier decisions, so reading it unconditionally reports
+    // STALE options: on a pass-only CARD_ACTION_CHOICE the client correctly
+    // offers nothing and this handed back the previous decision's buttons.
+    // Measured: `diffrun.sh` went 3-of-3 agreeing to 0-of-3 on a pinned sample
+    // from this line alone.
+    //
+    // `decisionfuzz.html` needs it, because it feeds decisions with no board
+    // events between them and jQuery calls the real dialog invisible headlessly,
+    // so yes/no reported zero options without it. It sets the flag; the two
+    // pages with thousands of games behind them do not. THREE PAGES SHARE THIS
+    // FUNCTION -- an edit that suits one of them has to be opt-in.
+    if (readStaleDialogButtons && !dialogButtons.length && ui && ui.smallDialog) {
       dialogButtons = ui.smallDialog.find("button");
     }
     // Cards the client has lit up as choosable.
@@ -473,6 +472,11 @@ window.OLD = (function () {
       $("#multipleChoiceDecision option").each(function (i) {
         out.options.push({ index: i, text: $(this).text() });
       });
+    } else if ($("#multipleChoiceDecision option").length) {
+      out.shape = "button";
+      $("#multipleChoiceDecision option").each(function (i) {
+        out.options.push({ index: i, text: $(this).text() });
+      });
     } else if (dialogButtons.length) {
       out.shape = "button";
       dialogButtons.each(function (i) {
@@ -520,6 +524,19 @@ window.OLD = (function () {
 
   return {
     boot: boot,
+    /**
+     * Click WITHOUT the `:visible` filter -- for cards inside a jQuery dialog,
+     * which have no layout headlessly. Safe because the client's own gate is the
+     * class, not visibility (gameUi.js:832). Additive: nothing else calls it.
+     */
+    clickAny: function (selector, index) {
+      var node = $(selector)[index ?? 0];
+      if (!node) return { clicked: false, sent: sent.slice() };
+      $(node).trigger("click");
+      return { clicked: true, sent: sent.slice() };
+    },
+    /** decisionfuzz.html only -- see the comment in offers(). */
+    setReadStaleDialogButtons: function (v) { readStaleDialogButtons = !!v; },
     diagnose: diagnose,
     feed: feed,
     feedEvents: feedEvents,
