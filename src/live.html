@@ -34,6 +34,7 @@
   <span id="status">starting</span>
   <span id="detail"></span>
   <button type="button" id="settings" title="Which phases auto-pass">Auto-pass</button>
+  <button type="button" id="cancel" title="Ask the table to cancel this game">Cancel game</button>
   <button type="button" id="concede" title="Leave this game">Concede</button>
 </div>
 
@@ -67,6 +68,7 @@ import { createPileViewer, createZoom } from "./view/piles.js";
 import { createDetacher } from "./view/detach.js";
 import { createSettingsPanel } from "./view/settings.js";
 import { shouldClientAutoPass, effectivePhases, PASS } from "./model/autopass.js";
+import { canConcede, canCancel } from "./model/gameopts.js";
 import { loadImageTable } from "./model/images.js";
 import { closeTopmost, allFlyouts } from "./view/flyout.js";
 
@@ -210,15 +212,35 @@ const settings = createSettingsPanel(boardEl, {
 });
 document.getElementById("settings").addEventListener("click", () => settings.toggle());
 
-// Conceding was implemented in the transport and wired to nothing, so a player
-// could not leave a game at all. Confirmed first: it is irreversible.
-document.getElementById("concede").addEventListener("click", async () => {
+// Leaving the game: concede, or ask the table to cancel it. Both are offered
+// only to someone actually SEATED -- the reference builds them in one branch
+// behind `!spectatorMode && !replayMode` (gameUi.js:791), and this client used
+// to show Concede to spectators, who can only be refused by the server.
+// Hidden until PARTICIPANTS arrives and says which we are.
+const concedeBtn = document.getElementById("concede");
+const cancelBtn = document.getElementById("cancel");
+concedeBtn.hidden = true;
+cancelBtn.hidden = true;
+
+// The confirm is a DELIBERATE divergence: the reference concedes on one click
+// with no confirmation, and this ends the game for everyone at the table.
+concedeBtn.addEventListener("click", async () => {
   if (!confirm("Concede this game? This cannot be undone.")) return;
   try {
     await transport.concede();
     show("stopped", "conceded");
   } catch (e) {
     show("failed", "concede " + (e.status ?? e.message));
+  }
+});
+
+cancelBtn.addEventListener("click", async () => {
+  if (!confirm("Ask the table to cancel this game?")) return;
+  try {
+    await transport.cancel();
+    detailEl.textContent = "cancel requested";
+  } catch (e) {
+    show("failed", "cancel " + (e.status ?? e.message));
   }
 });
 let lastChat = 0;
@@ -254,6 +276,10 @@ store.subscribe((s) => {
     transport.answer(d.id, PASS);
     detailEl.textContent = `auto-passed ${d.id} in ${s.phase}`;
   }
+
+  // Only a seated player may leave a game; a spectator has nothing to concede.
+  concedeBtn.hidden = !canConcede(s);
+  cancelBtn.hidden = !canCancel(s);
 
   // Unread counts PEOPLE talking. The game log is a running commentary on every
   // action -- counting it meant the badge was permanently lit and told you

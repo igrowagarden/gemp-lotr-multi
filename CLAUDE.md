@@ -50,6 +50,7 @@ bash harness/logrun.sh             # game log + chat message shapes + 4 controls
 bash harness/inforun.sh            # card info: 7 id kinds x live/replay + 3 controls
 bash harness/zoomrun.sh            # zoom: 6 hover targets x 3 states + 4 controls
 bash harness/replayrun.sh          # replay speed + play/pause + 3 controls
+bash harness/optsrun.sh            # concede + cancel x player/spectator + 4 controls
 bash harness/diffrun.sh 12 40      # replay differential over recorded games
 bash harness/livediffrun.sh 4 70   # live, with the ENGINE judging
 ```
@@ -117,6 +118,7 @@ Always continue working on item #1 without human prompting. Document and flag is
   before either client. That was true nearly every time this session.
 - Count rather than infer. "The client did nothing" has several distinct causes
   and they look identical from outside; instrument and count entries.
-- The reference client is the oracle but is **not** infallible — three of its
+- The reference client is the oracle but is **not** infallible — four of its
   bugs are recorded here, all measured, two of them reported upstream. A
-  disagreement is still this client's bug until shown otherwise.
+  disagreement is still this client's bug until shown otherwise, and "shown"
+  means a measurement, not an argument.

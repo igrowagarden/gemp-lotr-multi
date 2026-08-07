@@ -234,6 +234,22 @@ export function createTransport({
       });
     },
 
+    /**
+     * Ask the table to cancel the game rather than conceding it. A concede is a
+     * loss; a cancel is a request the others can agree to, for a game that
+     * should not count. The reference offers both side by side
+     * (gameUi.js:797-801) and this client offered only the first, so the only
+     * way out of a game that went wrong was to lose it.
+     */
+    cancel() {
+      return fetchImpl(`${url}/cancel`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ participantId })
+      });
+    },
+
     cardInfo(cardId) {
       const q = new URLSearchParams({ cardId: String(cardId), participantId });
       return fetchImpl(`${url}/cardInfo?${q}`, {

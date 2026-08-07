@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>game options differential</title>
+<link rel="stylesheet" href="../styles/board.css">
+<style>
+  body { font-family: ui-monospace, Consolas, monospace; font-size: 12px; padding: 10px; }
+  iframe { position: absolute; left: -10000px; top: 900px; width: 1400px; height: 900px; border: 0; }
+  pre { white-space: pre-wrap; }
+  .ok { color: #6E9B7A; } .bad { color: #FF5240; } .note { color: #B08D57; }
+</style></head>
+<body>
+<iframe id="old" src="./oldharness.html"></iframe>
+<pre id="out">RUNNING</pre>
+
+<script type="module">
+/**
+ * The GAME OPTIONS differential: concede, and asking for a cancel.
+ *
+ *   optsfuzz.html?role=player      (also role=spectator)
+ *   optsfuzz.html?role=...&sabotage=offerall    NEGATIVE CONTROL
+ *   optsfuzz.html?role=...&sabotage=offernone   NEGATIVE CONTROL
+ *   optsfuzz.html?role=...&sabotage=wrongverb   NEGATIVE CONTROL
+ *   optsfuzz.html?role=...&sabotage=wrongpath   NEGATIVE CONTROL
+ *
+ * TWO THINGS PER CONTROL: whether it is OFFERED, and what it SENDS. Offers
+ * alone would have missed a client that shows the right buttons and posts to
+ * the wrong endpoint -- the same blind spot that let CARD_SELECTION pass for a
+ * session while the sites were never lit.
+ *
+ * The reference builds both buttons in ONE branch behind
+ * `!spectatorMode && !replayMode` (gameUi.js:791-801), so they appear together
+ * or not at all. That is why the two roles are the axis: a spectator must get
+ * neither.
+ *
+ * WHAT IS SENT is read by intercepting `$.ajax` in the oracle's frame and
+ * calling the reference's REAL `GempLotrCommunication.prototype.concede` --
+ * oldharness stubs `ui.communication.concede` to a no-op, which is right for
+ * every other page and would report "the reference sends nothing" here.
+ *
+ * NOT COMPARED, on purpose: this client asks for confirmation and the reference
+ * does not. Conceding is irreversible and ends the game for everyone at the
+ * table; the extra click is a defended divergence (DESIGN.md), not a defect,
+ * and a differential that flagged it would be reporting a design decision.
+ */
+import { createStore } from "../state/store.js";
+import { createTransport } from "../net/transport.js";
+import { decodeEvents } from "../net/protocol.js";
+import { canConcede, canCancel, concedeRequest, cancelRequest }
+  from "../model/gameopts.js";
+
+const q = new URLSearchParams(location.search);
+const role = q.get("role") ?? "player";
+const sabotage = q.get("sabotage");
+const PLAYERS = ["asdf", "qwer", "Librarian"];
+const VIEWER = role === "spectator" ? "watcher" : "asdf";
+const GAME = "7";
+
+const out = document.getElementById("out");
+const lines = [];
+const say = (t, cls) => { lines.push(cls ? `<span class="${cls}">${t}</span>` : t);
+                          out.innerHTML = lines.join("\n"); };
+const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+async function ready(frame) {
+  for (let i = 0; i < 300; i++) {
+    if (frame.contentWindow?.OLD) return frame.contentWindow.OLD;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  throw new Error("old harness never came up");
+}
+const frame = document.getElementById("old");
+const OLD = await ready(frame);
+const W = frame.contentWindow;
+
+OLD.boot({ gameId: GAME, participantId: VIEWER });
+
+/**
+ * MEASURED BEFORE THE PARTICIPANTS EVENT ARRIVES.
+ *
+ * `addBottomLeftTabPane` runs from `init` at CONSTRUCTION (gameUi.js:213), and
+ * it is where the Options box -- and with it the concede and cancel buttons --
+ * is built. `spectatorMode` is not set until `participant()` runs, much later,
+ * so its own guard (`if (this.spectatorMode)`, gameUi.js:608, commented "//No
+ * Options box") reads a field that does not have a value yet.
+ *
+ * If the buttons are already present here, before any role is known, then the
+ * reference cannot be gating them on the role at all -- whatever the guard
+ * says. That is the measurement, and it is why it is taken at this exact point.
+ */
+const builtAtConstruction = {
+  concede: frame.contentWindow.$("#concedeGame").length > 0,
+  cancel: frame.contentWindow.$("#cancelGame").length > 0
+};
+
+const board = `<gameState>` +
+  `<ge type="P" participantId="${VIEWER}" allParticipantIds="${PLAYERS.join(",")}" ` +
+  `discardPublic="false"/>` +
+  PLAYERS.map((p, i) => `<ge type="PP" participantId="${p}" index="${i}"/>`).join("") +
+  `</gameState>`;
+OLD.feedBatch(OLD.parseEvents(board));
+const ui = OLD.ui;
+const $ = W.$;
+
+/**
+ * PREFLIGHT. The role has to have actually taken, or the whole run measures the
+ * wrong client: a spectator run that booted as a player would report both
+ * buttons present and call that agreement.
+ */
+const expectedSpectator = role === "spectator";
+say(`role=${role} viewer=${VIEWER}  oracle spectatorMode=${ui.spectatorMode}`);
+if (!!ui.spectatorMode !== expectedSpectator) {
+  say("");
+  say(`RESULT: 1 FAILED of 1 — the oracle booted as ` +
+      `${ui.spectatorMode ? "a spectator" : "a player"} and this run wanted ` +
+      `the other; nothing below would mean anything`, "bad");
+  throw new Error("preflight failed");
+}
+
+const oldOffers = {
+  concede: $("#concedeGame").length > 0,
+  cancel: $("#cancelGame").length > 0
+};
+
+/**
+ * What the reference actually sends. `$.ajax` is intercepted and the REAL
+ * prototype method invoked -- `ui.communication.concede` is a harness stub.
+ */
+function oldRequest(which) {
+  let seen = null;
+  const origAjax = $.ajax;
+  $.ajax = function (opts) {
+    seen = {
+      method: String(opts.type).toUpperCase(),
+      path: String(opts.url).replace("/gemp-lotr-server", ""),
+      body: Object.keys(opts.data ?? {}).sort()
+    };
+  };
+  try {
+    W.GempLotrCommunication.prototype[which].call(ui.communication, {});
+  } catch (e) {
+    say(`  (oracle threw sending ${which}: ${e.message})`, "note");
+  } finally {
+    $.ajax = origAjax;
+  }
+  return seen;
+}
+
+// -------------------------------------------------------------- the new client
+const store = createStore(VIEWER);
+store.dispatchAll(decodeEvents(board));
+const state = store.getState();
+
+let mine = {
+  concede: canConcede(state),
+  cancel: canCancel(state)
+};
+
+/** What this client sends, read from the transport itself via a fake fetch. */
+function newRequest(which) {
+  let seen = null;
+  const transport = createTransport({
+    gameId: GAME, participantId: VIEWER, onEvents: () => {},
+    fetchImpl: (url, opts) => {
+      seen = {
+        method: String(opts.method).toUpperCase(),
+        path: String(url).replace("/gemp-lotr-server", ""),
+        body: [...new URLSearchParams(opts.body).keys()].sort()
+      };
+      return Promise.resolve({ ok: true, text: () => Promise.resolve("") });
+    }
+  });
+  transport[which]();
+  if (sabotage === "wrongverb" && seen) seen.method = "GET";
+  if (sabotage === "wrongpath" && seen) seen.path = seen.path.replace(/\/[a-z]+$/, "/quit");
+  return seen;
+}
+
+// ---- negative controls on the offers, applied to the NEW client's reading.
+if (sabotage === "offerall") mine = { concede: true, cancel: true };
+if (sabotage === "offernone") mine = { concede: false, cancel: false };
+
+// ---------------------------------------------------------------- the compare
+let pass = 0, diff = 0;
+const fired = [];
+const check = (label, a, b) => {
+  if (eq(a, b)) { pass++; say(`  ok       ${label}`, "ok"); }
+  else {
+    diff++;
+    if (sabotage) fired.push(label);
+    say(`  DIFF     ${label}: old ${JSON.stringify(a)} vs new ${JSON.stringify(b)}`, "bad");
+  }
+};
+
+say("");
+say(`--- offered  (before any role was known: ${JSON.stringify(builtAtConstruction)})`);
+
+/**
+ * The reference's INTENT is unambiguous -- gameUi.js:608 carries the comment
+ * "//No Options box" for spectators, and gameUi.js:791 guards the two buttons
+ * on `!spectatorMode && !replayMode`. Its BEHAVIOUR does not match, and the
+ * measurement above is the proof: `addBottomLeftTabPane` runs from `init` at
+ * construction (gameUi.js:213), long before `participant()` assigns
+ * `spectatorMode`, so both guards read a field that has no value yet and the
+ * Options box is built for everyone.
+ *
+ * That makes a spectator offered a Concede button the REFERENCE'S defect, not
+ * this client's. It is recorded as ORACLE and does not count as a DIFF -- the
+ * same treatment the max=0 cases get in decisionfuzz, and for the same reason:
+ * counting somebody else's bug would make every run red and train a reader to
+ * ignore the colour.
+ */
+const expected = { concede: !expectedSpectator, cancel: !expectedSpectator };
+if (!eq(oldOffers, expected)) {
+  const constructionExplains =
+    builtAtConstruction.concede && builtAtConstruction.cancel && expectedSpectator;
+  if (constructionExplains) {
+    say(`  ORACLE   the reference offers ${JSON.stringify(oldOffers)} to a ` +
+        `SPECTATOR, though its own guard says ${JSON.stringify(expected)}. ` +
+        `The buttons already existed before any role was known, so the guard ` +
+        `at gameUi.js:791 runs after the fact — reference defect, not ours.`, "note");
+    // Compared against the reference's own INTENT, which is what this client
+    // implements and what the buttons were meant to do.
+    check("concede is offered (vs the reference's intent)", expected.concede, mine.concede);
+    check("cancel is offered (vs the reference's intent)", expected.cancel, mine.cancel);
+  } else {
+    say(`  HARNESS  gameopts.js says ${JSON.stringify(expected)} but the oracle ` +
+        `built ${JSON.stringify(oldOffers)}, and construction order does not ` +
+        `explain it`, "bad");
+    diff++;
+  }
+} else {
+  check("concede is offered", oldOffers.concede, mine.concede);
+  check("cancel is offered", oldOffers.cancel, mine.cancel);
+}
+
+// The requests are compared whatever the role: what a control SENDS does not
+// depend on who is looking, and checking it only for players would leave the
+// spectator run asserting half as much for no reason.
+say("");
+say("--- what each sends");
+check("concede request", oldRequest("concede"), newRequest("concede"));
+check("cancel request", oldRequest("cancel"), newRequest("cancel"));
+
+// And against the description in the model, so a change to both clients at once
+// still has to agree with something written down.
+check("concede matches the recorded shape",
+      { ...concedeRequest(GAME), body: ["participantId"] },
+      { ...oldRequest("concede") });
+check("cancel matches the recorded shape",
+      { ...cancelRequest(GAME), body: ["participantId"] },
+      { ...oldRequest("cancel") });
+
+say("");
+if (sabotage) {
+  say(`control ${sabotage} fired on: ${fired.length ? fired.join(", ") : "NOTHING"}`,
+      fired.length ? "note" : "bad");
+}
+const total = pass + diff;
+say(diff === 0 ? `RESULT: ALL PASS (${total})` : `RESULT: ${diff} DIFF of ${total}`,
+    diff === 0 ? "ok" : "bad");
+</script></body></html>

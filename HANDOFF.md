@@ -33,10 +33,13 @@ OFFERS and the exact string each SENDS, and all nine of the reference's
 `decisionFunction` call sites are reached. The decision space is finished work;
 do not re-open it without a reason.
 
-**Untested surfaces: PILES, the LOG, CARD INFO, ZOOM and REPLAY CONTROLS are
-done.** Still untested: drag-to-reorder, concede and detached boards.
+**Untested surfaces: PILES, the LOG, CARD INFO, ZOOM, REPLAY CONTROLS and
+CONCEDE/CANCEL are done.** Detached boards have NO reference counterpart --
+`window.open` appears nowhere in `gameUi.js` -- so there is nothing to compare;
+drag-to-reorder is a feature this client does not have yet, so it is a gap
+before it is a differential.
 
-Six surface differentials now, all with proven controls. Ten client gaps have
+Seven surface differentials now, all with proven controls. Twelve client gaps have
 come out of them, none of which the client itself reported: it rendered
 everything without error every time, and only the oracle said what was missing.
 
@@ -52,6 +55,7 @@ space from the source, drive both clients, prove the control fires.
     bash harness/inforun.sh    7 card-id kinds x live/replay, 3 controls
     bash harness/zoomrun.sh    6 hover targets x 3 states, 4 controls
     bash harness/replayrun.sh  replay speed + play/pause, 3 controls
+    bash harness/optsrun.sh    concede + cancel x player/spectator, 4 controls
 
 Two client bugs came out of the first enumeration, both in one afternoon and
 neither visible without the oracle: **no draw-deck pile at all**, and **every
@@ -362,6 +366,7 @@ harness/
   inforun.sh       CARD INFO differential: live + replay, 3 controls (MODES=)
   zoomrun.sh       ZOOM differential: 6 targets x 3 states, 4 controls
   replayrun.sh     REPLAY CONTROLS differential: speed + play/pause, 3 controls
+  optsrun.sh       GAME OPTIONS differential: concede + cancel, 4 controls (ROLES=)
   autopassmeasure.py  proves the auto-pass cookie changes what the ENGINE asks,
                    by counting no-action CARD_ACTION_CHOICEs  (--only A|B|C)
 ```
@@ -1857,6 +1862,78 @@ calls `this.checkForEnd` (chat.js:382) and other siblings the sink does not
 provide, and bound to the object those are TypeErrors that kill the page. Bound
 to the proxy they fall through to the no-op, so the reference's own method runs
 without anyone having to enumerate what it happens to touch.
+
+---
+
+## The game-options differential: concede and cancel
+
+`src/dev/optsfuzz.html`, driven by `harness/optsrun.sh`. No server, no game.
+
+    bash harness/optsrun.sh             player + spectator, 4 controls
+    bash harness/optsrun.sh baseline
+
+Two things per control -- whether it is OFFERED and what it SENDS. Offers alone
+would miss a client that shows the right buttons and posts to the wrong
+endpoint, which is the CARD_SELECTION blind spot in another costume.
+
+### Two client gaps
+
+1. **Concede was offered to spectators.** The button was hardcoded into the
+   status bar. It is now gated on `canConcede(state)` and hidden until
+   PARTICIPANTS says which seat, if any, is ours.
+2. **There was no "request cancel" at all.** The reference offers it beside
+   concede (gameUi.js:797-801) and the endpoint has always existed
+   (`POST /game/{id}/cancel`, GameRequestHandler.java:63-64), so the only way
+   out of a game that had gone wrong was to LOSE it. `transport.cancel()` and a
+   button, same shape as concede.
+
+### A FOURTH reference bug, and its own guard proves it
+
+The reference's intent is unambiguous: `gameUi.js:608` carries the comment
+`//No Options box` for spectators, and `gameUi.js:791` guards both buttons on
+`!spectatorMode && !replayMode`. **Its behaviour does not match.**
+
+`addBottomLeftTabPane` runs from `init` at CONSTRUCTION (gameUi.js:213), long
+before `participant()` assigns `spectatorMode` -- so both guards read a field
+that has no value yet, and the Options box is built for everyone. Measured: the
+page records whether the buttons exist BEFORE feeding the PARTICIPANTS event,
+and they do, in both roles.
+
+    offered before any role was known: {"concede":true,"cancel":true}
+
+So a spectator in the reference gets a Concede button for a game they are not
+playing. Recorded as `ORACLE`, not counted as a DIFF -- the same treatment the
+`max=0` cases get, and for the same reason: counting somebody else's bug makes
+every run red and teaches a reader to ignore the colour. The comparison then
+runs against the reference's own INTENT, which is what this client implements.
+
+### The confirm is a kept divergence, not a gap
+
+The reference concedes on ONE click with no confirmation. This client asks
+first, because conceding is irreversible and ends the game for everyone at the
+table. Deliberate, defended in DESIGN.md, and deliberately NOT compared -- a
+differential that flagged it would be reporting a design decision as a defect.
+
+### Verified
+
+    baseline     player ALL PASS (6)   spectator ALL PASS (6)
+    offerall     fires on SPECTATOR only   -- it forces both ON, so it can only
+                                             differ where the truth is OFF
+    offernone    fires on PLAYER only      -- the mirror
+    wrongverb    fires on both             -- what a control sends does not
+    wrongpath    fires on both                depend on who is looking
+
+The two offer controls being one-sided is their SCOPE, recorded in
+`CONTROL_SCOPE`; without that, each one's passing role reads as coverage.
+
+### Detached boards: there is nothing to compare, and that is the finding
+
+`window.open` appears nowhere in `gameUi.js` -- only in the deckbuilder and hall
+(`deckBuildingUi.js`, `hallUi.js`). **The reference has no detachable game board
+at all**, so `view/detach.js` has no counterpart and no differential is
+possible. That is not a gap in the testing; it is the absence of an oracle, and
+it should be recorded rather than papered over with a comparison against
+nothing. `multiwindow_spike.html` remains the evidence that the approach works.
 
 ---
 
