@@ -731,7 +731,21 @@ function runCase(c) {
              `areas=${targets[0] != null ? $(`.card:cardId(${targets[0]}) .actionArea`).length : "-"}`;
     } catch (e) { return "probe failed: " + e.message; }
   })();
+  // DID THE CLICK ARRIVE AT ALL? Everything measured so far says the card is
+  // selectable, carries an .actionArea and is found by the client's own
+  // selector -- and still nothing happens. That leaves two possibilities the
+  // outside cannot tell apart: the click never reaches `selectionFunction`, or
+  // it reaches it and the function declines. Counting entries separates them.
+  let selFnCalls = 0;
+  const origSelFn = OLD.ui && OLD.ui.selectionFunction;
+  if (typeof origSelFn === "function") {
+    OLD.ui.selectionFunction = function () {
+      selFnCalls++;
+      return origSelFn.apply(this, arguments);
+    };
+  }
   const oSend = drive.old(arg, targets, c);
+  rec.notes.push(`selectionFunction entered ${selFnCalls}x during the old drive`);
   // AND THE STATE AFTER. Everything measured so far was pre-click, which says
   // the decision rendered correctly but nothing about what the click did. If
   // `chosen` or `done` moved, the click landed and the submit step is at fault;

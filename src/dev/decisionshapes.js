@@ -346,6 +346,21 @@ export const CASES = [
   // the marker that says "we are right and the oracle is not" needs a
   // measurement, not a reading.
   //
+  // NARROWED, still open. Instrumenting `ui.selectionFunction` shows it is
+  // ENTERED ONCE during the drive, with no exception recorded -- so the click
+  // arrives and the reference's own selection logic runs. Four rounds were spent
+  // on a "the click does not land" theory that this measurement kills outright.
+  // What is left is the gap between `selectionFunction` running and
+  // `decisionFunction` being reached: the picker's Done lives on
+  // `cardActionDialog`'s jQuery-UI button pane, and `oldFinish()` looks in
+  // `.alertButtons` and `#smallDialog`, which the picker does not use. The
+  // buttonpane fallback added for this does not appear to connect either.
+  //
+  // NEXT MEASUREMENT: instrument `decisionFunction` the same way
+  // `selectionFunction` was, and count entries. That separates "Done was never
+  // pressed" from "Done was pressed and the submit path failed" -- the last
+  // distinction not yet measured here.
+  //
   // ATTEMPTED AND STILL OPEN. The driver now also presses
   // `.ui-dialog-buttonpane button`, and it changes nothing: every other picker
   // case submits through AUTO-ACCEPT (`selectedCardIds.length == max`), which by
