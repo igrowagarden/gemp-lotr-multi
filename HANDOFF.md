@@ -1793,6 +1793,30 @@ cause. Enumerate from the diff, not from memory.
 The control line is the one that makes the others mean anything: same three
 games, clean without sabotage and broken with it.
 
+### A control you cannot INVOKE reads like a control that found nothing
+
+`livediffrun.sh` had no `SABOTAGE` plumbing at all. Running
+`SABOTAGE=badcard bash livediffrun.sh` therefore printed an ordinary CLEAN
+result and applied no control whatsoever -- and it was nearly read as
+confirmation twice before the missing grep hit was noticed.
+
+This is the same failure as a control that cannot FIRE, one level up: the
+runner silently dropped the flag instead of refusing an option it did not
+understand. **A runner should fail on an option it does not implement, not
+ignore it.** `SABOTAGE=` is now plumbed through to `livediff.html`:
+
+    SABOTAGE=badcard    the engine must REJECT (a card id never offered)
+    SABOTAGE=actionids  the clients must DIVERGE (card ids for an action index)
+
+Verified firing: `ENGINE REJECTED the old client's answer "999999" to
+CARD_SELECTION`, with the decision's full parameter map beside it.
+
+### Live differential, verified
+
+    livediffrun.sh 4 70              4 clean games, ~260 decisions, all six
+                                     decision types, 0 mismatches 0 rejections
+    SABOTAGE=badcard ... 2 60        2 of 2 games report engine rejections
+
 ### The rule this cost twice in one day
 
 **A shared file with three consumers cannot be edited to suit one of them.**

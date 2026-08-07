@@ -42,6 +42,17 @@ DOCKER=/c/Users/emers/AppData/Local/Programs/DockerDesktop/resources/bin/docker.
 HERE="$(cd "$(dirname "$0")" && pwd)"
 BASE="http://localhost:17002/gemp-lotr/newclient/dev/livediff.html"
 
+# SABOTAGE= plumbs livediff.html's negative controls through this runner.
+#
+# It was missing, and its absence was invisible in the worst way: running
+# `SABOTAGE=badcard bash livediffrun.sh` printed a perfectly ordinary CLEAN
+# result and applied no control at all. A control you cannot INVOKE reads
+# exactly like a control that found nothing -- the same failure as a control
+# that cannot FIRE, one level up, and it was nearly read as confirmation twice.
+#
+#   SABOTAGE=badcard    the engine must REJECT (a card id never offered)
+#   SABOTAGE=actionids  the clients must DIVERGE (card ids for an action index)
+
 clean=0; problems=0; failed=0
 for round in $(seq 1 "$GAMES"); do
   # A fresh random deck for every seat, every game. Sampled from a pool the
@@ -77,7 +88,7 @@ for round in $(seq 1 "$GAMES"); do
   res=$(timeout 220 "$CHROME" --headless --disable-gpu \
         --user-data-dir="C:\\Users\\emers\\AppData\\Local\\Temp\\cr_live$round" \
         --window-size=1500,950 --dump-dom --virtual-time-budget=170000 \
-        "$BASE?gameId=$gid&participantId=asdf&login=asdf&password=asdf&mode=$MODE&seed=$seed&max=$MAX&for=100" \
+        "$BASE?gameId=$gid&participantId=asdf&login=asdf&password=asdf&mode=$MODE&seed=$seed&max=$MAX&for=100${SABOTAGE:+&sabotage=$SABOTAGE}" \
         2>/dev/null | python -c "
 import sys,re,html
 d=sys.stdin.read()
