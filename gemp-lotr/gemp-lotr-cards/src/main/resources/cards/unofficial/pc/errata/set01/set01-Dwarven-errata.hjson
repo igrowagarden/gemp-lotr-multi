@@ -685,12 +685,24 @@
 					text: Choose a Shadow card to discard
 				}
 				{
+					// "ITS OWNER may discard 3 cards from the bottom of THEIR
+					// draw deck to prevent this" -- the owner of the Shadow card
+					// just chosen, which is exactly what ownerFromMemory reads
+					// off `chosenCard`. Not anyShadow: the card names one player
+					// and it is not a fixed seat.
+					//
+					// ownerFromMemory is legal in a cost where fromMemory is not:
+					// PlayerSource.canPreEvaluate() defaults to true and only
+					// fromMemory overrides it to false.
 					type: preventable
-					player: shadow
+					player: ownerFromMemory(chosenCard)
 					text: Would you like to discard the bottom 3 cards of your deck to prevent {chosenCard} from being discarded?
 					cost: {
+						// `you` inside a prevention COST is whoever accepted, and
+						// only one player is ever offered here -- so this is the
+						// same owner, named the way a cost is allowed to name them.
 						type: discardBottomCardsFromDeck
-						deck: shadow
+						deck: you
 						count: 3
 						forced: false
 					}

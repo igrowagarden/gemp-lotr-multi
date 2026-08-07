@@ -26,6 +26,16 @@
 					type: location
 					filter: regionNumber(2)
 				}
+				// DO NOT "FIX" THIS ONE. The printed text says "the FIRST
+				// Shadow player may discard 2 cards from hand", and
+				// getFirstShadowPlayer returns exactly that -- the first Shadow
+				// player counter-clockwise from the Free Peoples player. Both
+				// tokens here are correct as written and stay correct at five
+				// seats.
+				//
+				// It is the one card the census flags where `shadow` is the
+				// intended answer rather than a two-player accident, so a
+				// mechanical sweep of the remaining tokens would break it.
 				effect: {
 					type: optional
 					player: shadow

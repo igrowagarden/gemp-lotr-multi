@@ -689,9 +689,15 @@
 				select: choose(elf)
 			}
 			effect: [
+				// "reveal AN OPPONENT's hand" -- one opponent, chosen, and the
+				// same one whose minion is discarded below.
+				{
+					type: ChooseOpponent
+					memorize: opponent
+				}
 				{
 					type: revealHand
-					hand: shadowPlayer
+					hand: fromMemory(opponent)
 					memorize: revealedCards
 				}
 				{
@@ -701,20 +707,41 @@
 						memory: revealedCards
 						filter: culture(isengard),minion
 					}
+					// The discard MOVED from the optional's `cost:` to its
+					// `effect:`, and it had to. A cost is registered as a play
+					// requirement, so every source in it must pre-evaluate, and
+					// fromMemory cannot -- the card refuses to load with "Can't
+					// pre-evaluate a cost". `ignoreCostCheckFailure` is not an
+					// escape here either: DiscardFromHand's validateAllowedFields
+					// does not list that field, so it is rejected as unknown
+					// before validatePreEvaluate ever runs.
+					//
+					// Behaviour is preserved because the enclosing If has already
+					// established that an [isengard] minion was revealed, so the
+					// discard cannot fail to be payable. What changes is only that
+					// it is now sequenced as an effect rather than checked up
+					// front.
+					//
+					// `player: you` still names the Free Peoples player: Optional
+					// delegates its EFFECT to its own `player:`, which defaults to
+					// `you` -- the event's performer. (Note it does NOT delegate
+					// its cost, which is the reverse of preventable.)
 					true: {
 						type: optional
 						text: Would you like to discard an {ISENGARD} minion revealed to draw 2 cards?
-						cost: {
-							type: discardFromHand
-							hand: shadowPlayer
-							forced: true
-							player: you
-							select: choose(memory(revealedCards),culture(isengard),minion)
-						}
-						effect: {
-							type: drawCards
-							count: 2
-						}
+						effect: [
+							{
+								type: discardFromHand
+								hand: fromMemory(opponent)
+								forced: true
+								player: you
+								select: choose(memory(revealedCards),culture(isengard),minion)
+							}
+							{
+								type: drawCards
+								count: 2
+							}
+						]
 					}
 				}
 			]
