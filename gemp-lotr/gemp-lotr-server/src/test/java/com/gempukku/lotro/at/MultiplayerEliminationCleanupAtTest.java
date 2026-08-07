@@ -124,6 +124,90 @@ public class MultiplayerEliminationCleanupAtTest {
     }
 
     /**
+     * "The other players complete the losing player's turn."
+     *
+     * THIS CLAUSE TURNED OUT TO BE ALREADY SATISFIED, and this test exists to
+     * say so with a measurement rather than a code read -- an earlier note in
+     * this project claimed the opposite and had to be retracted.
+     *
+     * The claim was that FellowshipPlayerChoosesToMoveOrStayGameProcess's
+     * eliminated-player guard aborts the turn. It does not: it answers "do you
+     * want to move again?" as "stay" on behalf of somebody who cannot be asked,
+     * and playerStays routes to EndOfPhaseGameProcess(REGROUP,
+     * EndOfTurnGameProcess) -- the ordinary end of a turn. The other two
+     * elimination guards behave the same way, treating the empty seat as a pass
+     * rather than a stop.
+     *
+     * So the turn runs out normally and play reaches the next player. What the
+     * guards prevent is the eliminated player being ASKED anything, which is
+     * separate from whether the turn finishes.
+     */
+    @Test
+    public void theOtherPlayersCompleteTheLosersTurn() throws Exception {
+        var scn = ThreeSeats();
+
+        scn.MoveCompanionsToTable(scn.GetCardFor(P1, "gimli"));
+        scn.StartMultiplayerGame();
+        assertEquals("P1 should take the first turn", P1, scn.FreePeoplesPlayer());
+
+        scn.game().playerLost(P1, "test-forced elimination mid-turn");
+
+        // A DECISION ALREADY SENT TO P1 IS STILL OUTSTANDING, and that is a
+        // property of this fixture rather than of the rule. StartMultiplayerGame
+        // leaves the Free Peoples player holding a "play a Fellowship action or
+        // pass" decision, and eliminating them at that instant does not withdraw
+        // it -- elimination removes a seat from future rotations, it does not
+        // retract a question already asked.
+        //
+        // In a real game the ring-bearer check runs inside effect resolution,
+        // when nothing is outstanding, so this state is reachable here and not
+        // there. The distinction the assertion below draws is therefore between
+        // a decision that PREDATES the loss, which is allowed to be answered,
+        // and any NEW one afterwards, which would be the actual defect. M3
+        // measured stray decisions after elimination at 3 -> 0; this keeps that
+        // honest for a loss that happens mid-turn.
+        boolean firstStepDone = false;
+        String reachedPlayer = null;
+        StringBuilder trace = new StringBuilder();
+        for (int step = 0; step < 300; step++) {
+            var waiting = new java.util.ArrayList<>(scn.userFeedback().getUsersPendingDecision());
+            if (waiting.isEmpty()) break;
+            java.util.Collections.sort(waiting);
+            String who = waiting.get(0);
+            if (firstStepDone)
+                assertNotEquals("an eliminated player must not be asked anything NEW"
+                                + " after the loss. trace: " + trace, P1, who);
+            firstStepDone = true;
+            var d = scn.userFeedback().getAwaitingDecision(who);
+            if (d == null) continue;
+            String answer;
+            switch (d.getDecisionType()) {
+                case MULTIPLE_CHOICE -> answer = "0";
+                case INTEGER -> answer = d.getDecisionParameters().containsKey("min")
+                        ? d.getDecisionParameters().get("min")[0] : "0";
+                default -> answer = "";
+            }
+            try {
+                scn.PlayerDecided(who, answer);
+            } catch (Exception e) {
+                trace.append("[").append(e.getClass().getSimpleName()).append("] ");
+                break;
+            }
+            String current = scn.gameState().getCurrentPlayerId();
+            if (!P1.equals(current)) {
+                reachedPlayer = current;
+                break;
+            }
+        }
+
+        assertNotNull("the turn should run out and pass to another player rather"
+                        + " than stalling on the eliminated seat. trace: " + trace,
+                reachedPlayer);
+        assertNotEquals("play moved on to a player who is still in the game",
+                P1, reachedPlayer);
+    }
+
+    /**
      * The guard on the whole feature: with only one other player left the game
      * is over, and none of the cleanup should run.
      *
