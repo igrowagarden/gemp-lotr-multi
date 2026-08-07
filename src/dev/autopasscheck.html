@@ -292,6 +292,20 @@ const probe = async () => {
   return res.status;
 };
 
+/**
+ * The probe DEPENDS on the server being intolerant of a bad phase name.
+ *
+ * `GameRequestHandler` calls `Phase.valueOf` and lets the exception out, which
+ * is what turns "did the cookie arrive" into a status code. The engine project
+ * has since made that parse TOLERANT on its `multiplayer/five-players` branch
+ * (gemp_multiplayer/docs/GEMP_AUTOPASS_COOKIE.md -- triaged and fixed there).
+ *
+ * Our server is a separate copy and still throws, so everything below holds.
+ * If it is ever rebuilt from that branch, a poisoned cookie will return 200 and
+ * the `path=/` assertion will FAIL -- loudly, which is right, but its message
+ * will read "the cookie does not reach the server" when the truth is "the
+ * server stopped minding". Read this before believing that failure.
+ */
 const POISON = "NOTAPHASE";
 const clear = (path) => {
   document.cookie = `autoPassPhases=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=${path}`;

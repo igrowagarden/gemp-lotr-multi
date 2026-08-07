@@ -57,6 +57,17 @@ BASE="http://localhost:17002/gemp-lotr/newclient/dev/livediff.html"
 #
 #   SABOTAGE=badcard    the engine must REJECT (a card id never offered)
 #   SABOTAGE=actionids  the clients must DIVERGE (card ids for an action index)
+#   SABOTAGE=perturb    ONE CONTROL PER DECISION TYPE, in one run. It spoils the
+#                       new client's answer for EVERY type and prints a
+#                       perturbed-vs-caught tally per type, so a type whose
+#                       divergence would NOT be noticed is named. Before this,
+#                       the two controls above covered CARD_ACTION_CHOICE offers
+#                       and CARD_SELECTION answers only, and "0 mismatches" on
+#                       the other five meant untested detection, not proven.
+#                       Add `SABTYPE=ASSIGN_MINIONS` to narrow it when bisecting.
+#                       Watch the CONTROL lines: `CONTROL HOLES` is the failure,
+#                       and `CONTROL UNSEEN` means that type never came up in
+#                       this game and is therefore still unproven.
 
 clean=0; problems=0; failed=0
 for round in $(seq 1 "$GAMES"); do
@@ -93,7 +104,7 @@ for round in $(seq 1 "$GAMES"); do
   res=$(timeout 220 "$CHROME" --headless --disable-gpu \
         --user-data-dir="C:\\Users\\emers\\AppData\\Local\\Temp\\cr_live$round" \
         --window-size=1500,950 --dump-dom --virtual-time-budget=170000 \
-        "$BASE?gameId=$gid&participantId=asdf&login=asdf&password=asdf&mode=$MODE&seed=$seed&max=$MAX&for=100${SABOTAGE:+&sabotage=$SABOTAGE}" \
+        "$BASE?gameId=$gid&participantId=asdf&login=asdf&password=asdf&mode=$MODE&seed=$seed&max=$MAX&for=100${SABOTAGE:+&sabotage=$SABOTAGE}${SABTYPE:+&sabtype=$SABTYPE}" \
         2>/dev/null | python -c "
 import sys,re,html
 d=sys.stdin.read()
@@ -106,6 +117,10 @@ det=[l for l in ls if l.startswith('by type')]
 # lines per game made 'zero engine rejections' unprovable: 128 problems were
 # reported and 24 lines survived, so anything past the third was invisible.
 cnt=[l for l in ls if l.startswith(('offer mismatches','engine rejections'))]
+# The per-type control tally. Without it the `perturb` control is invisible from
+# the runner and 'every type caught' cannot be asserted -- which is the whole
+# point of that control existing.
+cnt += [l for l in ls if l.startswith('CONTROL')]
 # Counters AND a few deduped samples. Counters alone prove HOW MANY went wrong
 # but say nothing about WHY, and a rejection cannot be reproduced from the seed,
 # so a run that reports '13 rejections' and no detail cannot be diagnosed at all.

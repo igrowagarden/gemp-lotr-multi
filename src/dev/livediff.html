@@ -69,7 +69,45 @@ const mode = q.get("mode") ?? "alternate";
 const maxDecisions = parseInt(q.get("max") ?? "60", 10);
 
 const stats = { decisions: 0, offerMismatch: 0, answerMismatch: 0,
-                rejectedOld: 0, rejectedNew: 0, sentOld: 0, sentNew: 0, byType: {}, selMin: {} };
+                rejectedOld: 0, rejectedNew: 0, sentOld: 0, sentNew: 0, byType: {}, selMin: {},
+                // `sabotage=perturb` bookkeeping: how many answers were spoiled
+                // per decision type, and how many of those were CAUGHT. They
+                // must match. See the note at perturb().
+                perturbed: {}, caught: {} };
+
+/**
+ * ONE CONTROL PER DECISION TYPE, in a single run.
+ *
+ * The two older controls inject into `CARD_ACTION_CHOICE` offers and
+ * `CARD_SELECTION` answers, so for the other five types "0 mismatches" meant
+ * UNTESTED detection rather than PROVEN detection -- nothing had ever shown
+ * that a divergence in ASSIGN_MINIONS or ARBITRARY_CARDS would be noticed at
+ * all.
+ *
+ * Running a separate sabotaged game per type would cost seven games. Instead
+ * `sabotage=perturb` spoils the NEW client's answer for EVERY type, and the run
+ * tallies perturbed-vs-caught per type. A type where the two disagree is a hole
+ * in the comparison, named. A type that never occurred is reported as such
+ * rather than counted as covered -- an untested type and a passing one must not
+ * look alike, which is the whole reason this exists.
+ *
+ * `sabtype=ASSIGN_MINIONS` narrows it to one type when bisecting.
+ *
+ * The perturbed answer is never SENT: `from` is forced to "old" below, so the
+ * engine always receives a legal answer and the game keeps going. Otherwise the
+ * control would produce engine rejections instead of client divergences and the
+ * run would stall a few decisions in, measuring nothing.
+ */
+const SABTYPE = q.get("sabtype");
+function perturb(d, pick) {
+  if (q.get("sabotage") !== "perturb") return pick;
+  const t = isAssignment(d) ? "ASSIGN_MINIONS" : d.decisionType;
+  if (SABTYPE && t !== SABTYPE) return pick;
+  stats.perturbed[t] = (stats.perturbed[t] ?? 0) + 1;
+  // Appending rather than replacing, so a PASS ("") is perturbed too -- the
+  // commonest answer in the game, and the one a naive control skips.
+  return { ...pick, new: String(pick.new) + "~", spoiled: true };
+}
 
 async function ready(frame) {
   for (let i = 0; i < 300; i++) {
@@ -324,17 +362,24 @@ const transport = createTransport({
     }
 
     // One option, expressed as each client would express it.
-    const pick = choose(d, oldOffer);
+    const pick = perturb(d, choose(d, oldOffer));
     const oldValue = pick.old, newValue = pick.new;
 
     if (oldValue !== newValue) {
       stats.answerMismatch++;
+      if (pick.spoiled) {
+        const t = isAssignment(d) ? "ASSIGN_MINIONS" : d.decisionType;
+        stats.caught[t] = (stats.caught[t] ?? 0) + 1;
+      }
       say(`ANSWERS DIFFER ${d.decisionType} (${pick.label}): ` +
           `old "${oldValue}" vs new "${newValue}" — ${d.text}`, "bad");
     }
 
-    // Alternate whose answer is actually sent, so the engine judges both.
-    const from = mode === "old" ? "old" : mode === "new" ? "new"
+    // Alternate whose answer is actually sent, so the engine judges both --
+    // except a SPOILED answer, which must never reach the engine or the control
+    // would produce rejections rather than divergences and stall the game.
+    const from = pick.spoiled ? "old"
+               : mode === "old" ? "old" : mode === "new" ? "new"
                : (answeredIds % 2 === 0 ? "old" : "new");
     const value = from === "old" ? oldValue : newValue;
     if (from === "old") stats.sentOld++; else stats.sentNew++;
@@ -386,6 +431,35 @@ function chatDone() {
     say(`old client errors: ${oldErrs.length}`, "warn");
     for (const e of oldErrs.slice(0, 4)) say("      " + e, "warn");
   }
+  // Per-type control coverage. Printed whenever the perturb control ran, and
+  // the runner greps it: a type perturbed but not caught is a hole, and a type
+  // that never came up is reported as UNSEEN rather than quietly counted.
+  if (q.get("sabotage") === "perturb") {
+    // The canonical seven, NOT just the types this game happened to ask. A type
+    // that never came up must be named as unproven -- otherwise a run that saw
+    // six of seven reports full coverage, which is the exact shape of the
+    // failure this control was built to end.
+    const ALL_TYPES = ["CARD_ACTION_CHOICE", "CARD_SELECTION", "ARBITRARY_CARDS",
+                       "ASSIGN_MINIONS", "INTEGER", "MULTIPLE_CHOICE", "ACTION_CHOICE"];
+    const types = [...new Set([...ALL_TYPES, ...Object.keys(stats.perturbed),
+                               ...Object.keys(stats.byType)])];
+    const holes = [];
+    const unseen = [];
+    for (const t of types) {
+      const p = stats.perturbed[t] ?? 0, c = stats.caught[t] ?? 0;
+      if (p === 0) unseen.push(t);
+      else if (c < p) holes.push(`${t} ${c}/${p}`);
+    }
+    say(`CONTROL perturbed: ${JSON.stringify(stats.perturbed)}`);
+    say(`CONTROL caught:    ${JSON.stringify(stats.caught)}`);
+    if (unseen.length) {
+      say(`CONTROL UNSEEN — this game asked none, so detection is still ` +
+          `UNPROVEN for: ${unseen.join(", ")}`, "warn");
+    }
+    say(holes.length ? `CONTROL HOLES: ${holes.join(", ")}` : "CONTROL COVERAGE: every perturbed type was caught",
+        holes.length ? "bad" : "ok");
+  }
+
   const bad = stats.offerMismatch + stats.answerMismatch + stats.rejectedOld + stats.rejectedNew;
   say(bad ? `RESULT: ${bad} PROBLEM of ${answeredIds}` : `RESULT: CLEAN over ${answeredIds} decisions`,
       bad ? "bad" : "ok");

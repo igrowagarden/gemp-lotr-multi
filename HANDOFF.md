@@ -504,12 +504,33 @@ clients were refused identically because both were handed the same choice.
 Fixed; see "The CARD_SELECTION rejections: SOLVED" for the two wrong turns taken
 on the way, both worth not repeating.
 
-**The controls do not cover every decision type.** Both inject into
-`CARD_ACTION_CHOICE` offers and `CARD_SELECTION` answers. Nothing tests whether
-a divergence in `ASSIGN_MINIONS` encoding, `ARBITRARY_CARDS` or the grouped
-assignment format would be *detected* at all. For those types "0 mismatches" is
-untested detection, not proven detection. One control per decision type is the
-obvious next move.
+**One control per decision type: DONE.** `SABOTAGE=perturb` spoils the new
+client's answer for EVERY type in a single run and tallies perturbed-vs-caught
+per type, so a type whose divergence would go unnoticed is NAMED rather than
+assumed. Measured over one game:
+
+    CONTROL perturbed: {INTEGER:1, MULTIPLE_CHOICE:5, ARBITRARY_CARDS:2,
+                        CARD_ACTION_CHOICE:12, CARD_SELECTION:4, ASSIGN_MINIONS:3}
+    CONTROL caught:    (identical)
+    CONTROL COVERAGE: every perturbed type was caught
+    CONTROL UNSEEN — this game asked none, so detection is still UNPROVEN
+                     for: ACTION_CHOICE
+
+So detection is proven in the LIVE differential for six of the seven types.
+`ACTION_CHOICE` is rare enough that it did not come up; it is covered instead by
+`fuzzrun`'s `answer` control, which reaches all seven. Run more games to catch
+it live, and note the run tells you when it has not.
+
+Two things make the control honest. The spoiled answer is **never sent** --
+`from` is forced to `old` -- so the engine always receives a legal answer and
+the game keeps going; otherwise the control would produce engine rejections
+instead of client divergences and stall a few decisions in. And the unseen list
+is computed against the CANONICAL SEVEN, not against the types this game
+happened to ask, so a run that saw six of seven cannot report full coverage.
+
+Before this, the two older controls injected into `CARD_ACTION_CHOICE` offers
+and `CARD_SELECTION` answers only, and "0 mismatches" on the other five meant
+untested detection rather than proven detection.
 
 **Next**, in the order they are worth doing:
 
@@ -533,9 +554,9 @@ obvious next move.
 0d. **Make rejection counts trustworthy.** Decision ids are not unique -- 22 call
    sites pass `1` -- so "a warning arrived AND the same decision id was asked
    again" counts unrelated warnings as rejections. Match on the decision's
-   identity. And **add a negative control per decision type**: today only
-   `CARD_ACTION_CHOICE` offers and `CARD_SELECTION` answers have one, so a clean
-   `ASSIGN_MINIONS` run means no divergence was found, not that one would be.
+   identity. ~~And add a negative control per decision type~~ -- **done**, see
+   `SABOTAGE=perturb` above; six of seven proven live, the seventh named as
+   unproven rather than assumed.
 
 1. **Play a hand yourself as a seated player.** Everything is verified by
    machine; nothing has been driven by a human through the real UI. Sit at
