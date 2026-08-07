@@ -224,12 +224,16 @@
 						showAll: true
 					}
 					{
+						type: ChooseOpponent
+						memorize: opponent
+					}
+					{
 						type: optional
-						player: shadow
+						player: fromMemory(opponent)
 						text: Would you like to draw 2 cards?
 						effect: {
 							type: drawCards
-							player: shadow
+							player: fromMemory(opponent)
 							count: 2
 						}
 					}

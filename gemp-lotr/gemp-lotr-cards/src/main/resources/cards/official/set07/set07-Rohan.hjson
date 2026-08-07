@@ -850,6 +850,10 @@
 					memorize: spotCount
 				}
 				{
+					type: ChooseOpponent
+					memorize: opponent
+				}
+				{
 					type: repeat
 					times: {
 						type: fromMemory
@@ -857,7 +861,7 @@
 					}
 					effect: {
 						type: choice
-						player: shadow
+						player: fromMemory(opponent)
 						texts: [
 							Remove 1 twilight
 							Place a random card from hand beneath draw deck
@@ -869,7 +873,7 @@
 							}
 							{
 								type: putRandomCardFromHandBeneathDrawDeck
-								hand: shadow
+								hand: fromMemory(opponent)
 							}
 						]
 					}
