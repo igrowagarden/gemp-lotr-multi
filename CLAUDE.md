@@ -38,10 +38,11 @@ origin because the reference client loads from `/gemp-lotr/js/`:
 bash harness/sync.sh
 ```
 
-The three differentials, all green and all proven capable of failing:
+The differentials, all green and all proven capable of failing:
 
 ```bash
 bash harness/fuzzrun.sh            # 48 decision shapes x 7 types + 3 controls
+bash harness/pilerun.sh            # 4 viewer configs x 5 piles + 3 controls
 bash harness/diffrun.sh 12 40      # replay differential over recorded games
 bash harness/livediffrun.sh 4 70   # live, with the ENGINE judging
 ```
@@ -65,8 +66,10 @@ DOCKER=/c/Users/emers/AppData/Local/Programs/DockerDesktop/resources/bin/docker.
   `--host-resolver-rules="MAP i.lotrtcgpc.net 127.0.0.1, MAP lotrtcg2e.club 127.0.0.1, EXCLUDE localhost"`
 - **`SEED=` or `IDS=` whenever you bisect with `diffrun.sh`.** It samples random
   recordings, so two unpinned runs compare different games and prove nothing.
-- **`src/dev/oldharness.html` is shared by three pages.** An edit that suits one
-  broke another for hours. Gate anything type-specific behind an opt-in flag.
+- **`src/dev/oldharness.html` is shared by FOUR pages** — `decisionfuzz`,
+  `pilefuzz`, `diff` and `livediff`. An edit that suits one broke another for
+  hours. Gate anything page-specific behind an opt-in flag, as
+  `setReadStaleDialogButtons` is.
 - **A grep for `FAIL` or `RESULT:` matches the pages' own source.** Use
   `RESULT: ALL PASS \([0-9]+\)`.
 - **`sync.sh` now REFUSES while a harness is running** — it does `rm -rf
@@ -105,6 +108,6 @@ Always continue working on item #1 without human prompting. Document and flag is
   before either client. That was true nearly every time this session.
 - Count rather than infer. "The client did nothing" has several distinct causes
   and they look identical from outside; instrument and count entries.
-- The reference client is the oracle but is **not** infallible — two of its bugs
-  are recorded here, both measured. A disagreement is still this client's bug
-  until shown otherwise.
+- The reference client is the oracle but is **not** infallible — three of its
+  bugs are recorded here, all measured, two of them reported upstream. A
+  disagreement is still this client's bug until shown otherwise.

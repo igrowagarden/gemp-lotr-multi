@@ -13,6 +13,7 @@
 
 import { createFlyout } from "./flyout.js";
 import { pileOf, pileSize } from "../state/reduce.js";
+import { pilesFor } from "../model/piles.js";
 import { renderCard } from "./card.js";
 import { imageUrl, CARD_BACK } from "../model/images.js";
 
@@ -22,13 +23,6 @@ const el = (doc, tag, cls, text) => {
   if (text != null) node.textContent = text;
   return node;
 };
-
-const PILES = [
-  { zone: "DISCARD", label: "Discard" },
-  { zone: "DEAD", label: "Dead" },
-  { zone: "ADVENTURE_DECK", label: "Adventure" },
-  { zone: "REMOVED", label: "Removed" }
-];
 
 export function createPileViewer(host, store) {
   let who = null;
@@ -53,8 +47,24 @@ export function createPileViewer(host, store) {
         return;
       }
 
+      // Which piles this viewer may open for this seat, per model/piles.js --
+      // NOT a fixed four. An opponent's adventure deck was previously offered
+      // and could only ever say "face down to you", and the draw deck was
+      // missing entirely.
+      const offered = pilesFor(s, who);
+      if (!offered.length) {
+        body.appendChild(el(doc, "span", "band-empty",
+          `Nothing of ${who}'s is open to you.`));
+        panel.root.querySelector(".flyout-title").textContent = `${who} · piles`;
+        return;
+      }
+      // The remembered zone may not be offered for THIS seat -- switching from
+      // your own seat to an opponent's while looking at your draw deck would
+      // otherwise show their deck, which is exactly what must not happen.
+      if (!offered.some((p) => p.zone === zone)) zone = offered[0].zone;
+
       const tabs = el(doc, "div", "piletabs");
-      for (const pile of PILES) {
+      for (const pile of offered) {
         const n = pileSize(s, who, pile.zone);
         const b = el(doc, "button", "ptab" + (pile.zone === zone ? " on" : ""),
                      `${pile.label} ${n}`);
@@ -97,7 +107,9 @@ export function createPileViewer(host, store) {
     show(playerId) {
       if (panel.isOpen && who === playerId) return panel.close();
       who = playerId;
-      zone = "DISCARD";
+      // Open on the first pile actually offered for this seat, not always on
+      // DISCARD -- which a spectator in a private-discard format cannot see.
+      zone = pilesFor(store.getState(), playerId)[0]?.zone ?? "DISCARD";
       panel.open();
       panel.paint(store.getState());
       return panel;

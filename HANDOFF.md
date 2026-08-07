@@ -33,11 +33,18 @@ OFFERS and the exact string each SENDS, and all nine of the reference's
 `decisionFunction` call sites are reached. The decision space is finished work;
 do not re-open it without a reason.
 
-**What is NOT covered, and it is the larger half:** piles, zoom, card info,
-chat, the game log, replay controls, drag-to-reorder, concede, spectating,
-detached boards. Nothing tests any of it against the reference. That is the
-next real piece of work, and `decisionfuzz.html` is the template -- enumerate
-the space from the source, drive both clients, prove the control fires.
+**The untested surfaces: PILES are now done, the rest are not.** Zoom, card
+info, chat, the game log, replay controls, drag-to-reorder, concede, detached
+boards -- nothing tests any of them against the reference. `decisionfuzz.html`
+is the template and `pilefuzz.html` is the worked second example: enumerate the
+space from the source, drive both clients, prove the control fires.
+
+    bash harness/pilerun.sh    4 viewer configs x 5 piles x 2 seats + 3 controls
+
+Two client bugs came out of the first enumeration, both in one afternoon and
+neither visible without the oracle: **no draw-deck pile at all**, and **every
+pile offered for every seat** including an opponent's adventure deck, which
+could only ever say "face down to you". See "The pile differential".
 
 ### Five client bugs found and fixed by the shape catalogue
 
@@ -337,6 +344,8 @@ harness/
   cleanhall.sh     concede abandoned games; see the restart note
   fuzzrun.sh       DECISION-SPACE differential: all 7 types + all 3 controls,
                    no server game needed        (TYPES=, `baseline` for no controls)
+  pilerun.sh       PILE differential: 4 viewer configs + 3 controls, no server
+                   game needed                  (CONFIGS=, `baseline`)
   autopassmeasure.py  proves the auto-pass cookie changes what the ENGINE asks,
                    by counting no-action CARD_ACTION_CHOICEs  (--only A|B|C)
 ```
@@ -1691,9 +1700,90 @@ inventing a verdict — read the SKIP line, it names which.
   agent's tree, so coordinate.
 - **Site owner may not reach the client either.** Worth checking together with
   the above rather than twice.
-- **Pile access for spectators** should follow the `discardPublic` flag on the
-  `PARTICIPANTS` event, not be hidden wholesale — in formats with public
-  discards a spectator may browse them.
+- ~~**Pile access for spectators** should follow the `discardPublic` flag.~~
+  **CLOSED, and it is now differentially verified.** A spectator gets Dead and
+  Removed for every seat always, and every seat's Discard when `discardPublic`
+  is set. See "The pile differential" below — the rule is `model/piles.js`,
+  transcribed from `gameUi.js:1747-1789` and checked against the oracle in all
+  four viewer configurations.
+
+---
+
+## The pile differential
+
+`src/dev/pilefuzz.html` + `src/dev/pileshapes.js`, driven by
+`harness/pilerun.sh`. **No server, no bots, no game** -- the same shape as the
+decision-space differential, applied to the first of the untested surfaces.
+
+    bash harness/pilerun.sh              4 configs + 3 controls
+    bash harness/pilerun.sh baseline     baseline only
+    CONFIGS=spectator-public bash harness/pilerun.sh
+
+### The space, and why it is four page loads
+
+Read out of `participant()` (`gameUi.js:1747-1789`), which is the ONLY place the
+reference decides a pile dialog exists:
+
+    role           player | spectator     getPlayerIndex(bottomPlayerId) == -1
+    discardPublic  true | false           an attribute on PARTICIPANTS
+    pile           5 kinds                one createPile call each
+    target seat    own | another          the loop runs over allPlayerIds
+
+Role and `discardPublic` are fixed at PARTICIPANTS time and every dialog is
+built once from them, so they cannot be varied inside a page -- and `boot()` may
+only be called once, which decisionfuzz.html measured the hard way. They are
+therefore CONFIGURATIONS, one per page load, and `pilerun.sh` runs all four.
+
+The rule, transcribed:
+
+| pile | offered for seat T when |
+|---|---|
+| Dead, Removed | T is any player — spectators included |
+| Discard | `discardPublic` ? any player : your own, and only if seated |
+| Adventure Deck, **Draw Deck** | your own, and only if seated |
+
+`model/piles.js` is that rule; `pileshapes.js` carries an INDEPENDENT
+transcription of it and the page checks the oracle against that first. If the
+two disagree the page reports `HARNESS`, not a client difference -- comparing
+the new client's rule against itself is exactly how the INTEGER differential
+passed for a session while measuring a value against a copy of itself.
+
+### Two client bugs, found immediately
+
+1. **No draw-deck pile at all.** The reference gives your own deck a dialog,
+   filed under `miscPileDialogs`, which is not a name anyone would guess. This
+   client had four pile kinds and the deck was not one of them, so a player
+   could not look at their own deck.
+2. **Every pile offered for every seat.** An opponent's adventure deck and
+   an opponent's private discard both had tabs, and both could only ever say
+   "face down to you" -- the server never sends those cards. A control that
+   opens onto a dead end is worse than no control.
+
+Both were invisible from inside: the client rendered them without error and the
+counts were even correct. Only the oracle says which ones should exist.
+
+### Verified
+
+    baseline    player-private 9   player-public 10
+                spectator-private 6   spectator-public 8      all ALL PASS
+    dropdeck    fires on the two PLAYER configs                 (its scope)
+    extrapile   fires on all four
+    contents    fires on all four, every reachable pile
+
+`dropdeck` **cannot** fire on a spectator configuration, because the draw deck
+is never offered to a spectator in the first place. That is its scope, not a
+gap, and `CONTROL_SCOPE` in `pilerun.sh` records it -- otherwise two clean
+spectator runs read as coverage they are not.
+
+### The harness fault it paid for, again
+
+The first run reported `old []` for all nine content comparisons at once. That
+is the standing signal: **a whole category failing identically is the harness.**
+It was. `NormalCardGroup` holds no card array -- `getCardElems` re-queries
+`$(".card", this.container)` and reads each element's `.data("card")`
+(`CardGroup.js:32-41`) -- so `group.cards` was `undefined` everywhere. Reading
+the dialog's DOM instead turned nine DIFFs into nine passes without a line of
+client code changing.
 
 ---
 
