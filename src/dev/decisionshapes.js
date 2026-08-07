@@ -331,6 +331,30 @@ export const CASES = [
     params: { cardId: ["temp0", "temp1"], blueprintId: ["1_10", "1_11"],
               selectable: ["false", "false"], min: "1", max: "1" } },
 
+  // THE max=0 SHAPE, IN THE PICKER. Mirror of the CARD_SELECTION case above,
+  // and the reference has the same defect in both places: its `finishChoice`
+  // tests `if (selectedCardIds.length < min) return;` (gameUi.js:2394) and never
+  // tests `max`, while the engine throws on either bound --
+  // `ArbitraryCardsSelectionDecision:92`, `cardIds.length > _maximum`.
+  // Cards are still listed as selectable, exactly as at CARD_SELECTION max=0.
+  //
+  // NOT marked `oracleWrong`, deliberately. The source says the reference should
+  // send an illegal answer here; the RUN does not show it doing so -- it sends
+  // nothing, because this page's driver cannot reach the picker's submit button
+  // (it lives on `cardActionDialog`, not the `#Done` in `alertButtons` that the
+  // other types use). So the reference is unproven here, not proven wrong, and
+  // the marker that says "we are right and the oracle is not" needs a
+  // measurement, not a reading. Reaching that button is what would settle it.
+  //
+  // What IS established: this client sends "", the only legal answer.
+  { name: "max=0 with cards still selectable", type: "ARBITRARY_CARDS",
+    note: "Zero cards wanted, cards still offered. Only \"\" is legal. The " +
+          "reference has no `max` test in finishChoice (gameUi.js:2394) and the " +
+          "engine throws on `cardIds.length > _maximum` " +
+          "(ArbitraryCardsSelectionDecision:92) -- but see above: not yet shown.",
+    params: { cardId: ["temp0", "temp1"], blueprintId: ["1_10", "1_11"],
+              selectable: ["true", "true"], min: "0", max: "0" } },
+
   { name: "empty picker", type: "ARBITRARY_CARDS",
     params: { cardId: [], blueprintId: [], min: "0", max: "0" } },
 
