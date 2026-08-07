@@ -1783,6 +1783,16 @@ consumes. Two theories were acted on -- reverting the `actionableCard` class gat
 and disabling the `ui.hand` stub -- before either was tested, and neither was the
 cause. Enumerate from the diff, not from memory.
 
+### Verified after the fix
+
+    fuzzrun.sh (full)         47/47 baseline, all three controls fired in scope
+    diffrun.sh SEED=7 3 25    3 of 3 agreeing
+    diffrun.sh SEED=7 + actionids   0 of 3  <- the control, on the SAME games
+    diffrun.sh 12 40          12 of 12 agreeing, 0 disagreeing
+
+The control line is the one that makes the others mean anything: same three
+games, clean without sabotage and broken with it.
+
 ### The rule this cost twice in one day
 
 **A shared file with three consumers cannot be edited to suit one of them.**
