@@ -527,6 +527,14 @@ arrive* rather than *the probe does not work*. It also establishes a third
 reference-client bug — its auto-pass checkboxes are inert, and every reference
 game runs on `_autoPassDefault` whatever the boxes say.
 
+The same probe measures point 2: `autoPassPhases=` at `path=/` returns **500**,
+so the empty value survives both the browser and Netty's decoder and does throw.
+That defect is currently masked by the path one — the cookie never arrives, so
+the empty value never bites. **The two cancel, and fixing only the path would
+turn "the checkboxes do nothing" into "unticking them all breaks the game."**
+Both halves have to move together, which is why `cookieWrites()` treats the
+empty set as a different representation rather than as an empty string.
+
 The client-side arm (`shouldClientAutoPass`) reproduces the reference's
 `gameUi.js:2477` branch and is **off by default**, because that branch is dead
 code: `settingsAutoPass` is declared `false` at `gameUi.js:84` and assigned

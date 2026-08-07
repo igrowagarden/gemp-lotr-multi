@@ -72,7 +72,7 @@ Three things that reading the server settled, none of them guessable:
    reaches `/gemp-lotr-server`. **Measured** — see below.
 
 `model/autopass.js` + `view/settings.js` + the "Auto-pass" button on the status
-bar; `dev/autopasscheck.html` is the suite, **50 assertions** (47 without a
+bar; `dev/autopasscheck.html` is the suite, **51 assertions** (47 without a
 `gameId`, and it says SKIP rather than counting the measurement as passed).
 
 The client-side arm — the reference's `gameUi.js:2477` — is implemented and
@@ -101,6 +101,27 @@ code:
 **The `/` row is the control.** Without it, two 200s are indistinguishable from
 a probe that does nothing — which is this project's most-repeated failure, and
 the reason the measurement was built this way rather than as two assertions.
+
+#### The two bugs mask each other, and fixing one alone makes it WORSE
+
+Unticking all seven boxes in the reference writes `autoPassPhases=` — an empty
+value (`gameUi.js:763-765` leaves it `""`). Measured at `path=/`:
+
+    empty value : clean 200 -> 500
+
+So the empty value survives the browser write *and* Netty's STRICT decoder, and
+`Phase.valueOf("")` throws exactly as the source predicts. It is fatal, not
+ignored: every game request 500s.
+
+Today nobody hits it, because the *path* bug means the cookie never arrives. The
+two defects cancel. **A fix that only adds `path: "/"` would take the reference
+from "the checkboxes do nothing" to "unticking them all breaks the game."** The
+upstream fix has to be both at once:
+
+    $.cookie("autoPassPhases", v, {expires: 365, path: "/"})   // and
+    // for the empty set: remove autoPassPhases, write autoPass=false instead
+
+which is what `cookieWrites()` here does, and what `autopasscheck` asserts.
 
 ### Two REFERENCE bugs found, and written up for the engine project
 
@@ -378,7 +399,7 @@ end of this session, plus `tests.html` at 197:
     wirecheck 12   actioncheck 19   assigncheck 6    pickcheck 17
     pathcheck 9    navcheck 9       flipcheck 4      zoomcheck 6
     chatcheck 18   cardstatecheck 18  pregamecheck 14   statcheck (report)
-    autopasscheck 50  <- 47 of them without a ?gameId=, and it SKIPs the rest
+    autopasscheck 51  <- 47 of them without a ?gameId=, and it SKIPs the rest
                          rather than passing them. Needs a live game to measure
                          the cookie path; see "Auto-pass" above for the URL.
 
@@ -1462,7 +1483,7 @@ GID=$(cd harness && source ./gemp_api.sh && C=$(login watcher qwer) \
   2>/dev/null | sed -e 's/<[^>]*>/\n/g' | grep -E "^(FAIL|SKIP|RESULT)"
 ```
 
-Expect `RESULT: ALL PASS (50)`. A `gameId` that is not actually playing makes
+Expect `RESULT: ALL PASS (51)`. A `gameId` that is not actually playing makes
 the clean probe return something other than 200, and the suite SKIPs rather than
 inventing a verdict — read the SKIP line, it names which.
 
@@ -1906,10 +1927,19 @@ instrument coming back empty, and that has not happened yet.
 
 ## What this project has left in the other trees
 
-Nothing. That is the intended state and worth re-checking if anything here starts
-depending on those trees.
+**Two untracked bug reports in `gemp_multiplayer/docs/`, and nothing else.**
+Both are findings this project measured and has no business fixing, left for
+that project to triage:
 
-`gemp_multiplayer` was restored to how it was found. The two branches this
+    GEMP_CARD_SELECTION_MAX0.md   the reference sends an illegal answer at max=0
+    GEMP_AUTOPASS_COOKIE.md       the reference's auto-pass settings are inert,
+                                  AND the obvious one-line fix breaks games
+
+Neither is committed, neither is staged, and nothing else in that repository has
+been touched. Check with `git status --short` there before believing it — the
+claim is falsifiable and should be re-checked rather than trusted.
+
+`gemp_multiplayer` was otherwise restored to how it was found. The two branches this
 project created (`gui/board-client`, and a stale `worktree-gui-board` from a
 first attempt) were deleted, the worktree removed, and a stray copy of the spike
 left at `harness/web/multiwindow_spike.html` was cleaned up. That repo has moved
@@ -1922,7 +1952,9 @@ one — and the reference-client reading (`gameUi.js`, `CardGroup.js`,
 `game.css`) is done against **our own** copy at `C:\Users\emers\gemp2`, which
 needs no coordination at all. Prefer that copy.
 
-Nothing here is pushed anywhere, because nothing here is in a repository.
+Nothing here is pushed anywhere. There *is* a repository here now (see "Version
+control, finally"), but it has no remote and shares no history with either GEMP
+repo, which is the whole point.
 
 ---
 
@@ -1999,73 +2031,3 @@ CARD_SELECTION`, with the decision's full parameter map beside it.
 Every edit to `oldharness.html` was made to make `decisionfuzz.html` work, and
 none was re-checked against the two older pages until the end. When one is
 needed, gate it opt-in.
-
----
-
-## What this project has left in the other trees
-
-Nothing. That is the intended state and worth re-checking if anything here starts
-depending on those trees.
-
-`gemp_multiplayer` was restored to how it was found. The two branches this
-project created (`gui/board-client`, and a stale `worktree-gui-board` from a
-first attempt) were deleted, the worktree removed, and a stray copy of the spike
-left at `harness/web/multiwindow_spike.html` was cleaned up. That repo has moved
-on under its own project since, so do not expect any particular commit there —
-the claim being made is only that none of the commits are ours.
-
-`vendor/gemp-lotr` was never touched at all. Every claim in `DESIGN.md` about
-GEMP's behaviour was arrived at by **reading** a GEMP tree, never by editing
-one — and the reference-client reading (`gameUi.js`, `CardGroup.js`,
-`game.css`) is done against **our own** copy at `C:\Users\emers\gemp2`, which
-needs no coordination at all. Prefer that copy.
-
-Nothing here is pushed anywhere, because nothing here is in a repository.
-
----
-
-## OPEN AND IMPORTANT: today's oracle edits broke the REPLAY differential
-
-`diffrun.sh` reports **0 of 3 games agreeing**, every mismatch a
-`CARD_ACTION_CHOICE`. It was clean before today.
-
-Bisected with git rather than guessed at, after two theories had already been
-wrong:
-
-| tree | result |
-|---|---|
-| everything at the initial commit | **3 of 3 AGREE** |
-| today's CLIENT + baseline ORACLE | **3 of 3 AGREE** |
-| today's client + today's oracle | 0 of 3 |
-
-So **the client changes are not implicated at all** -- the fault is in
-`src/dev/oldharness.html`. Two candidates were tested individually and cleared:
-the `actionableCard` class gate on `offers()` (since reverted, with the reasoning
-kept in place) and the `ui.hand` Proxy stub. Neither fixed it.
-
-Remaining suspects, all added today, in rough order of how much they could touch
-a replay's offers:
-
-1. the `<select>` reader branch in `offers()`
-2. `PlaySound` stubbed to a no-op
-3. `window.confirm`/`alert`/`prompt` stubs
-4. `selectionDebounceMs = 0`
-5. `clickAny` (additive; least likely)
-
-Bisecting the rest is now cheap and should be done ONE AT A TIME with a
-`diffrun.sh 3 25` between each:
-
-    git checkout 4c44d79 -- src/dev/oldharness.html   # known-good oracle
-    # re-apply one edit, bash harness/sync.sh, bash harness/diffrun.sh 3 25
-
-**Until this is closed:** `decisionfuzz.html` (47/47) is unaffected and can be
-trusted -- it was validated against this same oracle all day and its controls
-fire. `diff.html` and `livediff.html` cannot be, because they consume the same
-`offers()` and are exactly what is failing. Do not read a clean `livediffrun.sh`
-as evidence while this is open.
-
-The lesson, and it is the same one twice in one day: **a shared file with three
-consumers cannot be edited to suit one of them.** Every edit here was made to
-make `decisionfuzz.html` work, none was re-checked against the two older pages
-until the end, and the one that broke them is still unidentified.
-

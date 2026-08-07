@@ -344,6 +344,33 @@ if (!gameId) {
       note("   at /gemp-lotr and /gemp-lotr-server never sees them. MEASURED.");
       note("   Every reference game therefore runs on _autoPassDefault.");
     }
+
+    // 4. The EMPTY value, which is what the reference writes when all seven
+    //    boxes are unticked (gameUi.js:763-765 leaves newAutoPassPhases as ""),
+    //    and the reason cookieWrites() refuses to produce it. The server does
+    //    `value().split("0")` then Phase.valueOf on each; "".split("0") is [""]
+    //    in Java and Phase.valueOf("") throws.
+    //
+    //    Whether it BITES depends on something no source reading settles: an
+    //    empty-valued cookie may be dropped by the browser on write or by
+    //    Netty's STRICT decoder on read, in which case unticking everything is
+    //    merely ignored rather than fatal. So it is measured, and the result is
+    //    reported either way rather than asserted -- what this suite has to
+    //    guarantee is that WE never send it, and that is asserted above.
+    document.cookie = `autoPassPhases=; path=/`;
+    const sent = readCookie("autoPassPhases", document.cookie);
+    const atEmpty = await probe();
+    clear("/");
+    if (sent === null) {
+      note(`empty value : the browser did not store it at all -- not reachable this way`);
+    } else {
+      note(`empty value : clean ${clean} -> ${atEmpty}` +
+           (atEmpty === 200 ? "  (survived; the decoder drops it)"
+                            : "  <-- BREAKS the request, as the source predicts"));
+    }
+    ok("whatever the empty value does to the server, WE never write it",
+       !cookieWrites([]).some((w) => /^autoPassPhases=;\s*path/.test(w)),
+       cookieWrites([]).join(" | "));
   }
   clear("/");
   clear("/gemp-lotr");
