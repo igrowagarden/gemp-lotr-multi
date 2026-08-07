@@ -344,8 +344,15 @@ public class DefaultLotroGame implements LotroGame {
      * taken off the table.
      */
     private void removeEliminatedPlayersCardsFromPlay(String playerId) {
+        // A COPY of getInPlay(): that returns an unmodifiable live view, and
+        // cards are about to be taken out of it.
+        //
+        // Deliberately not an "active cards only" query either.
+        // stopAffectingCardsForCurrentPlayer deactivates cards between turns, so
+        // filtering on active would silently miss some of exactly the cards that
+        // have to go.
         List<PhysicalCard> theirs = new LinkedList<>();
-        for (PhysicalCard card : _gameState.getCardsInPlay()) {
+        for (PhysicalCard card : new LinkedList<PhysicalCard>(_gameState.getInPlay())) {
             if (card.getZone() == Zone.ADVENTURE_PATH)
                 continue;
             if (playerId.equals(card.getOwner()))
