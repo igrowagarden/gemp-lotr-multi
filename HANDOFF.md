@@ -1649,6 +1649,24 @@ inventing a verdict — read the SKIP line, it names which.
 
 ## Open
 
+- **BACKLOGGED: the reference executes `<script>` in a log message.**
+  `REFERENCE_SCRIPT_EXECUTION.md` is the write-up, and it is written
+  upstream-ready so filing it later is a copy rather than a rewrite.
+  `src/dev/scriptprobe.html` re-runs every measurement in about ten seconds.
+
+  The short version: `ChatBoxUI.appendMessage` interpolates the message into
+  markup and inserts it with jQuery 1.6.2, which evaluates scripts on insertion.
+  **The sink is unsafe — proven, four ways, three of them without this
+  project's harness. That an attacker can reach it — NOT shown**, and the two
+  player-controlled routes are closed (chat escaped by
+  `MarkdownParser.java:33-43`; logins alphanumeric per
+  `DbPlayerDAO.java:15,389-396`).
+
+  Deferred deliberately. It moves if a reachable route turns up — audit the
+  `SEND_MESSAGE` producers for unescaped free text, deck names and table
+  descriptions first — or if someone decides defence-in-depth is worth
+  reporting anyway. Not urgent while both routes stay shut.
+
 - ~~**The hall lists zero tables while a game is plainly playable.**~~
   **RETRACTED — the hall was never broken.** The diagnostic was:
 
@@ -1789,11 +1807,13 @@ the point rather than a hedge:
   (DbPlayerDAO.java:15,389-396).
 
 So the sink is unsafe by construction and is held safe by input handling
-elsewhere. Note what is and is not established: **the sink is unsafe -- proven;
-an attacker can reach it -- NOT shown.** Probe 4 gets there through an `M` game
-event, which is engine-authored and was fed by hand. Every place the engine
-composes a log message has not been audited, so "unreachable" is not claimed
-either; what is claimed is that no reachable route was found. That is worth telling the engine project as defence-in-depth, but it
+elsewhere. **The sink is unsafe -- proven; an attacker can reach it -- NOT
+shown.**
+
+**Written up and BACKLOGGED in `REFERENCE_SCRIPT_EXECUTION.md`**, which is the
+one home for it: the mechanism, all four measurements, why it is not filed as a
+vulnerability, what would settle the reachability question, and the fix if it is
+ever taken up. Nothing is filed upstream. That is worth telling the engine project as defence-in-depth, but it
 is NOT worth reporting as a vulnerability, and no upstream document has been
 written for it -- see the queue.
 

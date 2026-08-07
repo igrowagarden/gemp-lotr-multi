@@ -14,6 +14,9 @@ test and differential harnesses; `harness/` drives the server.
   GEMP works, check there first.
 - **`git log`** — the commit messages carry the *reasoning*, not just the change.
   Several record why an approach was abandoned; that is often what you need.
+- **`REFERENCE_SCRIPT_EXECUTION.md`** — a measured defect in the REFERENCE
+  client, backlogged here rather than filed upstream. Read it before concluding
+  anything about script handling in the log, in either client.
 
 ## Do not touch these trees
 
