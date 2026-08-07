@@ -21,6 +21,16 @@ function id(key) {
 const put = (key, zone, owner) =>
   `<ge type="PCIP" cardId="${id(key)}" blueprintId="1_${id(key)}" zone="${zone}" participantId="${owner}"/>`;
 
+/**
+ * An attachment. `hostKey` must already have been through `put`, so its id is
+ * in the cache -- `id()` hands out ids in first-call order, and asking for a
+ * host's id before its card exists would mint a new one and silently attach to
+ * nothing.
+ */
+const attach = (key, owner, hostKey, blueprint) =>
+  `<ge type="PCIP" cardId="${id(key)}" blueprintId="${blueprint}" zone="ATTACHED" ` +
+  `participantId="${owner}" targetCardId="${id(hostKey)}" targetType="attached"/>`;
+
 const tokens = (key, token, count) =>
   `<ge type="AT" cardId="${id(key)}" token="${token}" count="${count}"/>`;
 
@@ -36,6 +46,18 @@ export function setup() {
     if (seat % 2 === 0) out.push(put(`${p}-sup-1`, "SUPPORT", p));
     return out;
   }).join("");
+
+  // A SHADOW CONDITION ON ANOTHER SEAT'S COMPANION -- owned by qwer, riding
+  // dave's companion, so it crosses both an owner and a side boundary.
+  //
+  // In the fixture rather than in one suite because that is exactly what let
+  // the case go unexamined: this file had no attachments at all, and every
+  // attachment in `live_capture.xml` is The One Ring on its own owner's
+  // ring-bearer. Nine suites build on `setup()`, so putting one here means the
+  // board, the zoom, the navigation and the card-state suites all incidentally
+  // draw a rider whose owner is not its host's. Computed AFTER `boards`, so
+  // dave's companion already has its id.
+  const attachments = attach("qwer-cond-on-dave", "qwer", "dave-fp-0", "1_170");
 
   const hand = Array.from({ length: 8 }, (_, i) => put(`hand-${i}`, "HAND", "asdf")).join("");
 
@@ -54,7 +76,7 @@ export function setup() {
     <ge type="TC" participantId="carol"/>
     <ge type="GPC" phase="Fellowship"/>
     <ge type="TP" count="4"/>
-    ${boards}${hand}${sites}
+    ${boards}${attachments}${hand}${sites}
     ${tokens("carol-fp-1", "WOUND", 1)}
     ${tokens("carol-fp-2", "WOUND", 2)}
     ${tokens("carol-fp-2", "ROHAN", 3)}

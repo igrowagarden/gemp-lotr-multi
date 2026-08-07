@@ -52,6 +52,25 @@ store.dispatchAll(decodeEvents(fixture.setup()));
 // boundary as well as a side one. Read out of state rather than hardcoded --
 // the fixture assigns ids from a counter and they move whenever it changes.
 const s0 = store.getState();
+
+// THE FIXTURE'S OWN cross-side attachment, asserted before this suite adds any
+// of its own. `fixture.setup()` now ships one -- qwer's condition on dave's
+// companion -- so that the nine suites building on it all incidentally draw a
+// rider whose owner is not its host's.
+//
+// Asserted HERE because a fixture addition that silently produced nothing would
+// leave every one of those suites passing exactly as before. That is the same
+// shape as a control that cannot fire, and it is why "all twelve still pass" is
+// not on its own evidence that anything was added.
+const fixtureRider = allCards(s0).find((c) => c.zone === "ATTACHED");
+ok("fixture.setup() ships an attachment at all", !!fixtureRider,
+   fixtureRider ? `card ${fixtureRider.cardId}` : "none in state");
+const fixtureHost = fixtureRider ? s0.cards[fixtureRider.attachedTo] : null;
+ok("it names a host that exists", !!fixtureHost,
+   `attachedTo=${fixtureRider?.attachedTo}`);
+ok("and its owner is NOT the host's -- the cross-side case, in the fixture",
+   !!fixtureHost && fixtureRider.owner !== fixtureHost.owner,
+   `rider ${fixtureRider?.owner} vs host ${fixtureHost?.owner}`);
 // NOT merely "someone else's". Side filtering exists on exactly ONE band --
 // `focusFree`, the focused opponent's companions (layout/bands.js:24-30); every
 // other band has no `dimWhen` at all. A host in the CONTESTED fellowship
