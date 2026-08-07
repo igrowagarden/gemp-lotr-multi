@@ -1658,6 +1658,10 @@
 		direction: Left
 		effects: [
 			{
+				// "EACH Shadow player may draw a card for each companion over
+				// 4", and only one of them ever can -- `player:` on a trigger
+				// rebinds the performing player to a single seat. Same shape as
+				// 13_193 Isenwash; same engine change needed. Not card data.
 				type: Trigger
 				optional: true
 				player: shadow

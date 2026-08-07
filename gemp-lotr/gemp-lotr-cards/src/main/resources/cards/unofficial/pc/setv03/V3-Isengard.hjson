@@ -172,24 +172,41 @@
 				source: side(Free Peoples)
 				//method omitted since we want both hinder and discard
 				effect: {
-					// LEFT AS `shadow` DELIBERATELY -- this is a Shadow-side
-					// card, so the token is wrong above two players like the
-					// rest of its group, but neither replacement works and
-					// guessing a third would be worse than leaving it.
+					// LEFT AS `shadow`, and now understood rather than merely
+					// unexplained. This is a Shadow-side card so the token is
+					// wrong above two players like the rest of its group, but
+					// THE CONTROLLER IS NOT REACHABLE FROM HERE AT ALL.
 					//
-					// Measured, not assumed: `player: you` and `player: owner`
-					// were each tried and each broke the SAME two existing
-					// tests -- Card_V3_038_Tests
+					// BuiltLotroCardBlueprint.getHinderedFromPlayRequiredTrigger
+					// (and its Discarded twin) build the context as
+					//
+					//   new DefaultActionContext(result.getPerformingPlayer(),
+					//                            game, result.getSource(), ...)
+					//
+					// so BOTH the performing player and the source come from the
+					// removal event, not from this card. The trigger requires
+					// `source: side(Free Peoples)`, so the remover is a Free
+					// Peoples card and:
+					//
+					//   `you`    -> the player who did the hindering  = freeps
+					//   `owner`  -> getSource().getOwner()            = freeps
+					//
+					// which is why both were measured breaking the SAME two
+					// tests in the SAME way -- Card_V3_038_Tests
 					// .OneIllTurnHindersCompanionWhenSelfHinderedByFP and
-					// .OneIllTurnHindersFPConditionWhenSelfDiscardedByFP --
-					// with the Shadow player no longer asked anything
-					// (ShadowChooseCard got a null decision).
+					// .OneIllTurnHindersFPConditionWhenSelfDiscardedByFP, with
+					// the Shadow player never asked anything. They are not two
+					// failed guesses; they are the same wrong player twice.
 					//
-					// So inside a SelfRemovedFromPlayTrigger neither the
-					// performing player nor getSource().getOwner() is the
-					// card's controller, which is its own question about that
-					// trigger's action context rather than about the
-					// Shadow-side reading. See errors.log.
+					// Note every OTHER trigger path defaults the performing
+					// player to self.getOwner() and rebinds it from `player:`
+					// (BuiltLotroCardBlueprint ~830, ~884, ~1035). The
+					// self-removed-from-play paths do neither, and
+					// SelfRemovedFromPlayTriggerEffectProcessor does not even
+					// accept a `player:` field.
+					//
+					// FIXING THIS IS AN ENGINE CHANGE, not a card edit. See
+					// errors.log and todo.md.
 					type: Hinder
 					player: shadow
 					select: choose(side(Free Peoples), condition)

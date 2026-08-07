@@ -142,6 +142,10 @@
 		keywords: Dwelling
 		effects: [
 			{
+				// CORRECT AS WRITTEN -- do not sweep this one. The text says
+				// "the FIRST Shadow player may discard 2 cards from hand", and
+				// getFirstShadowPlayer returns precisely that. Its pc errata
+				// 63_188 carries the same note.
 				type: Trigger
 				optional: true
 				player: shadow
@@ -379,6 +383,19 @@
 		]
 		effects: [
 			{
+				// "EACH Shadow player may exert a minion to exert a companion",
+				// and only one of them ever can. `player:` on a trigger REBINDS
+				// the performing player of the trigger's action -- see
+				// BuiltLotroCardBlueprint ~830/~884/~1035, where the context is
+				// rebuilt around getPlayer() and defaults to self.getOwner() --
+				// and PlayerResolver.resolvePlayer returns exactly ONE player.
+				// So above two seats this site is offered to getFirstShadowPlayer
+				// and silently skips every other opponent.
+				//
+				// NOT fixable in card data. Unlike cantLookOrRevealHand, which
+				// only needed `.equals` to become `.contains`, a trigger has to
+				// be OFFERED to each player in turn, so the enumeration in
+				// BuiltLotroCardBlueprint has to loop. Its own task.
 				type: Trigger
 				optional: true
 				player: shadow
