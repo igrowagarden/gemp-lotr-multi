@@ -392,13 +392,14 @@
 				// So above two seats this site is offered to getFirstShadowPlayer
 				// and silently skips every other opponent.
 				//
-				// NOT fixable in card data. Unlike cantLookOrRevealHand, which
-				// only needed `.equals` to become `.contains`, a trigger has to
-				// be OFFERED to each player in turn, so the enumeration in
-				// BuiltLotroCardBlueprint has to loop. Its own task.
+				// It WAS the cantLookOrRevealHand fix after all: optional
+				// triggers are already enumerated per player
+				// (getOwnOptionalBeforeTriggers/AfterTriggers take a playerId),
+				// so widening isValid from equality to membership was enough and
+				// no enumeration had to loop.
 				type: Trigger
 				optional: true
-				player: shadow
+				player: anyShadow
 				trigger: {
 					type: startOfPhase
 					phase: regroup

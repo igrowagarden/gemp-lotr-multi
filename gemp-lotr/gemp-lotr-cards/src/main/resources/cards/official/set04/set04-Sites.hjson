@@ -1659,12 +1659,13 @@
 		effects: [
 			{
 				// "EACH Shadow player may draw a card for each companion over
-				// 4", and only one of them ever can -- `player:` on a trigger
-				// rebinds the performing player to a single seat. Same shape as
-				// 13_193 Isenwash; same engine change needed. Not card data.
+				// 4". Same shape as 13_193 Isenwash and fixed by the same
+				// change: a trigger's `player:` now resolves a GROUP, and
+				// optional triggers are already offered per player, so
+				// membership rather than equality is the whole of it.
 				type: Trigger
 				optional: true
-				player: shadow
+				player: anyShadow
 				trigger: {
 					type: movesTo
 					filter: self

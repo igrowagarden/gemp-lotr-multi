@@ -28,8 +28,16 @@ public class TriggerEffectProcessor implements EffectProcessor {
         final int limitPerPhase = FieldUtils.getInteger(value.get("limitPerPhase"), "limitPerPhase", 0);
         final Phase phase = FieldUtils.getEnum(Phase.class, value.get("phase"), "phase");
 
+        // resolvePlayers, not resolvePlayer: a trigger's `player:` may name a
+        // GROUP. "Each Shadow player may ..." (13_193, 4_362) was inexpressible
+        // while this returned one seat, because DefaultActionSource.isValid
+        // equality-checked it against the candidate performer, so every other
+        // opponent silently failed the check.
+        //
+        // Single-player tokens wrap to a one-element list, so `player: shadow`,
+        // `player: fp` and the rest behave exactly as they did.
         final String player = FieldUtils.getString(value.get("player"), "player");
-        PlayerSource playerSource = (player != null) ? PlayerResolver.resolvePlayer(player) : null;
+        PlayersSource playerSource = (player != null) ? PlayerResolver.resolvePlayers(player) : null;
 
         for (JSONObject trigger : triggerArray) {
             final TriggerChecker triggerChecker = environment.getTriggerCheckerFactory().getTriggerChecker(trigger, environment);
@@ -37,7 +45,7 @@ public class TriggerEffectProcessor implements EffectProcessor {
 
             DefaultActionSource triggerActionSource = new DefaultActionSource();
             if (playerSource != null) {
-                triggerActionSource.setPlayingPlayer(playerSource);
+                triggerActionSource.setPlayingPlayers(playerSource);
             }
             if (text != null) {
                 triggerActionSource.setText(text);
