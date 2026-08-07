@@ -649,6 +649,18 @@ function runCase(c) {
     } catch (e) { return "probe failed: " + e.message; }
   })();
   const oSend = drive.old(arg, targets, c);
+  // AND THE STATE AFTER. Everything measured so far was pre-click, which says
+  // the decision rendered correctly but nothing about what the click did. If
+  // `chosen` or `done` moved, the click landed and the submit step is at fault;
+  // if nothing moved, the click never arrived.
+  const after = (() => {
+    try {
+      const $ = $old();
+      return `done=${$("#Done").length} act=${$(".actionableCard").length} ` +
+             `chosen=${$(".selectedCard").length} btns=${$(".alertButtons button").length}`;
+    } catch (e) { return "probe failed"; }
+  })();
+  rec.notes.push(`old after drive:  ${after}`);
   const nSend = drive.new(arg, targets, c);
   rec.notes.push(`old before drive: ${before}`);
   rec.notes.push(`sent — old ${JSON.stringify(oSend.value)}, new ${JSON.stringify(nSend.value)}` +
