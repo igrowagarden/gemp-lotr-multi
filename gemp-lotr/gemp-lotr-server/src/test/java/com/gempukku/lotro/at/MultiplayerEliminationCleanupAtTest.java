@@ -208,6 +208,89 @@ public class MultiplayerEliminationCleanupAtTest {
     }
 
     /**
+     * "Remove his sites on the adventure path in numerical order, then each
+     * opponent ... chooses a site from his adventure deck to replace each one
+     * removed."
+     *
+     * What this pins is that the loser's sites do not simply stay. The
+     * replacement itself is PlaySiteEffect's job, which is deliberate: that
+     * effect already knows the difference between an ordered block, where the
+     * candidates are filtered to the printed site number and a normal adventure
+     * deck offers exactly one, and Shadows, where sites are numbered 0 and the
+     * whole deck is eligible so the player is genuinely asked.
+     *
+     * So the assertion is about the SITE ON THE PATH no longer being his, not
+     * about which card replaced it -- the latter is a format question and
+     * belongs to PlaySiteEffect's own behaviour rather than to this rule.
+     */
+    @Test
+    public void theLosersSitesAreReplacedByTheRemainingPlayers() throws Exception {
+        var scn = ThreeSeats();
+
+        scn.MoveCompanionsToTable(scn.GetCardFor(P1, "gimli"));
+        scn.StartMultiplayerGame();
+
+        // Find a site on the path that the losing player contributed. The path
+        // only ever holds sites already reached, so at the start of the game
+        // this is site 1.
+        var gameState = scn.gameState();
+        String loser = null;
+        Integer siteNumber = null;
+        for (int n = 1; n <= 9 && loser == null; n++) {
+            var site = gameState.getSite(n);
+            if (site != null && site.getOwner() != null) {
+                loser = site.getOwner();
+                siteNumber = n;
+            }
+        }
+        assertNotNull("fixture: no site is on the adventure path yet, so there is"
+                + " nothing for this rule to act on", loser);
+
+        var originalSite = gameState.getSite(siteNumber);
+        assertEquals("fixture: the site should belong to the player about to lose",
+                loser, originalSite.getOwner());
+
+        scn.game().playerLost(loser, "test-forced elimination");
+
+        // The replacement is queued as an action, so let the game process it.
+        for (int step = 0; step < 40; step++) {
+            var waiting = new java.util.ArrayList<>(scn.userFeedback().getUsersPendingDecision());
+            if (waiting.isEmpty()) break;
+            java.util.Collections.sort(waiting);
+            String who = waiting.get(0);
+            var d = scn.userFeedback().getAwaitingDecision(who);
+            if (d == null) continue;
+            String answer;
+            switch (d.getDecisionType()) {
+                case MULTIPLE_CHOICE -> answer = "0";
+                case ARBITRARY_CARDS, CARD_SELECTION -> {
+                    String[] ids = d.getDecisionParameters().get("cardId");
+                    answer = (ids == null || ids.length == 0) ? "" : ids[0];
+                }
+                default -> answer = "";
+            }
+            try {
+                scn.PlayerDecided(who, answer);
+            } catch (Exception e) {
+                break;
+            }
+            if (gameState.getSite(siteNumber) != originalSite) break;
+        }
+
+        var nowThere = gameState.getSite(siteNumber);
+        String dump = " loser=" + loser + " site=" + siteNumber
+                + " was=" + originalSite.getBlueprintId()
+                + " now=" + (nowThere == null ? "(none)" : nowThere.getBlueprintId()
+                        + " owned by " + nowThere.getOwner());
+
+        assertNotNull("the slot should still hold a site -- the rule replaces,"
+                + " it does not leave a hole in the path." + dump, nowThere);
+        assertNotEquals("the losing player's site should no longer be the one on"
+                        + " the adventure path." + dump,
+                loser, nowThere.getOwner());
+    }
+
+    /**
      * The guard on the whole feature: with only one other player left the game
      * is over, and none of the cleanup should run.
      *

@@ -12,7 +12,10 @@ import com.gempukku.lotro.game.state.LotroGame;
 import com.gempukku.lotro.game.state.PreGameInfo;
 import com.gempukku.lotro.game.state.actions.DefaultActionsEnvironment;
 import com.gempukku.lotro.logic.GameUtils;
+import com.gempukku.lotro.logic.PlayOrder;
 import com.gempukku.lotro.logic.PlayerOrder;
+import com.gempukku.lotro.logic.actions.SystemQueueAction;
+import com.gempukku.lotro.logic.effects.PlaySiteEffect;
 import com.gempukku.lotro.logic.modifiers.ModifiersEnvironment;
 import com.gempukku.lotro.logic.modifiers.ModifiersLogic;
 import com.gempukku.lotro.logic.modifiers.ModifiersQuerying;
@@ -311,6 +314,7 @@ public class DefaultLotroGame implements LotroGame {
                                 + _gameState.getPlayerOrder().getPlayerCount()
                                 + " players remain");
                         removeEliminatedPlayersCardsFromPlay(playerId);
+                        replaceEliminatedPlayersSites(playerId);
                     }
                 }
             }
@@ -387,6 +391,78 @@ public class DefaultLotroGame implements LotroGame {
         _gameState.sendMessage(playerId + "'s cards are removed from play ("
                 + theirs.size() + " removed, " + othersOnThem.size()
                 + " returned to their owners' discard piles)");
+    }
+
+    /**
+     * "Remove his sites on the adventure path in numerical order, then each
+     * opponent, starting to the player's right and proceeding counter-clockwise,
+     * chooses a site from his adventure deck to replace each one removed."
+     *
+     * REUSES PlaySiteEffect RATHER THAN REIMPLEMENTING ANY OF IT, which is the
+     * whole reason this is short. Given a site number and a player, that effect
+     * already: picks the legal candidates out of that player's adventure deck,
+     * takes the old site off the path, puts the new one down, and emits a
+     * ReplaceSiteResult so cards that trigger on site replacement still fire.
+     *
+     * It also decides, per FORMAT, whether the replacement is a choice at all.
+     * With ordered sites the candidates are filtered to the printed site number,
+     * so a normal adventure deck offers exactly one and
+     * ChooseArbitraryCardsEffect resolves it with no decision sent. With
+     * unordered sites -- Shadows, where a deck's sites are numbered 0 -- the
+     * whole deck is eligible and the player really is asked. Writing that logic
+     * here would have got the block rules wrong.
+     *
+     * WHY THIS GOES ON THE ACTION STACK when card removal did not: it can ask a
+     * question. Card removal is a state change and happens inline; this has to
+     * be an effect, queued the same way playerStays queues its own follow-up.
+     *
+     * Two edges, deliberately left to PlaySiteEffect's own judgement rather than
+     * forced: a card that forbids replacing a site will stop it (canReplaceSite
+     * is checked), and an opponent whose adventure deck holds nothing legal for
+     * that number replaces nothing. In both cases the loser's site simply stays,
+     * which is a better failure than a hole in the path.
+     */
+    private void replaceEliminatedPlayersSites(String playerId) {
+        List<PhysicalCard> hisSites = new LinkedList<>();
+        for (PhysicalCard card : new LinkedList<PhysicalCard>(_gameState.getInPlay())) {
+            if (card.getZone() == Zone.ADVENTURE_PATH && playerId.equals(card.getOwner())
+                    && card.getSiteNumber() != null)
+                hisSites.add(card);
+        }
+        if (hisSites.isEmpty())
+            return;
+
+        // "in numerical order"
+        hisSites.sort(Comparator.comparing(PhysicalCard::getSiteNumber));
+
+        // "starting to the player's right and proceeding counter-clockwise".
+        // The player to your right is the first seat counter-clockwise from you,
+        // which is the same rotation every response window uses -- turns go
+        // clockwise, responses and this go the other way.
+        PlayOrder order = _gameState.getPlayerOrder().getCounterClockwisePlayOrder(playerId, false);
+        order.getNextPlayer();   // skip the losing player himself
+        List<String> replacers = new LinkedList<>();
+        String next;
+        while ((next = order.getNextPlayer()) != null && !next.equals(playerId)) {
+            if (!_gameState.getPlayerOrder().isEliminated(next))
+                replacers.add(next);
+        }
+        if (replacers.isEmpty())
+            return;
+
+        SystemQueueAction action = new SystemQueueAction();
+        action.setText("Replace " + playerId + "'s sites");
+        for (int i = 0; i < hisSites.size(); i++) {
+            // One site apiece, round the table; more sites than opponents just
+            // wraps, which is the only reading that terminates.
+            String replacer = replacers.get(i % replacers.size());
+            action.appendEffect(
+                    new PlaySiteEffect(action, replacer, null, hisSites.get(i).getSiteNumber()));
+        }
+        _actionsEnvironment.addActionToStack(action);
+
+        _gameState.sendMessage(playerId + "'s " + hisSites.size()
+                + " site(s) on the adventure path are replaced by the remaining players");
     }
 
     public void requestCancel(String playerId) {
