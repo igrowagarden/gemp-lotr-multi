@@ -1770,6 +1770,33 @@ inventing a verdict — read the SKIP line, it names which.
 
 ## Open
 
+- **A Shadow condition on a companion VANISHES under the Shadow filter.**
+  Found by `src/dev/attachcheck.html`, which is the first thing in this project
+  ever to exercise a cross-side attachment.
+
+  The four-way filter does not dim, it HIDES: a filtered band renders
+  `N hidden` and returns without its cards (`view/board.js:283-286`). Riders are
+  drawn inside their host's band and have no band of their own, so an
+  opponent-owned Shadow condition attached to a Free Peoples companion is hidden
+  along with the companion. Measured:
+
+      filter -> the cross-side rider:
+        {"auto":"not drawn","fp":"lit","shadow":"not drawn","all":"lit"}
+
+  For that card it is backwards: a Shadow player filtering to **Shadow** to see
+  the shadow-side picture loses sight of their OWN condition on an enemy
+  companion.
+
+  **Recorded, not changed.** There is no oracle -- the reference has no such
+  filter -- so this is this client's own corner case and the filter's semantics
+  are `DESIGN.md`'s to decide. Doing it per-card rather than per-band needs side
+  information for an ATTACHED card, which is the same `GameEvent._side` gap
+  listed below: `ATTACHED` carries `side: null`, so there is nothing to filter
+  on even if the filter reached individual cards. A rider's side could instead
+  be derived from its own blueprint, which is the cheaper route if this is
+  taken up.
+
+
 - **BACKLOGGED: nobody has ever played this client by hand.** Everything is
   verified by machine. Every differential drives both clients through their own
   functions; no human has moved a mouse through the real UI, and a whole class
