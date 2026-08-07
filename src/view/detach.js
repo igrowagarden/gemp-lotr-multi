@@ -11,6 +11,14 @@
  * board is a second VIEW: it subscribes to the same store and opens no
  * connection of its own. That is why the store exists.
  *
+ * WHAT A DETACHED BOARD DELIBERATELY IS NOT. It is a read-only card view: no
+ * prompt, no decision handling, no flyouts, no selection. Everything that
+ * ANSWERS lives in the main window, and that is not a simplification to be
+ * removed later -- two windows offering the same decision would let a player
+ * answer twice, and the second answer arrives at a decision the engine has
+ * already closed. It also means `view/flyout.js`'s page-wide registry stays
+ * correct; see the note there.
+ *
  * Proven first in harness/multiwindow_spike.html.
  */
 
@@ -18,6 +26,11 @@ import { renderCard } from "./card.js";
 import { minionsOf, handSize, threats, clockOf, formatClock, pileSize }
   from "../state/reduce.js";
 
+/**
+ * playerId -> { win, unsubscribe }. Module-level because a seat may only be
+ * detached once: `detach` is idempotent per seat, and closing the parent has to
+ * be able to find every child to take them with it.
+ */
 const open = new Map();
 
 const el = (doc, tag, cls, text) => {

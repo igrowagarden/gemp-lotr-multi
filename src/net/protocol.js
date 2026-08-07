@@ -43,7 +43,15 @@ export const EVENT_TYPES = Object.freeze({
   PGS:  "PRE_GAME_SETUP"
 });
 
-/** AwaitingDecisionType -> the interaction shape the view should render. */
+/**
+ * AwaitingDecisionType -> the interaction shape the view should render.
+ *
+ * Seven types collapse to three shapes, and the view switches on the SHAPE. That
+ * is the point: a view that switched on the type would need seven branches and
+ * would grow an eighth every time the engine added one. `decodeEvent` falls back
+ * to "button" for an unrecognised type, so a new decision type renders as a list
+ * of its options rather than as nothing at all.
+ */
 export const DECISION_SHAPES = Object.freeze({
   INTEGER: "number",
   MULTIPLE_CHOICE: "button",
@@ -125,6 +133,15 @@ export function parseCharStats(raw) {
   return out;
 }
 
+/**
+ * A decision's parameters are ALWAYS arrays, even when one value arrives.
+ *
+ * `<parameter name="cardId" value="...">` repeats -- a CARD_ACTION_CHOICE
+ * carries parallel `cardId` / `actionId` / `blueprintId` / `actionText` lists
+ * whose positions correspond. Collapsing a single-element list to a scalar
+ * would make every consumer test which it got, and the parallelism is the whole
+ * contract (see model/actions.js).
+ */
 function parseDecision(el) {
   const type = str(el, "decisionType");
   const parameters = {};
@@ -181,7 +198,22 @@ function parseGameStats(el) {
   };
 }
 
-/** One <ge> element -> a plain event object. */
+/**
+ * One <ge> element -> a plain event object.
+ *
+ * DELIBERATELY NOT A SWITCH ON TYPE. Every attribute GEMP can put on any event
+ * is read unconditionally and `put` drops the ones that are absent, so the
+ * result carries exactly what arrived. A per-type decoder would need 27 cases
+ * that mostly repeat each other, and every one of them would be a place to
+ * forget a field -- which is how `metaSites` was decoded for months and never
+ * used, and how `index` (the SITE NUMBER on a site, not a card id) went missing
+ * from the adventure path.
+ *
+ * The cost is that this reads attributes that cannot appear on a given type.
+ * That is free: `hasAttribute` on a missing name is not an error, and the two
+ * places where an attribute means DIFFERENT things by type are handled
+ * explicitly below.
+ */
 export function decodeEvent(el) {
   const code = el.getAttribute("type");
   const type = EVENT_TYPES[code];
@@ -215,7 +247,16 @@ export function decodeEvent(el) {
     event.target = { cardId: int(el, "targetCardId"), type: str(el, "targetType") };
   }
   if (type === "PARTICIPANTS") put("discardPublic", bool(el, "discardPublic"));
+  // A decision can arrive on an event whose type code is NOT `D`. The server
+  // attaches `decisionType` to whatever event it happens to be flushing, so
+  // keying only on the type code silently drops decisions -- which presents as
+  // a client that hangs waiting for a prompt the server believes it sent.
   if (type === "DECISION" || el.hasAttribute("decisionType")) event.decision = parseDecision(el);
+
+  // Same shape of problem for stats, detected structurally rather than by type:
+  // a `<playerZones>` child, or the `moveLimit` attribute for the pre-game case
+  // where no zones exist yet. GAME_STATS is the usual carrier but not the only
+  // one.
   if (el.getElementsByTagName("playerZones").length || el.hasAttribute("moveLimit")) {
     event.gameStats = parseGameStats(el);
   }

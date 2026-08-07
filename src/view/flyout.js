@@ -19,6 +19,21 @@
 const MIN_W = 92;
 const MIN_H = 62;
 
+/**
+ * MODULE-LEVEL, and that is a real constraint rather than an oversight.
+ *
+ * `active` and `registry` are shared by every flyout in the page, because the
+ * two behaviours that need them are page-wide: Escape closes the topmost window
+ * across all of them, and only one may be `active` at a time. Per-instance
+ * state cannot express either.
+ *
+ * The cost: **flyouts belong to the main document only.** A detached board
+ * (view/detach.js) renders into another window, and a flyout created there
+ * would register here -- so Escape in one window would close a panel in the
+ * other. Nothing does that today: a detached seat is a read-only card view with
+ * no panels, which is why this has never bitten. If a detached window ever
+ * needs a flyout, this registry has to move into a per-document map first.
+ */
 let active = null;
 const registry = new Set();
 
@@ -34,6 +49,25 @@ function setActive(panel) {
   active = panel;
 }
 
+/**
+ * @param host          the element the window is positioned within, and dragged
+ *                      inside. Panels are hosted on the BOARD, not on the
+ *                      document -- a repaint that cleared the board would take
+ *                      them with it otherwise.
+ * @param id            becomes `flyout--{id}`, which is how CSS sizes and
+ *                      places each panel. Stylesheet and code are coupled by it.
+ * @param tab           the docked tab's label, or `null` for no tab at all --
+ *                      for a panel opened from somewhere else (piles from a
+ *                      seat chip, card info from a right click) that should
+ *                      leave nothing parked at the board's edge.
+ * @param render        `(body, ...args)` called on `paint()`. Owns the body's
+ *                      contents entirely; the frame is this module's.
+ * @param extraControls title-bar buttons, `{label, title, onClick(api, button)}`.
+ *                      The button is passed back so a toggle can relabel itself.
+ * @returns an api object. NOTE `isOpen` and `userSized` are GETTERS -- spreading
+ *   this object copies their values at spread time and freezes them, which has
+ *   already caught callers once (see view/piles.js).
+ */
 export function createFlyout(host, {
   id,
   title,
