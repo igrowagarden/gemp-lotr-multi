@@ -374,9 +374,16 @@ const DRIVE = {
         .filter(Boolean);
       if (!cards.length) return false;
       cards.forEach((c) => c.click());
-      const btn = $new(".prompt .pbtn.primary");
-      if (btn) btn.click();
-      return true;
+      const confirm = $new(".prompt .pbtn.primary");
+      if (confirm && !confirm.disabled) { confirm.click(); return true; }
+      // CONFIRM DISABLED MEANS THE SELECTION IS ILLEGAL, and the client is right
+      // to refuse it -- but refusing is not the same as answering. At `max=0`
+      // the only legal answer is the empty string and the strip offers Pass for
+      // exactly that, so a driver that presses only Confirm records `null` and
+      // makes a correct client look mute. Press what the player would press.
+      const pass = $$new(".prompt .pbtn").find((b) => b.textContent === "Pass");
+      if (pass) { pass.click(); return true; }
+      return false;
     })
   },
   ARBITRARY_CARDS: {
@@ -752,7 +759,7 @@ for (const c of selected) {
 }
 
 // -------------------------------------------------------------------- report
-let diffs = 0, expected = 0, errors = 0;
+let diffs = 0, expected = 0, errors = 0, oracle = 0;
 const groups = {};
 for (const r of results) (groups[r.case.type] ||= []).push(r);
 
@@ -769,11 +776,20 @@ for (const [type, rs] of Object.entries(groups)) {
     const encoding = r.findings.some(([, m]) => String(m).startsWith("ANSWERS DIFFER"));
     // An encoding difference is excusable ONLY by `equivalent`, which asserts
     // the engine was consulted and parses both answers to the same thing.
-    const marked = bad && (encoding ? r.case.equivalent : r.case.expect);
-    if (isErr) errors++; else if (marked) expected++; else if (bad) diffs++;
+    // THREE ways a difference can be acceptable, and they are not the same claim.
+    //   expect       differs by intent -- presentation only.
+    //   equivalent   different strings, engine parses both the same. Cited.
+    //   oracleWrong  the REFERENCE is wrong and this client is right. The
+    //                differential's whole premise is "a disagreement is a bug
+    //                here until shown otherwise", so this needs the strongest
+    //                evidence and its own verdict -- folding it into `expect`
+    //                would quietly convert a reference bug into our design note.
+    const oracleBad = bad && r.case.oracleWrong;
+    const marked = !oracleBad && bad && (encoding ? r.case.equivalent : r.case.expect);
+    if (isErr) errors++; else if (oracleBad) oracle++; else if (marked) expected++; else if (bad) diffs++;
 
-    const tag = isErr ? "ERR " : marked ? "KNOWN" : bad ? "DIFF" : "PASS";
-    const cls = isErr ? "bad" : marked ? "warn" : bad ? "bad" : "ok";
+    const tag = isErr ? "ERR " : oracleBad ? "ORACLE" : marked ? "KNOWN" : bad ? "DIFF" : "PASS";
+    const cls = isErr ? "bad" : oracleBad ? "warn" : marked ? "warn" : bad ? "bad" : "ok";
     say(`  <span class="${cls}">${tag}</span>  ${r.case.name}`);
     for (const [, msg] of r.findings) say(`         <span class="${cls}">${msg}</span>`);
     for (const n of r.notes) say(`         <span class="dim">${n}</span>`);
@@ -792,8 +808,9 @@ for (const [type, cs] of Object.entries(byType())) {
 
 say("");
 const verdict = diffs || errors
-  ? `RESULT: ${diffs} DIFF, ${errors} ERROR of ${results.length} cases (${expected} known)`
-  : `RESULT: ALL PASS (${results.length})`;
+  ? `RESULT: ${diffs} DIFF, ${errors} ERROR of ${results.length} cases ` +
+    `(${expected} known, ${oracle} reference-wrong)`
+  : `RESULT: ALL PASS (${results.length}${oracle ? `, ${oracle} reference-wrong` : ""})`;
 say(verdict, diffs || errors ? "bad" : "ok");
 if (sabotage && !diffs) {
   say(`CONTROL FAILED TO FIRE — sabotage=${sabotage} produced no DIFF. The ` +

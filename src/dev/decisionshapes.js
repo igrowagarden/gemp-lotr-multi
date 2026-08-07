@@ -155,7 +155,18 @@ export const CASES = [
 
   // ---------------------------------------------------------------- CARD_SELECTION
   // Boundaries taken from CardsSelectionDecision.getSelectedCardsByResponse:40-49.
+  // THE REFERENCE IS WRONG HERE, and this is the only case in the catalogue
+  // where that is true. It sends "140" -- a card id -- for a decision whose only
+  // legal answer is "". Two independent confirmations:
+  //   the validator  CardsSelectionDecision:40-49 accepts "" only when min is 0
+  //                  and throws on any count outside min/max, so 1 > 0 throws.
+  //   the engine     it was OBSERVED refusing exactly this, 13-36 times per game,
+  //                  in the session where the harness had the same bug:
+  //                  `decision 1 CARD_SELECTION params {min:[0],max:[0],cardId:[250]}`
+  // Presumably still rejecting real players' answers whenever a "discard one for
+  // each X" resolves to zero.
   { name: "max=0 with a card still listed", type: "CARD_SELECTION",
+    oracleWrong: "reference sends a card id where only \"\" is legal",
     note: "THE BUG. A discard whose count evaluator resolved to zero. The only " +
           "legal answer is the empty string, and the card is still offered.",
     params: { min: "0", max: "0", cardId: [WHERE.HAND] } },
@@ -187,6 +198,7 @@ export const CASES = [
     params: { min: "1", max: "1", cardId: [WHERE.SELF_FREE, WHERE.SELF_FREE] } },
 
   { name: "min > max, inverted range", type: "CARD_SELECTION",
+    oracleWrong: "reference answers an unsatisfiable range instead of declining",
     note: "The engine should never emit this. Robustness only.",
     params: { min: "3", max: "1", cardId: [WHERE.HAND, WHERE.HAND_2] } },
 
