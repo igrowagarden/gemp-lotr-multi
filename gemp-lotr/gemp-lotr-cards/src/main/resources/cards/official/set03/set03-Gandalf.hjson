@@ -17,9 +17,17 @@
 			{
 				type: Trigger
 				optional: true
+				// "Each time AN OPPONENT draws a card ... during the Shadow
+				// phase". A gate on WHOSE draw fires it, and it watched one seat --
+				// so at five players three opponents drew for free.
+				//
+				// opponentsOfOwner rather than anyShadow because a trigger gate is
+				// re-evaluated live: anyShadow is relative to getCurrentPlayerId(),
+				// so on somebody else's turn it would include this card's own owner
+				// and their own draw would trigger their own condition.
 				trigger: {
 					type: playerDrawsCard
-					player: shadow
+					player: opponentsOfOwner
 				}
 				requires: {
 					type: phase

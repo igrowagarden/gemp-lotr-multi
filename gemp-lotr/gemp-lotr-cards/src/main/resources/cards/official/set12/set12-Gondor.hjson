@@ -132,7 +132,15 @@
 						type: addModifier
 						modifier: {
 							type: cantUseSpecialAbilities
-							player: shadow
+							// "your OPPONENTS cannot use special abilities" --
+							// plural in print, and the only card in this group
+							// that says so outright. One banned seat left the
+							// other three free.
+							//
+							// The source here is the event itself, so
+							// opponentsOfOwner is everyone but the player who
+							// played it.
+							player: opponentsOfOwner
 						}
 					}
 				}

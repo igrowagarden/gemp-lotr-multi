@@ -440,8 +440,11 @@
 			{
 				type: modifier
 				modifier: {
+					// "AN OPPONENT can not play skirmish events or use skirmish
+					// special abilities" -- a prohibition, so "an" means any.
+					// Identical sentence and identical fix to 4_117 Faramir.
 					type: cantPlayPhaseEventsOrPhaseSpecialAbilities
-					player: shadow
+					player: opponentsOfOwner
 					phase: skirmish
 					requires: {
 						type: canSpot
@@ -452,9 +455,13 @@
 			{
 				type: Trigger
 				optional: false
+				// "Each time A SHADOW PLAYER adds a burden, discard this
+				// condition." A gate on whose burden fires it; one seat meant
+				// the other opponents could add burdens and leave the condition
+				// standing. See 3_29 for opponentsOfOwner rather than anyShadow.
 				trigger: {
 					type: addsBurden
-					player: shadow
+					player: opponentsOfOwner
 				}
 				effect: {
 					type: discard

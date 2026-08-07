@@ -427,7 +427,11 @@
 						count: 4
 					}
 					filter: side(free people),mount
-					player: shadow
+					// "those mounts cannot be discarded by A SHADOW PLAYER" --
+					// by any of them, not by whichever seat getFirstShadowPlayer
+					// happens to name. See 1_306 for why this is
+					// opponentsOfOwner rather than anyShadow or a deleted token.
+					player: opponentsOfOwner
 				}
 			}
 		]

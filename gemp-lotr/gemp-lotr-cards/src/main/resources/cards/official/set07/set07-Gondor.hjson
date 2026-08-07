@@ -1505,8 +1505,17 @@
 						amount: 1
 					}
 					true: {
+						// "make THAT OPPONENT remove (1). If HE OR SHE cannot,
+						// discard that possession or engine." Both halves are
+						// about the one opponent the trigger already named -- the
+						// player who played the card -- so the discard is
+						// performed by them, not by a fixed Shadow seat.
+						//
+						// The trigger's own filter is `not(your)`, which is
+						// already N-player correct, so only the consequence was
+						// pointed at the wrong seat.
 						type: discard
-						player: shadow
+						player: ownerFromMemory(playedCard)
 						select: memory(playedCard)
 					}
 					false: {

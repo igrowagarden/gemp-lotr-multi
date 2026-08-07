@@ -976,7 +976,20 @@
 			type: modifier
 			modifier: {
 				type: cantBeDiscarded
-				player: shadow
+				// "YOUR OPPONENT may not discard your [shire] tales" -- no
+				// opponent may, and YOU still may.
+				//
+				// Not `anyShadow`: that is relative to getCurrentPlayerId(), and
+				// a tale can be discarded on anybody's turn. On another player's
+				// turn anyShadow would name THIS card's owner among the banned
+				// and leave the current player free to discard them -- exactly
+				// backwards. opponentsOfOwner is turn-independent.
+				//
+				// And NOT by deleting the token, which is what PLAN.md recorded
+				// as the fix: CantDiscardFromPlayModifier treats a null player
+				// as EVERYBODY, so that would stop the card's own controller
+				// discarding their own tales too.
+				player: opponentsOfOwner
 				filter: your,culture(shire),tale
 			}
 		}

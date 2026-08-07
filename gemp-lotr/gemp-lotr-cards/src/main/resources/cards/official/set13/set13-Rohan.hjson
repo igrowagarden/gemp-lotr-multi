@@ -677,9 +677,13 @@
 			{
 				type: Trigger
 				optional: true
+				// "Each time A SHADOW PLAYER replaces the fellowship's current
+				// site" -- any of them. A gate on whose replacement fires it,
+				// and it watched one seat. See 3_29 for why opponentsOfOwner
+				// rather than anyShadow.
 				trigger: {
 					type: replacesSite
-					player: shadow
+					player: opponentsOfOwner
 					number: {
 						type: currentSiteNumber
 					}

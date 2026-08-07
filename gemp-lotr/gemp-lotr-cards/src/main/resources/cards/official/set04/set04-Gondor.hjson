@@ -381,7 +381,11 @@
 				type: modifier
 				modifier: {
 					type: cantPlayPhaseEventsOrPhaseSpecialAbilities
-					player: shadow
+					// "AN OPPONENT may not play skirmish events or use skirmish
+					// special abilities" -- a prohibition, so "an" is "any", and
+					// at five seats one banned seat leaves three others free to
+					// do exactly what the card forbids.
+					player: opponentsOfOwner
 					phase: skirmish
 					requires: {
 						type: canSpot

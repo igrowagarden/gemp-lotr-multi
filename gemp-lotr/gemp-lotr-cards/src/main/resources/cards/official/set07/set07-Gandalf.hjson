@@ -486,6 +486,12 @@
 				type: activated
 				phase: skirmish
 				requires: {
+					// "If you have more cards in hand than EACH opponent" --
+					// more than every one of them, which is more than the
+					// largest of their hands. `hand: anyShadow` on forEachInHand
+					// yields that maximum. The old form compared against one
+					// seat, so at five players the card fired happily while
+					// three opponents held more cards than you.
 					type: isGreaterThan
 					firstNumber: {
 						type: forEachInHand
@@ -493,7 +499,7 @@
 					}
 					secondNumber: {
 						type: forEachInHand
-						hand: shadow
+						hand: anyShadow
 					}
 				}
 				cost: {
@@ -501,11 +507,21 @@
 					forced: false
 					count: 2
 				}
-				effect: {
-					type: exert
-					player: shadow
-					select: choose(minion)
-				}
+				effect: [
+					{
+						type: ChooseOpponent
+						memorize: opponent
+					}
+					{
+						// "make AN OPPONENT exert a minion" -- singular, so one
+						// chosen opponent. The select stays UNSCOPED: the text
+						// says "a minion", not "his or her minion", which is the
+						// same reading Gandalf's Staff and Eowyn carry.
+						type: exert
+						player: fromMemory(opponent)
+						select: choose(minion)
+					}
+				]
 			}
 		]
 		gametext: Bearer must be Gandalf.<br>He is <b>damage +1</b>.<br><b>Skirmish:</b> If you have more cards in hand than each opponent, discard 2 cards from hand to make an opponent exert a minion.

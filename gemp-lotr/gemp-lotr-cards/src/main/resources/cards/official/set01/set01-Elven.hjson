@@ -1236,8 +1236,12 @@
 				type: activated
 				phase: maneuver
 				requires: {
+					// "If AN OPPONENT has at least 7 cards in hand" -- any of
+					// them, not the seat getFirstShadowPlayer names. Above two
+					// players the old form hid the action while three opponents
+					// sat on full hands.
 					type: cardsInHandMoreThan
-					player: shadowPlayer
+					player: anyShadow
 					count: 6
 				}
 				cost: {
@@ -1246,17 +1250,29 @@
 				}
 				effect: [
 					{
+						type: ChooseOpponent
+						memorize: opponent
+					}
+					{
+						// "look at 2 of THOSE cards" -- the same opponent the
+						// requirement is about, so both the look and the discard
+						// name the chosen one. A per-player zone needs no card
+						// filter: `hand:` already says whose hand it is.
 						type: LookAtRandomCardsFromHand
-						hand: shadow
+						hand: fromMemory(opponent)
 						count: 2
 						memorize: seenCards
 					}
 					{
+						// player: freeps is correct and stays -- the Free Peoples
+						// player is the one who decides WHICH of the two is
+						// discarded ("discard one and replace the other"), and
+						// there is only ever one Free Peoples player.
 						type: discardFromHand
 						forced: true
 						select: choose(memory(seenCards))
 						player: freeps
-						hand: shadow
+						hand: fromMemory(opponent)
 					}
 				]
 			}
