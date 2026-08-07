@@ -315,10 +315,20 @@
 						type: moves
 					}
 					effect: {
-						type: putCardsFromDiscardIntoHand
-						player: shadow
-						select: choose(side(shadow))
-						count: 0-3
+						// "EACH Shadow player may take up to 3 Shadow cards
+						// into hand from HIS OR HER discard pile" -- one
+						// selection per opponent, out of their own pile. A
+						// discard pile is a per-player zone, so `player: you`
+						// names the pile and no card filter is needed for
+						// scoping; side(shadow) is the card's own constraint.
+						type: forEachPlayer
+						player: eachShadow
+						effect: {
+							type: putCardsFromDiscardIntoHand
+							player: you
+							select: choose(side(shadow))
+							count: 0-3
+						}
 					}
 				}
 			]

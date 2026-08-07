@@ -346,13 +346,19 @@
 					until: endOfTurn
 				}
 				{
-					type: optional
-					player: shadow
-					text: Would you like to draw 6 cards?
+					// "EACH Shadow player may draw 6 cards" -- one offer per
+					// opponent. `you` inside is the opponent of that iteration.
+					type: forEachPlayer
+					player: eachShadow
 					effect: {
-						type: drawCards
-						player: shadow
-						count: 6
+						type: optional
+						player: you
+						text: Would you like to draw 6 cards?
+						effect: {
+							type: drawCards
+							player: you
+							count: 6
+						}
 					}
 				}
 			]

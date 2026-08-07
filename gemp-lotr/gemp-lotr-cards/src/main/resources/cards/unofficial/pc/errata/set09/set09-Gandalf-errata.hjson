@@ -107,20 +107,26 @@
 					type: moves
 				}
 				effect: {
-					type: optional
-					player: shadowPlayer
-					text: Would you like to discard 2 cards to draw 2 cards?
-					cost: {
-						type: discardFromHand
-						player: shadow
-						hand: shadow
-						forced: false
-						count: 2
-					}
+					// "EACH opponent may discard 2 cards from hand to draw 2
+					// cards" -- the same edit as the official 9_26.
+					type: forEachPlayer
+					player: eachShadow
 					effect: {
-						type: drawCards
-						player: shadow
-						count: 2
+						type: optional
+						player: you
+						text: Would you like to discard 2 cards to draw 2 cards?
+						cost: {
+							type: discardFromHand
+							player: you
+							hand: you
+							forced: false
+							count: 2
+						}
+						effect: {
+							type: drawCards
+							player: you
+							count: 2
+						}
 					}
 				}
 			}

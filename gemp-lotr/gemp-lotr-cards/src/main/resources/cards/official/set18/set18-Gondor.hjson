@@ -1008,13 +1008,22 @@
 				}
 				effect: [
 					{
-						type: shuffleHandIntoDrawDeck
-						player: shadow
-					}
-					{
-						type: drawCards
-						player: shadow
-						count: 8
+						// "EACH opponent shuffle HIS OR HER hand into HIS OR HER
+						// draw deck and draw 8 cards" -- both halves are
+						// per-player zones, so `player: you` names them.
+						type: forEachPlayer
+						player: eachShadow
+						effect: [
+							{
+								type: shuffleHandIntoDrawDeck
+								player: you
+							}
+							{
+								type: drawCards
+								player: you
+								count: 8
+							}
+						]
 					}
 				]
 			}

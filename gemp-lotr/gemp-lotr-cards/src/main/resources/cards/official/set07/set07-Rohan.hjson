@@ -1543,9 +1543,15 @@
 						until: endOfTurn
 					}
 					{
-						type: putCardsFromDiscardIntoHand
-						player: shadow
-						count: 0-4
+						// "EACH Shadow player may take up to 4 cards into hand
+						// from HIS OR HER discard pile". See 6_44 for the shape.
+						type: forEachPlayer
+						player: eachShadow
+						effect: {
+							type: putCardsFromDiscardIntoHand
+							player: you
+							count: 0-4
+						}
 					}
 					{
 						type: discard

@@ -449,12 +449,18 @@
 					culture: gollum
 				}
 				{
-					type: optional
-					player: shadow
-					text: Would you like to draw a card?
+					// "EACH Shadow player may draw a card" -- one offer per
+					// opponent. See 6_96 for the shape.
+					type: forEachPlayer
+					player: eachShadow
 					effect: {
-						type: drawCards
-						player: shadow
+						type: optional
+						player: you
+						text: Would you like to draw a card?
+						effect: {
+							type: drawCards
+							player: you
+						}
 					}
 				}
 			]

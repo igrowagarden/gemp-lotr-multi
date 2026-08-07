@@ -132,9 +132,18 @@
 				select: choose(fellowship,companion)
 			}
 			effect: {
-				type: discard
-				player: shadow
-				select: choose(your,side(shadow))
+				// "EACH Shadow player discard one of HIS OR HER Shadow cards
+				// from play" -- one discard per opponent, from their own cards.
+				// `your` resolves against the acting player, which inside
+				// forEachPlayer is the opponent of that iteration, so it scopes
+				// the selection without needing ownedByPlayerFromMemory.
+				type: forEachPlayer
+				player: eachShadow
+				effect: {
+					type: discard
+					player: you
+					select: choose(your,side(shadow))
+				}
 			}
 		}
 		gametext: Spot Gimli and exert a fellowship companion to have each Shadow player discard one of his or her Shadow cards from play.
