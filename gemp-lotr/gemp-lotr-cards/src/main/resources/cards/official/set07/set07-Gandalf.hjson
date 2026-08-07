@@ -334,9 +334,12 @@
 					player: anyShadow
 					text: Would you like to place 3 cards from your hand on top of your deck to prevent Gandalf's effect?
 					cost: {
+						// "his or her hand ... his or her draw deck" -- both
+						// belong to whoever accepted, which `you` names inside
+						// a prevention cost. See 5_20 for the mechanism.
 						type: putCardsFromHandOnTopOfDeck
-						player: shadow
-						hand: shadow
+						player: you
+						hand: you
 						count: 3
 					}
 					effect: {

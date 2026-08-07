@@ -25,8 +25,10 @@
 					player: anyShadow
 					text: Would you like to exert a minion twice to prevent discarding a minion?
 					cost: {
+						// `you` is whoever accepted the offer, not the first
+						// Shadow player. See 5_20 for the mechanism.
 						type: exert
-						player: shadow
+						player: you
 						select: choose(minion)
 						times: 2
 					}

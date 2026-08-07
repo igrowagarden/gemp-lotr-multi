@@ -333,8 +333,12 @@
 					player: anyShadow
 					text: Would you like to discard a minion to prevent Free Player discarding up to 2 shadow possessions?
 					cost: {
+						// `you` inside a prevention cost is whoever ACCEPTED:
+						// PreventableEffectAppender appends the cost in a
+						// context delegated to them. `shadow` would name the
+						// first Shadow player however many were offered.
 						type: discard
-						player: shadow
+						player: you
 						select: choose(minion)
 					}
 					effect: {
