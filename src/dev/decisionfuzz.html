@@ -609,7 +609,13 @@ function runCase(c) {
     // say plainly that the shapes are not directly comparable.
     rec.notes.push(`old reported shape=${oldN.shape}; picker shapes are not ` +
                    `directly comparable, counts are`);
-    const oldCount = oldN.cards.length || oldN.buttons.length;
+    // CARDS ONLY. This used to be `cards.length || buttons.length`, and the
+    // fallthrough fired precisely when it must not: on a decision where NOTHING
+    // is selectable, the reference still renders a Done/OK button, so "0
+    // selectable cards" was reported as "1" and the two informational cases --
+    // the whole point of which is that nothing can be chosen -- failed. A button
+    // is not a card, and `||` made zero mean "look somewhere else".
+    const oldCount = oldN.cards.length;
     if (oldCount !== newSide.reach.length) {
       rec.findings.push(["DIFF", `selectable count: old ${oldCount} vs new ${newSide.reach.length} ` +
                                  `(new: ${JSON.stringify(newSide.reach)})`]);
@@ -810,7 +816,14 @@ for (const [type, rs] of Object.entries(groups)) {
     //                evidence and its own verdict -- folding it into `expect`
     //                would quietly convert a reference bug into our design note.
     const oracleBad = bad && r.case.oracleWrong;
-    const marked = !oracleBad && bad && (encoding ? r.case.equivalent : r.case.expect);
+    // An ANSWERS DIFFER normally demands `equivalent` -- a cited claim that the
+    // engine parses both strings the same. `unreachable` is the one other way
+    // out, and it is a stronger statement, not a weaker one: the engine cannot
+    // emit this shape at all, so neither client will ever be asked and there is
+    // no answer to be right about. Kept in the catalogue so the question is not
+    // re-opened, not because the behaviour matters.
+    const marked = !oracleBad && bad &&
+      (encoding ? (r.case.equivalent || r.case.unreachable) : r.case.expect);
     if (isErr) errors++; else if (oracleBad) oracle++; else if (marked) expected++; else if (bad) diffs++;
 
     const tag = isErr ? "ERR " : oracleBad ? "ORACLE" : marked ? "KNOWN" : bad ? "DIFF" : "PASS";

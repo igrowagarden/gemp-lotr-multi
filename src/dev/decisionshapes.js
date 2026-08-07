@@ -300,6 +300,9 @@ export const CASES = [
   // considered and ruled out, rather than deleted so the question gets asked again.
   { name: "selectable absent entirely (unreachable)", type: "ARBITRARY_CARDS",
     expect: "engine cannot emit this — every constructor writes `selectable`",
+    // No answer comparison is meaningful for input the engine cannot produce:
+    // whatever the two clients do with it, neither will ever be asked.
+    unreachable: true,
     params: { cardId: ["temp0", "temp1"], blueprintId: ["1_10", "1_11"],
               min: "1", max: "1" } },
 
