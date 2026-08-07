@@ -378,6 +378,84 @@ public interface GameProcedures extends Actions, GameProperties, PileProperties 
 				+ textFragment + "'");
 	}
 
+	/**
+	 * Put one companion in a skirmish against one minion, at any number of seats,
+	 * and stop when that skirmish is the one being resolved.
+	 *
+	 * {@link #SkipToAssignments} plus {@link Skirmishes#FreepsAssignAndResolve}
+	 * is written as P1 and P2 -- it declines assignments for P2 alone -- so a
+	 * third seat's unanswered assignment stalls it.
+	 *
+	 * The shape above two seats was measured rather than guessed, and it is not
+	 * the one the two-player helpers imply. The Free Peoples player is asked
+	 * first and is offered EVERY opponent's minions at once; each Shadow player
+	 * is then asked separately about whichever of their own are still
+	 * unassigned. So the assignment this method wants is always the Free Peoples
+	 * player's, whoever owns the minion. That matches archery, where the Free
+	 * Peoples player assigns the wounds given by minions regardless of who
+	 * controls them (docs/GEMP_INTERNALS.md section 6).
+	 */
+	default void PassUntilSkirmishBetween(PhysicalCardImpl comp, PhysicalCardImpl minion) {
+		String target = String.valueOf(minion.getCardId());
+		for (int attempts = 1; attempts <= 300; attempts++) {
+			if (gameState().getCurrentPhase() == Phase.SKIRMISH
+					&& gameState().getSkirmish() != null
+					&& gameState().getSkirmish().getShadowCharacters().contains(minion))
+				return;
+
+			var pending = new java.util.ArrayList<>(userFeedback().getUsersPendingDecision());
+			if (pending.isEmpty())
+				throw new RuntimeException("Nobody has a decision, and the phase is "
+						+ gameState().getCurrentPhase() + " with no skirmish against "
+						+ minion.getBlueprint().getTitle());
+
+			java.util.Collections.sort(pending);
+			String playerId = pending.get(0);
+			var decision = userFeedback().getAwaitingDecision(playerId);
+			if (decision == null)
+				continue;
+
+			var params = decision.getDecisionParameters();
+			String[] minions = params.get("minions");
+			if (minions != null && java.util.Arrays.asList(minions).contains(target)) {
+				PlayerDecided(playerId, comp.getCardId() + " " + target);
+				continue;
+			}
+			PlayerDecided(playerId, AnswerThatStartsNoSkirmish(decision));
+		}
+		throw new RuntimeException("Never reached a skirmish against "
+				+ minion.getBlueprint().getTitle() + "; stalled in "
+				+ gameState().getCurrentPhase());
+	}
+
+	/**
+	 * Decline everything, but answer the questions that have no decline.
+	 *
+	 * "Choose next skirmish to resolve" is a card selection with min=1: passing
+	 * it is rejected outright, which is how a walk that declines everything dies
+	 * one step short of the skirmish it was walking to.
+	 */
+	private static String AnswerThatStartsNoSkirmish(
+			com.gempukku.lotro.logic.decisions.AwaitingDecision decision) {
+		var params = decision.getDecisionParameters();
+		switch (decision.getDecisionType()) {
+			case INTEGER:
+				return params.containsKey("min") ? params.get("min")[0] : "0";
+			case ACTION_CHOICE:
+			case MULTIPLE_CHOICE:
+				return "0";
+			case CARD_SELECTION: {
+				boolean mustPick = params.containsKey("min") && !params.get("min")[0].equals("0");
+				String[] cardIds = params.get("cardId");
+				if (mustPick && cardIds != null && cardIds.length > 0)
+					return cardIds[0];
+				return "";
+			}
+			default:
+				return "";
+		}
+	}
+
 	/** Decline everything except the invitation to move on. */
 	private static String AnswerThatKeepsMoving(
 			com.gempukku.lotro.logic.decisions.AwaitingDecision decision) {

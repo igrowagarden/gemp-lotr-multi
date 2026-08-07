@@ -334,11 +334,20 @@
 					type: winsSkirmish
 					filter: bearer
 				}
-				effect: {
-					type: wound
-					player: shadow
-					select: choose(minion)
-				}
+				effect: [
+					{
+						type: ChooseOpponent
+						memorize: opponent
+					}
+					{
+						// "wound a minion", not "his or her minion": the chosen
+						// player picks from every minion in play, so this
+						// selection is deliberately NOT scoped to their own.
+						type: wound
+						player: fromMemory(opponent)
+						select: choose(minion)
+					}
+				]
 			}
 		]
 		gametext: Bearer must be a Wizard.<br>If bearer is Gandalf, he gains <b>muster</b>. <helper>(At the start of the regroup phase, you may discard a card from hand to draw a card.)</helper><br>Each time bearer wins a skirmish, choose a Shadow player who must wound a minion.
