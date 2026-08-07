@@ -33,14 +33,19 @@ OFFERS and the exact string each SENDS, and all nine of the reference's
 `decisionFunction` call sites are reached. The decision space is finished work;
 do not re-open it without a reason.
 
-**The untested surfaces: PILES and the LOG are done, the rest are not.** Zoom,
-card info, replay controls, drag-to-reorder, concede and detached boards --
-nothing tests any of them against the reference. `decisionfuzz.html`
+**Untested surfaces: PILES, the LOG and CARD INFO are done.** Still untested:
+**zoom**, replay controls, drag-to-reorder, concede and detached boards.
+
+Zoom is the obvious next one and is already known to be tractable: the reference
+builds `ui.autoZoom` at gameUi.js:209 and `AutoZoom` exposes `previewImageBPID`,
+so "which blueprint is previewed for this element" is readable without touching
+the oracle. Mind `AutoZoom.HoverDelay = 500` against the virtual clock. `decisionfuzz.html`
 is the template and `pilefuzz.html` is the worked second example: enumerate the
 space from the source, drive both clients, prove the control fires.
 
     bash harness/pilerun.sh    4 viewer configs x 5 piles x 2 seats + 3 controls
     bash harness/logrun.sh     14 message shapes + ordering, 4 controls
+    bash harness/inforun.sh    7 card-id kinds x live/replay, 3 controls
 
 Two client bugs came out of the first enumeration, both in one afternoon and
 neither visible without the oracle: **no draw-deck pile at all**, and **every
@@ -348,6 +353,7 @@ harness/
   pilerun.sh       PILE differential: 4 viewer configs + 3 controls, no server
                    game needed                  (CONFIGS=, `baseline`)
   logrun.sh        LOG differential: game log + chat, 4 controls (`baseline`)
+  inforun.sh       CARD INFO differential: live + replay, 3 controls (MODES=)
   autopassmeasure.py  proves the auto-pass cookie changes what the ENGINE asks,
                    by counting no-action CARD_ACTION_CHOICEs  (--only A|B|C)
 ```
@@ -1843,6 +1849,76 @@ calls `this.checkForEnd` (chat.js:382) and other siblings the sink does not
 provide, and bound to the object those are TypeErrors that kill the page. Bound
 to the proxy they fall through to the no-op, so the reference's own method runs
 without anyone having to enumerate what it happens to touch.
+
+---
+
+## The card-info differential
+
+`src/dev/infofuzz.html` + `src/dev/infoshapes.js`, driven by
+`harness/inforun.sh`. No server, no bots, no game.
+
+    bash harness/inforun.sh              live + replay, 3 controls
+    bash harness/inforun.sh baseline
+
+### Two decisions, not one -- which is the bug it found
+
+`displayCardInfo` (gameUi.js:956-968) makes two INDEPENDENT decisions:
+
+    showModifiers = !replayMode && cardId != "hint"
+                    && (cardId.length < 4 || cardId.substring(0,4) != "temp")
+    cardInfoDialog.showCard(card, showModifiers ? "..." : null);   // ALWAYS
+    if (showModifiers) getCardModifiersFunction(cardId, ...);      // guarded
+
+**The card is always shown; only the QUERY is guarded.** This client had the two
+fused -- a `/^\d+$/` test on the id that declined to open at all for anything
+non-numeric. So right-clicking a card in the picker did nothing whatsoever: not
+"no modifiers available", nothing. A card's own text is worth reading even when
+nothing is modifying it, which is most of the time.
+
+Three exclusions from the query, each for its own reason: `replay` has no live
+game to ask, `"hint"` is a card named in the LOG and identified by blueprint
+with no instance in play, and `temp*` ids belong to the picker and are rejected
+by the engine -- a refusal that comes back looking exactly like "no modifiers",
+which is a different and wrong answer.
+
+The `length < 4` clause is a guard so `substring(0,4)` cannot mis-read a short
+id, not a special case: `"tem"` still gets modifiers. `infoshapes.js` pins that
+down so a later "simplification" to `startsWith` stays honest.
+
+### Two more gaps it exposed
+
+- **A card named in the game log could not be opened.** The reference opens card
+  info when a `cardHint` is clicked (gameUi.js:808-814), building a Card from
+  the blueprint with cardId `"hint"`. This client drew the hints and previewed
+  them on hover with no way to inspect them. Now a left click opens them --
+  left, not right, because a hint is not a decision target and the objection
+  that made right-click the choice for board cards does not apply.
+- **`replay.html` had no card info at all.** The reference shows it in a replay
+  and skips only the fetch. Wired, with `replay: true`.
+
+### Verified
+
+    baseline    live ALL PASS (7)    replay ALL PASS (7)
+    alwaysask   live 4 DIFF   replay 7 DIFF
+    neverask    live 3 DIFF   replay ALL PASS   <- its scope, see below
+    neveropen   live 7 DIFF   replay 7 DIFF
+
+`neverask` **cannot** fire in replay: it suppresses the query, and in a replay
+the reference queries nothing anyway. That is its scope, `CONTROL_SCOPE` records
+it, and without recording it a clean replay run reads as coverage it is not.
+
+Every count is arithmetic: 4 ids the reference declines to ask about live, 3 it
+does, 7 it always shows.
+
+### No oracle edit was needed
+
+Both observables are hooks on the reference's own objects --
+`ui.cardInfoDialog.showCard` and `ui.getCardModifiersFunction`, wrapped per case
+and restored after. `oldharness.html` has five consumers and every edit to it
+has cost this project time, so not touching it is worth a little more work in
+the page. `replayMode` is set directly on the ui rather than by booting a
+recording: it is a plain flag `displayCardInfo` reads, and driving a whole
+replay to flip one boolean would be testing the replay harness instead.
 
 ---
 
