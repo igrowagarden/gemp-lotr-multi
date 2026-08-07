@@ -1104,24 +1104,48 @@
 		effects: {
 			type: event
 			effect: [
+				// The Man is chosen up front so BOTH outcomes below can name the
+				// same one. It used to be picked by the +4 itself, which was fine
+				// while the reduction was a separate -2 riding on top.
 				{
-					type: modifyStrength
+					type: chooseActiveCards
 					select: choose(culture(rohan),man)
-					amount: 4
+					count: 1
 					memorize: chosenMan
+					text: Choose a [rohan] Man to make strength +4
 				}
 				{
-					type: optional
-					player: shadow
-					text: Would you like to place a random card from hand beneath draw deck to reduce the bonus to +2 for {chosenMan}?
+					// "ANY Shadow player may ... instead" -- an offer that goes
+					// round the table and stops at the first acceptance. That is
+					// what `preventable` does and what `optional` cannot: it
+					// resolves `player:` through PlayerResolver.resolvePlayer,
+					// which returns exactly one seat, so only the player
+					// getFirstShadowPlayer named was ever asked and the other
+					// opponents were silently skipped.
+					//
+					// Written as +4-or-+2 rather than +4-then--2 because the
+					// reduction is now the `instead:` branch of the offer.
+					type: preventable
+					player: anyShadow
+					text: Would you like to place a random card from hand beneath your draw deck to make {chosenMan} strength +2 instead of +4?
 					cost: {
+						// `you` in a prevention cost is whoever ACCEPTED --
+						// PreventableEffectAppender appends the cost in a context
+						// delegated to that player. `shadow` here would charge a
+						// fixed seat for somebody else's decision, which is the
+						// second bug the anyShadow work introduced elsewhere.
 						type: putRandomCardFromHandBeneathDrawDeck
-						hand: shadow
+						hand: you
 					}
 					effect: {
 						type: modifyStrength
 						select: memory(chosenMan)
-						amount: -2
+						amount: 4
+					}
+					instead: {
+						type: modifyStrength
+						select: memory(chosenMan)
+						amount: 2
 					}
 				}
 			]
