@@ -344,7 +344,16 @@ export const CASES = [
   // (it lives on `cardActionDialog`, not the `#Done` in `alertButtons` that the
   // other types use). So the reference is unproven here, not proven wrong, and
   // the marker that says "we are right and the oracle is not" needs a
-  // measurement, not a reading. Reaching that button is what would settle it.
+  // measurement, not a reading.
+  //
+  // ATTEMPTED AND STILL OPEN. The driver now also presses
+  // `.ui-dialog-buttonpane button`, and it changes nothing: every other picker
+  // case submits through AUTO-ACCEPT (`selectedCardIds.length == max`), which by
+  // definition never fires at max=0, so this is the one case that truly needs
+  // the button -- and the dialog's button pane is not rendered in the can opener
+  // at all. Settling it needs the pane to exist headlessly, or a different way
+  // in that is still the client's own submit path rather than a call to
+  // `finishChoice` (which would be teaching the client, not watching it).
   //
   // What IS established: this client sends "", the only legal answer.
   { name: "max=0 with cards still selectable", type: "ARBITRARY_CARDS",

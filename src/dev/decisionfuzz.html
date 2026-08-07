@@ -421,7 +421,17 @@ const DRIVE = {
       let n = 0;
       for (const i of idx.slice(0, want)) if (oldClickAny("#arbitraryChoice .card .actionArea", i)) n++;
       if (!n) return false;
-      oldFinish();
+      // THE PICKER SUBMITS SOMEWHERE ELSE. Every other type finishes through
+      // `#Done` in `alertButtons`; `arbitraryCardsDecision` puts its button on
+      // `cardActionDialog`'s jQuery-UI button pane. `oldFinish()` therefore
+      // reached nothing here, and the reference "sent nothing" for every picker
+      // case -- which read as the reference declining, when it had simply never
+      // been asked to submit.
+      //
+      // Deliberately NOT folded into `oldFinish`: that helper is shared by four
+      // drivers, and widening a shared thing to suit one caller is the mistake
+      // that broke the replay differential earlier today.
+      if (!oldFinish()) oldClickAny(".ui-dialog-buttonpane button", 0);
       return true;
     }),
     new: (want = 1) => newSends(() => {
