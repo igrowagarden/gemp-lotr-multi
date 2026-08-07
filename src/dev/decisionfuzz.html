@@ -735,6 +735,12 @@ function runCase(c) {
              // reaches (gameUi.js:842). Without both, "the old client sent
              // nothing" has no explanation attached to it.
              `selFn=${typeof OLD.ui?.selectionFunction} ` +
+             // Every button in the document, and every dialog pane. Separates
+             // "the pane is not created" from "it is created and my selector is
+             // wrong" -- the two remaining explanations for a Done that cannot
+             // be pressed.
+             `allBtn=${$("button").length} pane=${$(".ui-dialog-buttonpane").length} ` +
+             `dlg=${$(".ui-dialog").length} ` +
              // The click gate (gameUi.js:827-832) needs the event target to
              // carry `.actionArea` AND `successfulDrag` to be false. Everything
              // upstream of it is already known good, so these two are what is

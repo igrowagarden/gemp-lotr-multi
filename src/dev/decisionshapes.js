@@ -365,9 +365,18 @@ export const CASES = [
   // never reached. Every OTHER picker case shows `decisionFunction 1x` because
   // they submit through AUTO-ACCEPT (`selectedCardIds.length == max`), which by
   // definition cannot fire at max=0 -- so this is the only case that needs the
-  // Done button, and the picker's Done is a jQuery-UI dialog button whose pane
-  // is never materialised in the can opener. Pressing it by class and by text
-  // both find nothing in the document.
+  // Done button.
+  //
+  // CORRECTION. This note previously said the dialog's button pane is never
+  // materialised. That was inferred from two selectors failing, and it is
+  // wrong: a census at drive time reports `pane=1 allBtn=4 dlg=14`. The pane
+  // exists and there are buttons in the document, so this is a TARGETING
+  // problem, not a missing pane -- fourteen dialogs are present and the Done
+  // being pressed, if any, may belong to another of them.
+  //
+  // Next: dump the four buttons' text and their owning dialog rather than
+  // filtering blind. Two selectors failing is not evidence about the DOM;
+  // counting is.
   //
   // So: the reference's behaviour here is UNMEASURED, and will stay so until the
   // can opener renders dialog button panes. It is not evidence of anything about
