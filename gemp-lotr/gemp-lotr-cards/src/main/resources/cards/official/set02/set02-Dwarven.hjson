@@ -685,14 +685,26 @@
 				select: choose(dwarf)
 			}
 			effect: [
+				// "make AN OPPONENT draw 2 cards. THAT PLAYER then chooses..."
+				// -- two tokens, one opponent, and the second must be the same
+				// as the first. This card was missing from the handoff's list
+				// of the `one` bucket entirely.
+				{
+					type: ChooseOpponent
+					memorize: opponent
+				}
 				{
 					type: drawCards
-					player: shadowPlayer
+					player: fromMemory(opponent)
 					count: 2
 				}
 				{
+					// The branch effects need no player of their own: Choice
+					// delegates the context to whoever `player:` names, so the
+					// `you` inside skipPhase and the default hand for
+					// discardFromHand are both the chosen opponent.
 					type: choice
-					player: shadowPlayer
+					player: fromMemory(opponent)
 					texts: [
 						Discard 2 Shadow cards from hand
 						Skip your next Shadow phase

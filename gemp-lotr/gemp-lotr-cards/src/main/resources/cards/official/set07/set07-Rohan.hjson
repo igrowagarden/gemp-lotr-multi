@@ -790,15 +790,29 @@
 				count: 3
 			}
 			effect: [
+				// Outside the repeat, as on Eowyn (10_72) -- inside, the Free
+				// Peoples player would be asked afresh for every card in the
+				// hand and could switch victims mid-effect. "An opponent ...
+				// that player's hand" names one opponent for all three tokens.
+				{
+					type: ChooseOpponent
+					memorize: opponent
+				}
 				{
 					type: repeat
 					times: {
+						// "for each card in THAT PLAYER's hand". Safe to read
+						// from memory here: Repeat evaluates `times` only
+						// inside createEffect, never during the playability
+						// check, so the ChooseOpponent above has always run
+						// first. (Repeat.isPlayableInFull consults its inner
+						// appenders and never touches timesSource.)
 						type: forEachInHand
-						hand: shadow
+						hand: fromMemory(opponent)
 					}
 					effect: {
 						type: choice
-						player: shadow
+						player: fromMemory(opponent)
 						texts: [
 							Remove 1 twilight
 							Place a random card from hand beneath draw deck
@@ -809,8 +823,12 @@
 								amount: 1
 							}
 							{
+								// "HIS OR HER draw deck" -- an owner word, and
+								// naming the player IS the scoping here: hand
+								// and deck are per-player zones, so no card
+								// filter is wanted. Measured on 1_43/10_104.
 								type: putRandomCardFromHandBeneathDrawDeck
-								hand: shadow
+								hand: fromMemory(opponent)
 							}
 						]
 					}

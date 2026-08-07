@@ -257,9 +257,17 @@
 				select: choose(culture(shire),companion)
 			},
 			effect: [
+				// BEFORE the choice, not inside an option: Choice wraps the
+				// branch effects in a DelegateActionContext built around
+				// whoever `player:` names, so that token decides which seat
+				// holds the whole fork. Measured on Duality (13_47).
+				{
+					type: ChooseOpponent
+					memorize: opponent
+				}
 				{
 					type: choice
-					player: shadow
+					player: fromMemory(opponent)
 					texts: [
 						Remove 2 twilight
 						Discard a minion
