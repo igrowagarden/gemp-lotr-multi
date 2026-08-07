@@ -490,14 +490,36 @@ public class ValueResolver {
                 FieldUtils.validateAllowedFields(object, "filter", "hand", "over", "limit", "multiplier", "divider");
                 final String filter = FieldUtils.getString(object.get("filter"), "filter", "any");
                 final String hand = FieldUtils.getString(object.get("hand"), "hand", "you");
-                final PlayerSource player = PlayerResolver.resolvePlayer(hand);
+                // A PlayersSource, so `hand:` may name a GROUP -- and when it
+                // does, the value is the LARGEST of those hands.
+                //
+                // Glamdring (7_39) is why: "If you have more cards in hand than
+                // EACH opponent". Comparing against one opponent's hand is the
+                // same sentence only at two players; above two it let the card
+                // fire while three opponents held more cards than you. "More
+                // than every opponent" is "more than the biggest of them", so
+                // max is the reading this card needs.
+                //
+                // Max rather than sum is a CHOICE, and it is recorded as one:
+                // no card sums opponents' hands today, and if one ever wants to
+                // it should say so with its own token rather than silently
+                // reinterpreting this one. Every existing user names a single
+                // player, which wraps to a one-element list whose max is itself,
+                // so all 16 are unchanged by construction.
+                final PlayersSource players = PlayerResolver.resolvePlayers(hand);
                 final FilterableSource filterableSource = environment.getFilterFactory().generateFilter(filter, environment);
 
                 return new SmartValueSource(environment, object,
                         actionContext -> {
-                            String playerId = player.getPlayer(actionContext);
+                            java.util.Collection<String> playerIds = players.getPlayers(actionContext);
                             Filterable filterable = filterableSource.getFilterable(actionContext);
-                            return (game, cardAffected) -> Filters.filter(game, game.getGameState().getHand(playerId), filterable).size();
+                            return (game, cardAffected) -> {
+                                int largest = 0;
+                                for (String playerId : playerIds)
+                                    largest = Math.max(largest,
+                                            Filters.filter(game, game.getGameState().getHand(playerId), filterable).size());
+                                return largest;
+                            };
                         });
             } else if (type.equalsIgnoreCase("forEachInMemory")) {
                 FieldUtils.validateAllowedFields(object, "memory", "filter", "over", "limit", "multiplier", "divider");

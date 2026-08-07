@@ -16,7 +16,11 @@ public class ReplacesSite implements TriggerCheckerProducer {
         String player = FieldUtils.getString(value.get("player"), "player");
         ValueSource numberResolver = ValueResolver.resolveEvaluator(value.get("number"), 0, environment);
 
-        PlayerSource playerSource = (player != null) ? PlayerResolver.resolvePlayer(player) : null;
+        // A GATE naming a group -- Riddermark Tactician (13_133) says "Each time
+        // A SHADOW PLAYER replaces the fellowship's current site". It is the
+        // only card using this trigger's player field, and a single token
+        // watched one seat.
+        PlayersSource playerSource = (player != null) ? PlayerResolver.resolvePlayers(player) : null;
 
         return new TriggerChecker() {
             @Override
@@ -30,8 +34,8 @@ public class ReplacesSite implements TriggerCheckerProducer {
                 if (number != 0 && replaceSiteResult.getSiteNumber() != number)
                     return false;
 
-                String playerId = playerSource != null ? playerSource.getPlayer(actionContext) : null;
-                if (playerId != null && !playerId.equals(replaceSiteResult.getPlayerId()))
+                if (playerSource != null
+                        && !playerSource.getPlayers(actionContext).contains(replaceSiteResult.getPlayerId()))
                     return false;
 
                 return true;

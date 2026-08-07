@@ -15,14 +15,24 @@ public class AddsBurden implements TriggerCheckerProducer {
         String player = FieldUtils.getString(value.get("player"), "player");
 
         final FilterableSource sourceFilter = environment.getFilterFactory().generateFilter(filter, environment);
-        PlayerSource playerSource = player != null ? PlayerResolver.resolvePlayer(player) : null;
+        // A GATE naming a group -- Spirit of the White Tree (17_34) says "Each
+        // time A SHADOW PLAYER adds a burden, discard this condition", and it is
+        // the only one of this trigger's six users to carry a player token at
+        // all. The null case (the other five) still means anybody.
+        PlayersSource playerSource = player != null ? PlayerResolver.resolvePlayers(player) : null;
 
         return new TriggerChecker() {
             @Override
             public boolean accepts(ActionContext actionContext) {
-                String playerId = playerSource != null ? playerSource.getPlayer(actionContext) : null;
-                return TriggerConditions.addedBurden(actionContext.getGame(), playerId, actionContext.getEffectResult(),
-                        sourceFilter.getFilterable(actionContext));
+                if (playerSource == null)
+                    return TriggerConditions.addedBurden(actionContext.getGame(), null,
+                            actionContext.getEffectResult(), sourceFilter.getFilterable(actionContext));
+
+                for (String playerId : playerSource.getPlayers(actionContext))
+                    if (TriggerConditions.addedBurden(actionContext.getGame(), playerId,
+                            actionContext.getEffectResult(), sourceFilter.getFilterable(actionContext)))
+                        return true;
+                return false;
             }
 
             @Override
