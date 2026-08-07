@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>zoom differential</title>
+<link rel="stylesheet" href="../styles/board.css">
+<style>
+  body { font-family: ui-monospace, Consolas, monospace; font-size: 12px; padding: 10px; }
+  iframe { position: absolute; left: -10000px; top: 900px; width: 1400px; height: 900px; border: 0; }
+  #board { position: absolute; left: -10000px; top: 0; width: 1400px; height: 800px; }
+  pre { white-space: pre-wrap; }
+  .ok { color: #6E9B7A; } .bad { color: #FF5240; } .note { color: #B08D57; }
+</style></head>
+<body>
+<iframe id="old" src="./oldharness.html"></iframe>
+<div id="board"></div>
+<pre id="out">RUNNING</pre>
+
+<script type="module">
+/**
+ * The ZOOM differential: what hovering something previews.
+ *
+ *   zoomfuzz.html                       baseline
+ *   zoomfuzz.html?sabotage=showback     NEGATIVE CONTROL
+ *   zoomfuzz.html?sabotage=blank        NEGATIVE CONTROL
+ *   zoomfuzz.html?sabotage=wrongcard    NEGATIVE CONTROL
+ *   zoomfuzz.html?sabotage=ignorestate  NEGATIVE CONTROL
+ *
+ * THE OBSERVABLE IS `displayPreviewImage`, not `previewImageBPID`.
+ * `AutoZoom.previewImageBPID` is declared at autoZoomHandler.js:3 and assigned
+ * NOWHERE -- dead state, the same trap as the reference's `settingsAutoPass`.
+ * Reading it would have reported "no preview" for every case, which is
+ * indistinguishable from a client that previews nothing. So the reference's own
+ * `displayPreviewImage(card, div)` is wrapped and the card it is handed is what
+ * gets compared.
+ *
+ * THE 500ms HOVER DELAY IS BYPASSED, deliberately, by setting `hoverValid` --
+ * which makes `handleMouseOver` take its immediate branch into exactly the same
+ * `triggerHover` / `triggerHintHover` the timer would have called. The delay is
+ * PACING, not content, and this page is about content; the same argument the
+ * oracle's queue patch makes. A page that waited on real timers against a
+ * virtual clock would be testing the clock.
+ *
+ * NO ORACLE EDIT: everything here hangs off `ui.autoZoom`, which the reference
+ * builds itself at gameUi.js:209.
+ */
+import { createStore } from "../state/store.js";
+import { createBoard } from "../view/board.js";
+import { createZoom } from "../view/piles.js";
+import { decodeEvents } from "../net/protocol.js";
+import { CASES, STATES, VIEWER, baseBoard, FREE_BACK, SHADOW_BACK }
+  from "./zoomshapes.js";
+
+const q = new URLSearchParams(location.search);
+const sabotage = q.get("sabotage");
+const out = document.getElementById("out");
+const lines = [];
+const say = (t, cls) => { lines.push(cls ? `<span class="${cls}">${t}</span>` : t);
+                          out.innerHTML = lines.join("\n"); };
+
+async function ready(frame) {
+  for (let i = 0; i < 300; i++) {
+    if (frame.contentWindow?.OLD) return frame.contentWindow.OLD;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  throw new Error("old harness never came up");
+}
+const frame = document.getElementById("old");
+const OLD = await ready(frame);
+OLD.boot({ gameId: "1", participantId: VIEWER });
+OLD.feedBatch(OLD.parseEvents(baseBoard()));
+const ui = OLD.ui;
+const $ = frame.contentWindow.$;
+const az = ui.autoZoom;
+
+/**
+ * PREFLIGHT. Every verdict below rests on autoZoom existing, on
+ * displayPreviewImage being wrappable, and on the board actually carrying the
+ * cards. Without the last one every hover finds nothing and the run reports
+ * "neither client previews anything" -- a clean-looking sheet of agreement over
+ * a board that was never laid down.
+ */
+const haveZoom = !!az && typeof az.handleMouseOver === "function"
+                 && typeof az.displayPreviewImage === "function";
+const cardCount = $(".card").length;
+say(`preflight: autoZoom=${!!az} handleMouseOver+displayPreviewImage=${haveZoom} ` +
+    `cards on the oracle's board=${cardCount}`,
+    haveZoom && cardCount > 0 ? "note" : "bad");
+if (!haveZoom || cardCount === 0) {
+  say("");
+  say("RESULT: 1 FAILED of 1 — the oracle has no zoom or no board; nothing " +
+      "below would mean anything", "bad");
+  throw new Error("preflight failed");
+}
+
+// Touch detection and the user's toggle are environment, not behaviour under
+// test; pinned so the run does not depend on either.
+az.isTouchDevice = false;
+az.showPreviewImage = true;
+
+/** Hover something in the reference and report the blueprint it previewed. */
+function oldPreview(target, dragging, infoOpen) {
+  let shown = null;
+  const orig = az.displayPreviewImage;
+  az.displayPreviewImage = function (card) { shown = card ? card.blueprintId : null; };
+  // Immediate branch rather than the 500ms timer; same triggers either way.
+  az.hoverValid = true;
+  try {
+    az.handleMouseOver({ target, shiftKey: false, stopPropagation() {} },
+                       dragging, infoOpen);
+  } catch (e) {
+    say(`  (oracle threw while hovering: ${e.message})`, "note");
+  } finally {
+    az.displayPreviewImage = orig;
+  }
+  return shown;
+}
+
+/**
+ * Build the element the reference expects to be handed. `triggerHover` reads
+ * `target.closest(".card").data("card")`, so the hover target is the
+ * `.actionArea` INSIDE a card -- hovering the card div itself is not what the
+ * client ever does and would test a path no user reaches.
+ */
+function oldTargetFor(c) {
+  if (c.target === "card") {
+    const card = $(".card:cardId(" + c.cardId + ")")[0];
+    if (!card) return null;
+    let area = $(".actionArea", card)[0];
+    if (!area) {
+      area = $("<div class='actionArea'></div>").appendTo(card)[0];
+    }
+    return area;
+  }
+  if (c.target === "hint") {
+    return $("<div class='cardHint' value='" + c.blueprintId + "'>x</div>")
+      .appendTo($(frame.contentWindow.document.body))[0];
+  }
+  return $("<div class='notacard'></div>")
+    .appendTo($(frame.contentWindow.document.body))[0];
+}
+
+// -------------------------------------------------------------- the new client
+const store = createStore(VIEWER);
+const boardEl = document.getElementById("board");
+createBoard(boardEl, store, {});
+// Suppression is driven per case. `ignorestate` makes the new client genuinely
+// ignore it rather than faking the reading, so that control exercises the real
+// code path the reference guards at autoZoomHandler.js:292.
+let suppressNow = false;
+const zoom = createZoom(boardEl, {
+  suppressed: () => suppressNow && sabotage !== "ignorestate"
+});
+store.dispatchAll(decodeEvents(baseBoard()));
+
+/**
+ * Hover something in the new client and report the blueprint it previewed.
+ * Read from the rendered preview rather than from the rule, so what is compared
+ * is what a player would actually see.
+ */
+function newPreview(c, suppressedState) {
+  suppressNow = suppressedState;
+  zoom.hide();
+  let node;
+  if (c.target === "card") node = boardEl.querySelector(`.card[data-card-id="${c.cardId}"]`);
+  else if (c.target === "hint") {
+    node = document.createElement("span");
+    node.className = "cardhint";
+    node.dataset.blueprintId = c.blueprintId;
+    boardEl.appendChild(node);
+  } else {
+    node = document.createElement("div");
+    boardEl.appendChild(node);
+  }
+  if (!node) return null;
+
+  node.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+  const shown = zoom.node.classList.contains("on") ? (zoom.previewedBlueprint ?? null) : null;
+
+  // ---- negative controls. `ignorestate` is applied in the client above; the
+  //      rest are applied to the reading, as in the other fuzz pages.
+  if (sabotage === "blank") return null;
+  if (sabotage === "wrongcard" && shown) return "9_99";
+  // Only the card BACKS, and only where a preview was not otherwise suppressed
+  // -- otherwise this would overlap `ignorestate` and neither control would be
+  // saying anything specific.
+  if (sabotage === "showback" && !suppressedState &&
+      (c.blueprintId === FREE_BACK || c.blueprintId === SHADOW_BACK)) {
+    return c.blueprintId;
+  }
+  return shown;
+}
+
+// ---------------------------------------------------------------- the compare
+let pass = 0, diff = 0;
+const fired = [];
+
+for (const state of STATES) {
+  say("");
+  say(`--- ${state.name}`);
+  for (const c of CASES) {
+    const expected = state.suppressed ? null : c.expectBlueprint;
+
+    const target = oldTargetFor(c);
+    const o = target ? oldPreview(target, state.dragging, state.infoOpen) : null;
+    const m = newPreview(c, state.suppressed);
+
+    // The oracle against its own transcription FIRST -- if zoomshapes.js has
+    // misread handleMouseOver, every verdict below rests on the misreading.
+    if ((o ?? null) !== expected) {
+      diff++;
+      say(`  HARNESS  ${c.name}: zoomshapes says ${expected} but the oracle ` +
+          `previewed ${o}`, "bad");
+      continue;
+    }
+
+    if ((o ?? null) === (m ?? null)) {
+      pass++;
+      say(`  ok       ${c.name}: ${o ?? "no preview"}`, "ok");
+    } else {
+      diff++;
+      if (sabotage) fired.push(c.name);
+      say(`  DIFF     ${c.name}: old ${o ?? "no preview"} vs new ${m ?? "no preview"}`, "bad");
+    }
+  }
+}
+
+say("");
+if (sabotage) {
+  say(`control ${sabotage} fired on: ${fired.length ? fired.length + " cell(s)" : "NOTHING"}`,
+      fired.length ? "note" : "bad");
+}
+const total = pass + diff;
+say(diff === 0 ? `RESULT: ALL PASS (${total})` : `RESULT: ${diff} DIFF of ${total}`,
+    diff === 0 ? "ok" : "bad");
+</script></body></html>

@@ -48,6 +48,7 @@ bash harness/fuzzrun.sh            # 48 decision shapes x 7 types + 3 controls
 bash harness/pilerun.sh            # 4 viewer configs x 5 piles + 3 controls
 bash harness/logrun.sh             # game log + chat message shapes + 4 controls
 bash harness/inforun.sh            # card info: 7 id kinds x live/replay + 3 controls
+bash harness/zoomrun.sh            # zoom: 6 hover targets x 3 states + 4 controls
 bash harness/diffrun.sh 12 40      # replay differential over recorded games
 bash harness/livediffrun.sh 4 70   # live, with the ENGINE judging
 ```

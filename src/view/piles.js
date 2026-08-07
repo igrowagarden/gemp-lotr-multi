@@ -118,12 +118,26 @@ export function createPileViewer(host, store) {
 }
 
 /**
+ * The two card BACKS. Blowing one up to full size shows a large picture of a
+ * card back -- not information, and for a moment it reads as the client leaking
+ * a card it should not be showing. The reference refuses them explicitly
+ * (`bp !== "-1_1" && bp !== "-1_2"`, autoZoomHandler.js:255).
+ */
+const BACKS = new Set(["-1_1", "-1_2"]);
+
+/**
  * Hover preview, anchored to the far side of the board from whatever you are
  * pointing at -- so it is never under the cursor and never jitters the way a
  * cursor-following preview does. Sites preview on their side, the way they sit
  * in the path; an unplayed site has nothing to preview.
+ *
+ * @param suppressed  optional predicate: while it returns true nothing
+ *   previews. The reference silences the preview while a card is being
+ *   click-dragged and while the card-info dialog is open
+ *   (autoZoomHandler.js:292) -- in both cases a full-size image would land on
+ *   top of the thing the player is actually working with.
  */
-export function createZoom(host) {
+export function createZoom(host, { suppressed = () => false } = {}) {
   const doc = host.ownerDocument;
   const node = el(doc, "div", "zoom");
   const art = doc.createElement("img");
@@ -133,14 +147,23 @@ export function createZoom(host) {
   node.append(art, label);
   host.appendChild(node);
 
+  // What is on screen, so the view can be asked rather than re-derived. Without
+  // it the only way to check a preview is to compare image URLs, which turns a
+  // question about WHICH CARD into a question about the CDN.
+  let previewed = null;
+
   host.addEventListener("mouseover", (e) => {
     // `.cardhint` is a card named in the game log; it has no art of its own and
     // resolves through the blueprint-id fallback below.
     const card = e.target.closest(".card, .site, .cardhint");
-    if (!card || card.classList.contains("pending")) {
+    const blueprint = card?.dataset?.blueprintId ?? null;
+    if (!card || card.classList.contains("pending") || suppressed() ||
+        BACKS.has(blueprint)) {
       node.classList.remove("on");
+      previewed = null;
       return;
     }
+    previewed = blueprint;
     const isSite = card.classList.contains("site");
     node.classList.toggle("landscape", isSite);
 
@@ -176,6 +199,14 @@ export function createZoom(host) {
     node.classList.add("on");
   });
 
-  host.addEventListener("mouseleave", () => node.classList.remove("on"));
-  return { node, hide: () => node.classList.remove("on") };
+  host.addEventListener("mouseleave", () => {
+    node.classList.remove("on");
+    previewed = null;
+  });
+  return {
+    node,
+    hide: () => { node.classList.remove("on"); previewed = null; },
+    /** The blueprint currently previewed, or null. Read by dev/zoomfuzz.html. */
+    get previewedBlueprint() { return previewed; }
+  };
 }

@@ -33,19 +33,19 @@ OFFERS and the exact string each SENDS, and all nine of the reference's
 `decisionFunction` call sites are reached. The decision space is finished work;
 do not re-open it without a reason.
 
-**Untested surfaces: PILES, the LOG and CARD INFO are done.** Still untested:
-**zoom**, replay controls, drag-to-reorder, concede and detached boards.
+**Untested surfaces: PILES, the LOG, CARD INFO and ZOOM are done.** Still
+untested: replay controls, drag-to-reorder, concede and detached boards.
 
-Zoom is the obvious next one and is already known to be tractable: the reference
-builds `ui.autoZoom` at gameUi.js:209 and `AutoZoom` exposes `previewImageBPID`,
-so "which blueprint is previewed for this element" is readable without touching
-the oracle. Mind `AutoZoom.HoverDelay = 500` against the virtual clock. `decisionfuzz.html`
+Five surface differentials now, all with proven controls. Nine client bugs have
+come out of them, none of which the client itself reported: it rendered
+everything without error every time, and only the oracle said what was missing. `decisionfuzz.html`
 is the template and `pilefuzz.html` is the worked second example: enumerate the
 space from the source, drive both clients, prove the control fires.
 
     bash harness/pilerun.sh    4 viewer configs x 5 piles x 2 seats + 3 controls
     bash harness/logrun.sh     14 message shapes + ordering, 4 controls
     bash harness/inforun.sh    7 card-id kinds x live/replay, 3 controls
+    bash harness/zoomrun.sh    6 hover targets x 3 states, 4 controls
 
 Two client bugs came out of the first enumeration, both in one afternoon and
 neither visible without the oracle: **no draw-deck pile at all**, and **every
@@ -354,6 +354,7 @@ harness/
                    game needed                  (CONFIGS=, `baseline`)
   logrun.sh        LOG differential: game log + chat, 4 controls (`baseline`)
   inforun.sh       CARD INFO differential: live + replay, 3 controls (MODES=)
+  zoomrun.sh       ZOOM differential: 6 targets x 3 states, 4 controls
   autopassmeasure.py  proves the auto-pass cookie changes what the ENGINE asks,
                    by counting no-action CARD_ACTION_CHOICEs  (--only A|B|C)
 ```
@@ -1849,6 +1850,74 @@ calls `this.checkForEnd` (chat.js:382) and other siblings the sink does not
 provide, and bound to the object those are TypeErrors that kill the page. Bound
 to the proxy they fall through to the no-op, so the reference's own method runs
 without anyone having to enumerate what it happens to touch.
+
+---
+
+## The zoom differential
+
+`src/dev/zoomfuzz.html` + `src/dev/zoomshapes.js`, driven by
+`harness/zoomrun.sh`. No server, no bots, no game.
+
+    bash harness/zoomrun.sh             baseline + 4 controls
+    bash harness/zoomrun.sh baseline
+
+Six hover targets across three suppression states = 18 cells.
+
+### The client bug: a face-down card was previewed
+
+`AutoZoom.triggerHover` refuses the two card BACKS outright:
+
+    if (bp !== "-1_1" && bp !== "-1_2") displayPreviewImage(card, ...)
+
+`-1_1` and `-1_2` are the Free and Shadow backs. This client copied the art off
+the hovered card, so hovering a face-down card blew the BACK up to full size --
+not information, and for a moment it reads as the client leaking a card it
+should not be showing. `view/piles.js` now refuses both.
+
+### And two suppression states it had none of
+
+`handleMouseOver` also silences the preview **while a card is being
+click-dragged** and **while the card-info dialog is open**
+(autoZoomHandler.js:292). In both cases a full-size card lands on top of the
+thing the player is working with -- and the second is the sharper one: you open
+card info to READ it, and the preview covered it. `createZoom` now takes a
+`suppressed` predicate; `live.html` and `replay.html` pass "the card-info window
+is open".
+
+Dragging is not wired, because this client has no drag-to-reorder yet. When it
+arrives, the predicate is where it goes.
+
+### previewImageBPID is DEAD STATE -- do not read it
+
+`AutoZoom.previewImageBPID` is declared at autoZoomHandler.js:3 and **assigned
+nowhere**, exactly like the reference's `settingsAutoPass`. An earlier note in
+this file said it was the observable; that was wrong. Reading it would have
+reported "no preview" for all 18 cells, which is indistinguishable from a client
+that previews nothing -- a clean-looking sheet of agreement over a measurement
+that never measured. The real observable is the reference's own
+`displayPreviewImage(card, div)`, wrapped per case.
+
+### The 500ms hover delay is bypassed on purpose
+
+`hoverValid` is set so `handleMouseOver` takes its immediate branch into exactly
+the same `triggerHover` / `triggerHintHover` the timer would have called. The
+delay is PACING, not content, and this page is about content -- the same
+argument the oracle's queue patch makes. Waiting on real timers against a
+virtual clock would test the clock.
+
+### Verified
+
+    baseline      ALL PASS (18)
+    showback      2 DIFF   -- the two backs, unsuppressed
+    blank         3 DIFF   -- the three cells that DO preview
+    wrongcard     3 DIFF   -- the same three
+    ignorestate   6 DIFF   -- three previewing cells x two suppressed states
+
+Every count is arithmetic. `ignorestate` sabotages the CLIENT rather than the
+reading, so it exercises the real guard.
+
+No oracle edit: everything hangs off `ui.autoZoom`, which the reference builds
+itself at gameUi.js:209.
 
 ---
 

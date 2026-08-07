@@ -81,13 +81,14 @@ const board = createBoard(boardEl, store, {});
 const path = createPathPanel(boardEl, store);
 const chat = createChatPanel(boardEl, store);       // no onSend: nothing to say to a recording
 const piles = createPileViewer(boardEl, store);
-createZoom(boardEl);
+let cardInfo = null;
+createZoom(boardEl, { suppressed: () => !!cardInfo?.isOpen });
 // Card info in a replay too. The reference shows the card and simply skips the
 // modifier query (gameUi.js:956-961 -- `!this.replayMode` guards the FETCH, not
 // the dialog), so a recording is still readable: right click a card, click a
 // card named in the log. `replay: true` is what stops it querying a game that
 // is no longer being played; there is no transport here to query with.
-createCardInfo(boardEl, { replay: true, fetchInfo: () => Promise.resolve("") });
+cardInfo = createCardInfo(boardEl, { replay: true, fetchInfo: () => Promise.resolve("") });
 store.subscribe((s) => { path.paint(s); chat.paint(s); piles.paint(s); });
 
 let events = [];

@@ -187,10 +187,15 @@ const detacher = createDetacher(store, { onNote: (t) => { detailEl.textContent =
 const effects = createEffects(boardEl);
 const pregame = createPreGame(boardEl, store);
 const alerts = createAlerts({ title: `GEMP — game ${gameId}` });
-createZoom(boardEl);
+// The preview yields while the card-info window is open: the reference
+// silences it then (autoZoomHandler.js:292), and a full-size card landing on
+// top of the panel you just opened to read is the reason why. `cardInfo` is
+// assigned below, so the predicate is lazy rather than a value.
+let cardInfo = null;
+createZoom(boardEl, { suppressed: () => !!cardInfo?.isOpen });
 // Right click a card for what is modifying it -- the server knows, and nothing
 // was asking. Left click already means "choose this card" during a decision.
-createCardInfo(boardEl, { fetchInfo: (cardId) => transport.cardInfo(cardId) });
+cardInfo = createCardInfo(boardEl, { fetchInfo: (cardId) => transport.cardInfo(cardId) });
 
 // Which phases the SERVER skips for you when you have nothing playable. The
 // panel writes a cookie the engine re-reads on every poll; it does not pass
