@@ -70,6 +70,19 @@ DOCKER=/c/Users/emers/AppData/Local/Programs/DockerDesktop/resources/bin/docker.
 - **A grep for `FAIL` or `RESULT:` matches the pages' own source.** Use
   `RESULT: ALL PASS \([0-9]+\)`.
 
+## Responding
+
+**End every response with an explicit `## Next steps` list** — numbered, ordered,
+concrete, visually separated. Not woven into a closing paragraph, and not omitted
+because the answer was short or the task finished. When something is done, the
+list says what verification or follow-up remains.
+
+Each item says what to DO, not just what is broken. If an item is blocked, it
+says what would unblock it.
+
+This project runs across many sessions and the queue has to be readable at a
+glance without re-reading the whole answer to reconstruct it.
+
 ## Working rules
 
 - Prove a control fires before trusting a clean run. A control that cannot fire,
