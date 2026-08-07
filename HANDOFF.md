@@ -8,27 +8,84 @@ with working negative controls on both halves. Read `DESIGN.md` next — it is t
 design of record and carries the evidence for every claim about GEMP's
 behaviour.
 
-**The one open failure is now solved**: every unexplained engine rejection was
-the harness answering a `CARD_SELECTION` that asked for `max=0` cards. Fixed and
-verified. See "The CARD_SELECTION rejections: SOLVED".
+## Start here
 
-**There is now a git repository here.** Two commits. See "Version control,
-finally".
+**There is a git repository now.** `git log` is the real record; the commit
+messages carry the reasoning, not just the change. That is new as of the last
+session and it replaces the old advice about reconstructing state from file
+mtimes.
 
-**The newest instrument is `src/dev/decisionfuzz.html`** -- a differential over
-DECISION SHAPES rather than over games. It found four real client bugs in an
-afternoon, after 400 games overnight found none. Read "The decision-space
-differential" before running another soak: the lesson is that volume and
-coverage are different things, and this project had been buying the wrong one.
-All seven decision types now pass -- 47 cases, offers AND the exact string
-sent, with three controls proven to fire. `bash harness/fuzzrun.sh` is the one
-command.
+**Three harnesses, all green and all PROVEN CAPABLE OF FAILING:**
 
-**This header used to say "no client code written yet" and was a full session
-out of date.** If you are reading this after a crash, trust file mtimes over
-prose: `find . -type f -newermt "<when>" -printf "%TH:%TM %p\n" | sort` is how
-the state of an unversioned tree gets reconstructed, and it is how this session
-started. There is still no git here (see below), so nothing else records it.
+    bash harness/fuzzrun.sh      48 cases x 7 decision types + 3 controls   ~6 min
+    bash harness/diffrun.sh 12 40    replay differential over recorded games
+    bash harness/livediffrun.sh 4 70 live, with the ENGINE judging answers
+
+    SEED= or IDS= pin diffrun's sample -- REQUIRED when bisecting, see below
+    SABOTAGE=badcard bash harness/livediffrun.sh 2 60    its negative control
+
+Last full verification: fuzzrun 48/48 with all three controls firing in scope
+(exit 0); diffrun 12 of 12 agreeing with `actionids` firing; livediff 4 clean
+games over ~260 decisions across all six decision types with `badcard` firing.
+
+**All seven decision types are done.** Every type compares what each client
+OFFERS and the exact string each SENDS, and all nine of the reference's
+`decisionFunction` call sites are reached. The decision space is finished work;
+do not re-open it without a reason.
+
+**What is NOT covered, and it is the larger half:** piles, zoom, card info,
+chat, the game log, replay controls, drag-to-reorder, concede, spectating,
+detached boards. Nothing tests any of it against the reference. That is the
+next real piece of work, and `decisionfuzz.html` is the template -- enumerate
+the space from the source, drive both clients, prove the control fires.
+
+### Five client bugs found and fixed by the shape catalogue
+
+All in one afternoon, after an overnight run of 400 games and 2000 decks found
+nothing:
+
+| bug | why the old harness could not see it |
+|---|---|
+| `defaultValue` ignored on INTEGER | the live differential's INTEGER answers were self-compared -- a value against itself |
+| sites never lit for `CARD_SELECTION` | offers-only comparison; a guard written for `isActionChoice` alone |
+| empty `MULTIPLE_CHOICE` offered a dead button | sends index "0" into an empty list; a control whose only outcome is a rejection |
+| **`min`/`max` unenforced when sending** | both clients LIGHT the card, because the engine still lists it. Only driving the answer exposes it. |
+| the picker's Confirm/Pass bounds | same defect, same blind spot |
+
+### Two REFERENCE bugs found, and written up for the engine project
+
+The reference client sends an answer the engine refuses whenever a selection
+has `max=0` -- one card where only `""` is legal. Both submit paths have it:
+`cardSelectionDecision` and `arbitraryCardsDecision` each test `< min` and never
+`max`, while the engine throws on either bound. **Both are measured, not
+inferred.** Written up in `gemp_multiplayer/docs/GEMP_CARD_SELECTION_MAX0.md`,
+left UNTRACKED in that repo for its owners to triage. Do not edit that tree.
+
+Three catalogue cases carry the `oracleWrong` marker for this. It is the only
+marker that says "the reference is wrong and this client is right", and it
+requires a measurement.
+
+### The lessons that cost the most, in one place
+
+1. **Volume is not coverage.** 400 games found nothing; enumerating the decision
+   SHAPE space found five bugs in an afternoon. The game state space is
+   astronomical, the shape space is eleven parameter names.
+2. **Instrument the instrument.** Nearly every "client difference" this session
+   was the harness measuring wrong. When a whole CATEGORY fails identically,
+   suspect the tool.
+3. **Count, do not infer.** "The reference did nothing" has three distinct
+   causes -- the click never arrived, it arrived and the selection declined, or
+   the selection was made and never submitted. They are indistinguishable from
+   outside. Two counters (`selectionFunction`, `decisionFunction`) settled in one
+   run what six rounds of theorising could not.
+4. **A random sample cannot bisect.** `diffrun.sh` drew different games each run,
+   so "0 of 3" against "1 of 3" compared nothing. Use `SEED=`/`IDS=`.
+5. **A shared file with three consumers cannot be edited to suit one.** Every
+   edit to `oldharness.html` was made for `decisionfuzz.html`; one of them broke
+   the replay differential and went unnoticed for hours. Gate them opt-in.
+6. **A control that cannot fire, or cannot be INVOKED, reads as success.** Two
+   controls silently covered only four of seven types; `livediffrun.sh` ignored
+   `SABOTAGE=` entirely and printed CLEAN. Both looked exactly like passing.
 
 ---
 
@@ -313,6 +370,18 @@ obvious next move.
 0. ~~**The fuzzer's BUTTON driver, the last two answer call sites, and a
    per-type runner.**~~ **All done.** 47/47 across seven types, three controls
    firing in scope, `harness/fuzzrun.sh`. See "The decision-space differential".
+
+0. **The untested surfaces.** Piles, zoom, card info, chat, the game log,
+   replay controls, drag-to-reorder, concede, spectating, detached boards.
+   Nothing compares any of it against the reference, and it is the larger half
+   of "does the new client match the old". `decisionfuzz.html` is the template.
+
+0b. **Auto-pass.** The reference auto-passes a CARD_ACTION_CHOICE with no
+   eligible cards; at five players you pass constantly. Small and still open.
+
+0c. **A nightly.** All three harnesses are controlled now, so an unattended run
+   accumulates evidence rather than unverified green. `fuzzrun.sh` is ~6 min and
+   exits non-zero on failure.
 
 0d. **Make rejection counts trustworthy.** Decision ids are not unique -- 22 call
    sites pass `1` -- so "a warning arrived AND the same decision id was asked

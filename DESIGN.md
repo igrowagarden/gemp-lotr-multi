@@ -461,6 +461,23 @@ regression and the six upstream-clean commits intact.
 
 ---
 
+## Answering, and the bounds
+
+`min` and `max` are **both enforced by the engine** on every card selection
+(`CardsSelectionDecision:40-49`, `ArbitraryCardsSelectionDecision:92`), and an
+empty answer is legal only at `min` 0. So the board strip disables Confirm
+outside `[min,max]` and offers Pass only at `min` 0 — a control whose only
+outcome is a rejection is worse than no control, because a refused answer comes
+back as the same decision asked again and the player cannot see why.
+
+An `INTEGER` decision opens on the engine's `defaultValue` when it supplies one,
+clamped into range. The reference does this and we did not, which meant every
+such decision opened on the minimum.
+
+Both were found by `src/dev/decisionfuzz.html`, which enumerates decision shapes
+rather than sampling games. The reference gets both wrong at `max=0`; see
+HANDOFF.
+
 ## Open
 
 - `GameEvent.side` unpopulated and unserialised — blocks filtering opponents'
