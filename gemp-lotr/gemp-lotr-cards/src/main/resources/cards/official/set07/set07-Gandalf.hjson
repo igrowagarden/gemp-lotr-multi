@@ -83,8 +83,22 @@
 			}
 			effect: [
 				{
+					// "make THAT OPPONENT remove (2) or cancel that event" --
+					// the player who played the triggering event, which is
+					// exactly its owner. `shadow` named getFirstShadowPlayer
+					// whoever had played it, so at five seats the wrong
+					// opponent paid for someone else's event.
+					//
+					// NOT FULLY RIGHT, and the remainder is an engine gap rather
+					// than a reading. The trigger above is `played, filter:
+					// event`, which fires on the controller's OWN events too, so
+					// this can now name its own controller -- a legal but
+					// pointless choice nobody would take, where before it hit a
+					// bystander. Scoping the trigger to opponents' events needs
+					// `player:` there to accept a group; PlayerResolver returns
+					// one seat, so "played by an opponent" cannot be written.
 					type: choice
-					player: shadow
+					player: ownerFromMemory(playedEvent)
 					texts: [
 						Remove (2) twilight
 						Cancel {playedEvent}
