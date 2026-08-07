@@ -48,7 +48,13 @@ export function initialState(viewerId, { spectating = false } = {}) {
   });
 }
 
-const MAX_LOG = 200;
+/**
+ * Matched to the reference's `ChatBoxUI.maxMessageCount` (chat.js:16), which
+ * also drops the OLDEST line past the cap. This was 200 for no recorded reason,
+ * which silently threw away 300 lines of history the reference still shows --
+ * invisible in a short game and only ever noticed by someone scrolling back.
+ */
+const MAX_LOG = 500;
 
 /** Shallow-clone a card and apply changes. Cards are plain and never mutated. */
 function patchCard(state, cardId, changes) {

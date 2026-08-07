@@ -33,13 +33,14 @@ OFFERS and the exact string each SENDS, and all nine of the reference's
 `decisionFunction` call sites are reached. The decision space is finished work;
 do not re-open it without a reason.
 
-**The untested surfaces: PILES are now done, the rest are not.** Zoom, card
-info, chat, the game log, replay controls, drag-to-reorder, concede, detached
-boards -- nothing tests any of them against the reference. `decisionfuzz.html`
+**The untested surfaces: PILES and the LOG are done, the rest are not.** Zoom,
+card info, replay controls, drag-to-reorder, concede and detached boards --
+nothing tests any of them against the reference. `decisionfuzz.html`
 is the template and `pilefuzz.html` is the worked second example: enumerate the
 space from the source, drive both clients, prove the control fires.
 
     bash harness/pilerun.sh    4 viewer configs x 5 piles x 2 seats + 3 controls
+    bash harness/logrun.sh     14 message shapes + ordering, 4 controls
 
 Two client bugs came out of the first enumeration, both in one afternoon and
 neither visible without the oracle: **no draw-deck pile at all**, and **every
@@ -346,6 +347,7 @@ harness/
                    no server game needed        (TYPES=, `baseline` for no controls)
   pilerun.sh       PILE differential: 4 viewer configs + 3 controls, no server
                    game needed                  (CONFIGS=, `baseline`)
+  logrun.sh        LOG differential: game log + chat, 4 controls (`baseline`)
   autopassmeasure.py  proves the auto-pass cookie changes what the ENGINE asks,
                    by counting no-action CARD_ACTION_CHOICEs  (--only A|B|C)
 ```
@@ -1706,6 +1708,101 @@ inventing a verdict — read the SKIP line, it names which.
   is set. See "The pile differential" below — the rule is `model/piles.js`,
   transcribed from `gameUi.js:1747-1789` and checked against the oracle in all
   four viewer configurations.
+
+---
+
+## The log differential
+
+`src/dev/logfuzz.html` + `src/dev/logshapes.js`, driven by `harness/logrun.sh`.
+No server, no bots, no game.
+
+    bash harness/logrun.sh             baseline + 4 controls
+    bash harness/logrun.sh baseline
+
+### One transcript, and that is the reference's doing
+
+Game messages, warnings and chat all land in ONE list in arrival order. That was
+not a choice made here: `gameAnimations.message` and `.warning` both call
+`chatBox.appendMessage` (gameAnimations.js:1175-1197), the same method the chat
+poll calls, into the same `chatMessagesDiv`.
+
+### Four fields per line, not the rendered text
+
+The reference composes a chat line as
+`<div class='msg-identifier'><b>from: </b></div><div class='msg-content'>text</div>`
+(chat.js:418-428), so its `.text()` runs the speaker and the words together.
+Comparing raw text would measure two styling choices and bury a real difference
+in the WORDS among cosmetic ones. Each line is reduced to **kind, from, body,
+hints** and each is compared separately, so a failure names which moved.
+
+### Three client bugs
+
+1. **The log cap was 200; the reference's is 500** (`ChatBoxUI.maxMessageCount`,
+   chat.js:16). Both drop the oldest, so this silently threw away 300 lines of
+   history the reference still shows -- invisible in a short game and only ever
+   noticed by someone scrolling back. `MAX_LOG` now matches and says why.
+2. **`<script>` in a log message rendered its SOURCE as prose.** `renderMessage`
+   kept the words of any element it did not understand, which is right for `<b>`
+   and wrong for a script: `before<script>window.x=1;</script>after` displayed as
+   `beforewindow.x=1;after`. It never executed -- a rendering bug, not a hole --
+   but the log is where a player reads what happened and code is not what
+   happened. SCRIPT/STYLE/TEMPLATE/NOSCRIPT now contribute nothing.
+3. **Rendered lines carried no record of where they came from.** The reference
+   stamps every line `gameMessage` / `warningMessage` / `chatMessage` /
+   `systemMessage` and uses it to filter (its "toggle system messages" button).
+   Ours had only a warning colour, so the log could not be filtered and System
+   lines lost their attribution entirely -- the room's narration read like
+   something a person said. One class per kind now, and `System` is labelled the
+   way the reference labels it.
+
+### A REFERENCE hazard, measured, and NOT a demonstrated hole
+
+`appendMessage` builds its line with `$("<div class='message ...'>" + message +
+"</div>")`, and jQuery EXECUTES `<script>` in parsed HTML. Measured: the script
+case sets `window.__pwned` in the oracle's frame and not in ours. The page
+reports it as `ORACLE` and does **not** count it as a DIFF -- it is not this
+client's defect and would otherwise make every run red for someone else's bug.
+
+**It is not an exploitable XSS by any route checked**, and that qualification is
+the point rather than a hedge:
+
+- chat is escaped server-side before it is ever sent -- `MarkdownParser` builds
+  its renderer with `escapeHtml(true)` and `sanitizeUrls(true)`
+  (MarkdownParser.java:33-43), so a script typed into chat arrives as text;
+- player names cannot carry `<` -- `validLoginChars` is alphanumerics plus `-_`
+  (DbPlayerDAO.java:15,389-396).
+
+So the sink is unsafe by construction and is held safe by input handling
+elsewhere. That is worth telling the engine project as defence-in-depth, but it
+is NOT worth reporting as a vulnerability, and no upstream document has been
+written for it -- see the queue.
+
+### Verified
+
+    baseline    ALL PASS (20)
+    drophint    4 DIFF   -- exactly the four lines carrying card references
+    raw         18 DIFF
+    misclass    3 DIFF   -- exactly the three warnings
+    reorder     18 DIFF
+
+One control per compared field, so a field that silently stopped being compared
+shows up as a control that stopped firing.
+
+### It needed an opt-in on the shared oracle
+
+`oldharness.html` stubs `ui.chatBox` with a no-op proxy, because the real one
+opens its own long poll. That swallows every message, and a silent sink reads
+exactly like a client that renders nothing -- the log surface could not be
+compared at all. `OLD.setRealChatBox(true)` installs a sink that borrows
+`ChatBoxUI.prototype.appendMessage` itself, so the reference's real behaviour is
+what is measured rather than a reimplementation of it. **Opt-in, default off,
+and this is the only page that opts in** -- that file has four consumers now.
+
+Its methods are bound to the PROXY, not to the bare object: `appendMessage`
+calls `this.checkForEnd` (chat.js:382) and other siblings the sink does not
+provide, and bound to the object those are TypeErrors that kill the page. Bound
+to the proxy they fall through to the no-op, so the reference's own method runs
+without anyone having to enumerate what it happens to touch.
 
 ---
 

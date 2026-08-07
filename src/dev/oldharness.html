@@ -80,6 +80,50 @@ window.OLD = (function () {
   // See offers(). Off by default: only a consumer that feeds decisions with no
   // intervening board events needs it, and it costs correctness for the others.
   var readStaleDialogButtons = false;
+  var realChatBox = false;          // logfuzz.html only; see boot()
+
+  /**
+   * A chat box that runs the reference's OWN `appendMessage` and nothing else.
+   *
+   * Not a reimplementation: `ChatBoxUI.prototype.appendMessage` is borrowed
+   * directly, so the thing under test is the reference's real behaviour --
+   * wrapping a gameMessage in `.msg-content`, the class it stamps on each line,
+   * and its 500-message cap that drops the OLDEST. Reimplementing any of that
+   * here would make the differential compare our reading of the reference
+   * against our reading of the reference.
+   *
+   * Only the fields that method actually touches are provided; every other
+   * property still answers with a no-op, so layout calls remain as harmless as
+   * they were under the plain proxy.
+   */
+  function makeMessageSink() {
+    var host = $("<div class='chatMessages'></div>");
+    $("body").append(host);
+    var target = {
+      chatMessagesDiv: host,
+      hiddenClasses: [],
+      maxMessageCount: ChatBoxUI.prototype.maxMessageCount,
+      everyoneRegex: ChatBoxUI.prototype.everyoneRegex,
+      pingRegex: null,
+      mentionRegex: null,
+      appendMessage: ChatBoxUI.prototype.appendMessage,
+      isShowingMessageClass: ChatBoxUI.prototype.isShowingMessageClass,
+      scrollChatToBottom: function () {}
+    };
+    // Methods are bound to the PROXY, not to `target`. `appendMessage` calls
+    // `this.checkForEnd` (chat.js:382) and other siblings this sink does not
+    // provide; bound to the bare object those are plain TypeErrors that kill
+    // the page, while bound to the proxy they fall through to the no-op. The
+    // point is to run the reference's real appendMessage without having to
+    // enumerate everything it happens to touch.
+    var proxy = new Proxy(target, {
+      get: function (t, k) {
+        if (k in t) return typeof t[k] === "function" ? t[k].bind(proxy) : t[k];
+        return function () {};
+      }
+    });
+    return proxy;
+  }
   var calls = { processDecision: 0, cardActionChoice: 0, lastType: null };
   var sent = [];            // every (decisionId, value) it tried to send
   var errors = [];
@@ -131,7 +175,17 @@ window.OLD = (function () {
     // appendMessage, beginGameChat, ...). A proxy answering every property with
     // a no-op is sturdier than a list that has to be kept in step with 3000
     // lines of client we are deliberately not reading in full.
-    ui.chatBox = new Proxy({}, { get: function () { return function () {}; } });
+    //
+    // OPT-IN, for logfuzz.html only: a sink that runs the reference's REAL
+    // `appendMessage` while still no-opping everything else. The no-op proxy
+    // swallows every game message, warning and chat line, so the log surface
+    // could not be compared at all -- and a silent sink reads exactly like a
+    // client that renders nothing. Gated because three other pages depend on
+    // this file and none of them wants a chat box; see the traps in HANDOFF for
+    // what an ungated edit here has already cost.
+    ui.chatBox = realChatBox ? makeMessageSink() : new Proxy({}, {
+      get: function () { return function () {}; }
+    });
 
     // Make `#main`'s jQuery queue SYNCHRONOUS.
     //
@@ -537,6 +591,48 @@ window.OLD = (function () {
     },
     /** decisionfuzz.html only -- see the comment in offers(). */
     setReadStaleDialogButtons: function (v) { readStaleDialogButtons = !!v; },
+    /**
+     * logfuzz.html only. MUST be called before boot(), which is where the chat
+     * box is installed -- setting it afterwards leaves the no-op proxy in place
+     * and every message vanishes silently, which looks like a client that
+     * renders nothing rather than a harness that was configured too late.
+     */
+    setRealChatBox: function (v) { realChatBox = !!v; },
+    /**
+     * The reference's rendered log lines, in order, structured. logfuzz.html
+     * only; null when the real chat box was never installed, so a page that
+     * forgot `setRealChatBox` gets an obvious null rather than a plausible
+     * empty list.
+     *
+     * Structured rather than raw text on purpose. The reference composes a chat
+     * line as `<div class='msg-identifier'><b>from: </b></div><div
+     * class='msg-content'>text</div>` (chat.js:418-428), so its `.text()` runs
+     * the speaker and the words together with punctuation between. Comparing
+     * that against another client's concatenation measures two styling choices,
+     * not two readings of the message -- and a real difference in the WORDS
+     * would be buried among the cosmetic ones.
+     */
+    logLines: function () {
+      if (!realChatBox) return null;
+      var $$ = $;
+      return $$("div.message", ui.chatBox.chatMessagesDiv).map(function () {
+        var node = $$(this);
+        var cls = (node.attr("class") || "").split(/\s+/).filter(function (c) {
+          return c !== "message" && c !== "";
+        })[0] || "";
+        var who = $$(".msg-identifier b", node).text().replace(/:\s*$/, "").trim();
+        var content = $$(".msg-content", node);
+        return {
+          kind: { gameMessage: "game", warningMessage: "warning",
+                  chatMessage: "chat", systemMessage: "system" }[cls] || cls,
+          from: who || null,
+          body: (content.length ? content.text() : node.text()).trim(),
+          hints: $$(".cardHint", node).map(function () {
+            return $$(this).attr("value");
+          }).get()
+        };
+      }).get();
+    },
     diagnose: diagnose,
     feed: feed,
     feedEvents: feedEvents,

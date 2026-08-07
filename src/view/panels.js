@@ -240,11 +240,20 @@ export function renderMessage(raw, doc = document) {
   const parsed = doc.implementation.createHTMLDocument("");
   parsed.body.innerHTML = raw;
 
+  // Elements whose TEXT is code, not words. "Keep the words, drop the element"
+  // is right for `<b>` and wrong for these: a message containing a script tag
+  // rendered its source as visible prose -- `before<script>window.x=1;</script>`
+  // came out as "beforewindow.x=1;". It never executed, so this is a rendering
+  // bug rather than a hole, but the log is where a player reads what happened
+  // and code is not what happened. The reference shows nothing for them.
+  const CODE = new Set(["SCRIPT", "STYLE", "TEMPLATE", "NOSCRIPT"]);
+
   const walk = (node, into) => {
     for (const child of node.childNodes) {
       if (child.nodeType === 3) {
         into.appendChild(doc.createTextNode(child.nodeValue));
       } else if (child.nodeType === 1) {
+        if (CODE.has(child.tagName)) continue;
         const id = child.getAttribute?.("value");
         if (child.classList?.contains("cardHint") && id) {
           const hint = el(doc, "span", "cardhint", child.textContent);
@@ -296,10 +305,22 @@ export function createChatPanel(host, store, { onSend = null } = {}) {
       const recent = s.log.slice(-80);
       if (!recent.length) lines.appendChild(el(doc, "span", "band-empty", "Nothing said yet."));
       for (const entry of recent) {
-        const line = el(doc, "span", entry.warning ? "chat-warn" : null);
-        if (entry.from && !entry.system) line.appendChild(el(doc, "b", "chat-who", entry.from));
+        // One class per kind, the way the reference stamps every line with
+        // gameMessage / warningMessage / chatMessage / systemMessage
+        // (chat.js:340-378, 407-428). Without it a rendered line carries no
+        // record of where it came from, so the log cannot be filtered and the
+        // reference's own "toggle system messages" affordance is impossible to
+        // offer. It also makes the two logs comparable line for line.
+        const kind = entry.kind === "chat"
+          ? (entry.system ? "chat-system" : "chat-said")
+          : (entry.warning ? "chat-warn" : "chat-game");
+        const line = el(doc, "span", kind);
+        // Attribution for System lines too. The reference prints "System: "
+        // exactly as it prints a player's name, and dropping it left the room's
+        // narration looking like something a person said -- the class alone
+        // says so in colour, which is not available to anyone reading the text.
+        if (entry.from) line.appendChild(el(doc, "b", "chat-who", entry.from));
         line.appendChild(renderMessage(entry.text, doc));
-        if (entry.system) line.classList.add("chat-system");
         lines.appendChild(line);
       }
       body.insertBefore(lines, form);

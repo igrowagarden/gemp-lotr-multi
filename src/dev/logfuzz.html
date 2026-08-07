@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>log differential</title>
+<link rel="stylesheet" href="../styles/board.css">
+<style>
+  body { font-family: ui-monospace, Consolas, monospace; font-size: 12px; padding: 10px; }
+  iframe { position: absolute; left: -10000px; top: 900px; width: 1400px; height: 900px; border: 0; }
+  #board { position: absolute; left: -10000px; top: 0; width: 1400px; height: 800px; }
+  pre { white-space: pre-wrap; }
+  .ok { color: #6E9B7A; } .bad { color: #FF5240; } .note { color: #B08D57; }
+</style></head>
+<body>
+<iframe id="old" src="./oldharness.html"></iframe>
+<div id="board"></div>
+<pre id="out">RUNNING</pre>
+
+<script type="module">
+/**
+ * The LOG differential: the game log and chat, which share one list.
+ *
+ * Third page built to the decisionfuzz shape, after pilefuzz. Both clients
+ * funnel game messages, warnings and chat into ONE transcript in arrival
+ * order -- that is the reference's behaviour, not a choice made here:
+ * `gameAnimations.message` and `.warning` both call `chatBox.appendMessage`
+ * (gameAnimations.js:1175-1197), the same method the chat poll calls, into the
+ * same div.
+ *
+ *   logfuzz.html                          baseline
+ *   logfuzz.html?sabotage=drophint        NEGATIVE CONTROL
+ *   logfuzz.html?sabotage=raw             NEGATIVE CONTROL
+ *   logfuzz.html?sabotage=misclass        NEGATIVE CONTROL
+ *   logfuzz.html?sabotage=reorder         NEGATIVE CONTROL
+ *
+ * FOUR FIELDS ARE COMPARED PER LINE, not the rendered text. The reference runs
+ * the speaker and the words together with punctuation between them
+ * (chat.js:418-428); comparing raw text would measure two styling choices and
+ * bury a real difference in the WORDS among cosmetic ones. So each line is
+ * reduced to what it MEANS -- kind, speaker, body, card references -- and each
+ * is compared on its own so a failure names which of the four moved.
+ *
+ * The oracle's chat box is a no-op proxy by default, which would swallow every
+ * line and read exactly like a client that renders nothing. `setRealChatBox`
+ * installs one that runs the reference's OWN appendMessage; it is opt-in and
+ * this is the only page that opts in, because three other pages share that file.
+ */
+import { createStore } from "../state/store.js";
+import { createChatPanel } from "../view/panels.js";
+import { decodeEvents } from "../net/protocol.js";
+import { CASES, ORDER_CASE, VIEWER, baseBoard, messageXml } from "./logshapes.js";
+
+const q = new URLSearchParams(location.search);
+const sabotage = q.get("sabotage");
+const out = document.getElementById("out");
+const lines = [];
+const say = (t, cls) => {
+  lines.push(cls ? `<span class="${cls}">${t}</span>` : t);
+  out.innerHTML = lines.join("\n");
+};
+const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+async function ready(frame) {
+  for (let i = 0; i < 300; i++) {
+    if (frame.contentWindow?.OLD) return frame.contentWindow.OLD;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  throw new Error("old harness never came up");
+}
+const frame = document.getElementById("old");
+const OLD = await ready(frame);
+
+// MUST precede boot(): the chat box is installed there, and setting this after
+// leaves the no-op proxy swallowing everything.
+OLD.setRealChatBox(true);
+OLD.boot({ gameId: "1", participantId: VIEWER });
+OLD.feedBatch(OLD.parseEvents(baseBoard()));
+
+/**
+ * A chat line composed exactly as `chat.js:418-428` composes one, because this
+ * page feeds the chat box directly rather than through the poll it normally
+ * arrives on. Transcribed literally and cited rather than paraphrased -- it is
+ * the oracle's own formatting and a paraphrase would be comparing this page's
+ * idea of the reference against the new client.
+ */
+function oldChat(from, text) {
+  const msgClass = from === "System" ? "systemMessage" : "chatMessage";
+  const prefix = "<div class='msg-identifier'><span> <b>" + from + ": </b></span></div>";
+  const postfix = "<div class='msg-content'>" + text + "</div>";
+  OLD.ui.chatBox.appendMessage(prefix + postfix, msgClass);
+}
+
+// -------------------------------------------------------------- the new client
+const store = createStore(VIEWER);
+const chat = createChatPanel(document.getElementById("board"), store, {});
+chat.open();
+store.dispatchAll(decodeEvents(baseBoard()));
+
+// ------------------------------------------------------------------- feed both
+const FEED = [...CASES, ...ORDER_CASE];
+for (const c of FEED) {
+  if (c.kind === "chat") {
+    oldChat(c.from, c.raw);
+    store.dispatchAll([{ type: "CHAT_MESSAGE", message: c.raw,
+                         from: c.from, system: !!c.system }]);
+  } else {
+    const xml = `<gameState>${messageXml(c.kind, c.raw)}</gameState>`;
+    OLD.feedBatch(OLD.parseEvents(xml));
+    store.dispatchAll(decodeEvents(xml));
+  }
+}
+chat.paint(store.getState());
+
+// ------------------------------------------------------------------- read both
+const oldLines = OLD.logLines();
+if (oldLines === null) {
+  say("RESULT: 1 FAILED of 1 — the oracle's real chat box was never installed", "bad");
+  throw new Error("no chat box");
+}
+
+/** The new client's rendered lines, read the same way: structured, not raw. */
+function newLines() {
+  const nodes = [...document.querySelectorAll("#board .chat-lines > span")];
+  return nodes.filter((n) => !n.classList.contains("band-empty")).map((n) => {
+    const who = n.querySelector(".chat-who");
+    const kind = n.classList.contains("chat-warn") ? "warning"
+               : n.classList.contains("chat-system") ? "system"
+               : n.classList.contains("chat-said") ? "chat"
+               : "game";
+    // The speaker element is part of the line, so its text has to come out
+    // before the body is read -- otherwise every chat body carries the name.
+    const clone = n.cloneNode(true);
+    clone.querySelector(".chat-who")?.remove();
+    return {
+      kind,
+      from: who ? who.textContent : null,
+      body: clone.textContent.trim(),
+      hints: [...n.querySelectorAll(".cardhint")].map((h) => h.dataset.blueprintId)
+    };
+  });
+}
+
+let mine = newLines();
+
+// --------- negative controls, applied to the NEW client's reading only, so a
+//           DIFF proves the comparison can see each field move.
+if (sabotage === "drophint") mine = mine.map((l) => ({ ...l, hints: [] }));
+if (sabotage === "raw") {
+  mine = mine.map((l) => ({ ...l, body: l.body.replace(/[aeiou]/g, "") }));
+}
+if (sabotage === "misclass") {
+  mine = mine.map((l) => ({ ...l, kind: l.kind === "warning" ? "game" : l.kind }));
+}
+if (sabotage === "reorder") mine = [...mine].reverse();
+
+// -------------------------------------------------------------------- compare
+let pass = 0, diff = 0;
+const fired = [];
+
+// The two logs must be the same LENGTH before a line-by-line comparison means
+// anything -- comparing index to index across different lengths reports every
+// line after the first drop as wrong and hides which one actually vanished.
+if (oldLines.length !== mine.length) {
+  diff++;
+  if (sabotage) fired.push("length");
+  say(`  LENGTH   old rendered ${oldLines.length} lines, new rendered ${mine.length}`, "bad");
+}
+
+const n = Math.min(oldLines.length, mine.length);
+for (let i = 0; i < n; i++) {
+  const o = oldLines[i], m = mine[i];
+  const label = (FEED[i]?.name) ?? `line ${i}`;
+  const bad = [];
+  if (o.kind !== m.kind) bad.push(`kind old=${o.kind} new=${m.kind}`);
+  if ((o.from ?? null) !== (m.from ?? null)) bad.push(`from old=${o.from} new=${m.from}`);
+  if (o.body !== m.body) bad.push(`body old=${JSON.stringify(o.body)} new=${JSON.stringify(m.body)}`);
+  if (!eq(o.hints, m.hints)) bad.push(`hints old=[${o.hints}] new=[${m.hints}]`);
+
+  if (bad.length) {
+    diff++;
+    if (sabotage) fired.push(String(i));
+    say(`  DIFF     ${label}: ${bad.join("; ")}`, "bad");
+  } else {
+    pass++;
+  }
+}
+
+// The script case is worth an explicit assertion rather than only a comparison:
+// two clients that BOTH executed it would agree, and agreement is not the
+// property wanted here.
+// Named per side. "A script executed" is a claim about ONE client, and a check
+// that ORs the two together cannot say which -- and the answer decides whether
+// this is a bug to fix here or one to report upstream.
+const ranHere = window.__pwned !== undefined;
+const ranThere = frame.contentWindow.__pwned !== undefined;
+if (ranHere) {
+  diff++;
+  say("  DANGER   a <script> in a log message EXECUTED in the NEW client", "bad");
+} else {
+  pass++;
+}
+if (ranThere) {
+  // Not counted as a DIFF: it is not this client's defect, and folding it into
+  // the failure count would make every run red for someone else's bug. Recorded
+  // loudly instead, the way the oracleWrong cases are.
+  say("  ORACLE   a <script> in a log message EXECUTED in the REFERENCE " +
+      "(window.__pwned is set in its frame) — reference defect, not ours", "note");
+}
+
+say("");
+if (sabotage) {
+  say(`control ${sabotage} fired on: ${fired.length ? fired.join(",") : "NOTHING"}`,
+      fired.length ? "note" : "bad");
+}
+const total = pass + diff;
+say(diff === 0 ? `RESULT: ALL PASS (${total})` : `RESULT: ${diff} DIFF of ${total}`,
+    diff === 0 ? "ok" : "bad");
+</script></body></html>
