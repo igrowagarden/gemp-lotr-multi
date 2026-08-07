@@ -102,6 +102,44 @@ code:
 a probe that does nothing — which is this project's most-repeated failure, and
 the reason the measurement was built this way rather than as two assertions.
 
+#### And it demonstrably changes what the engine ASKS
+
+The cookie table above proves the cookie *arrives and is parsed*. It does not
+prove a valid set changes anything. `harness/autopassmeasure.py` does, by
+counting the one decision auto-pass suppresses — a `CARD_ACTION_CHOICE`
+offering **no cards at all**, which is exactly what `playableActions.isEmpty()`
+produces at the three call sites.
+
+Three fresh 3-player games, MINIMAL policy, 100s each:
+
+| run | cookie | no-action `CARD_ACTION_CHOICE` by phase |
+|---|---|---|
+| A | `autoPass=false` | FELLOWSHIP 7, REGROUP 21, SHADOW 4 — **32** |
+| C | *none* (`_autoPassDefault`) | SHADOW 4 — **4** |
+| B | all seven phases | **none** |
+
+**A is the control**; without it a zero in B would be indistinguishable from a
+measurement that cannot see these decisions. C is the sharpest and is what every
+client gets today: the default suppresses Fellowship and Regroup and leaves
+Shadow asking, matching `GameRequestHandler.java:50-54` exactly. C against B is
+the user-facing claim — tick Shadow and the Shadow prompts stop.
+
+All three games ran to identical phase counts (`FELLOWSHIP` 22, `SHADOW` 44,
+`REGROUP` 22) with identical `CARD_SELECTION` (26), `ARBITRARY_CARDS` (1) and
+`INTEGER` (1) counts, because the MINIMAL policy plays nothing and the turn
+structure is therefore fixed. The only counter that moved is the one under test.
+`CARD_ACTION_CHOICE` totals were 43 / 22 / 9: the drop is the no-action ones
+plus a couple that differ because the shuffles differ, so do **not** read those
+totals as exact arithmetic — the by-phase no-action column is the measurement.
+
+    bash harness/seat_table.sh 3 asdf qwer Librarian     # note the gameId
+    cd harness && python autopassmeasure.py --game NNN --subject asdf \
+        --others qwer,Librarian --seconds 100 --only C
+
+Each run needs its **own fresh game** — running two halves against one game
+compares different portions of it, which is the same trap as an unpinned
+`diffrun` sample.
+
 #### The two bugs mask each other, and fixing one alone makes it WORSE
 
 Unticking all seven boxes in the reference writes `autoPassPhases=` — an empty
@@ -297,6 +335,8 @@ harness/
   cleanhall.sh     concede abandoned games; see the restart note
   fuzzrun.sh       DECISION-SPACE differential: all 7 types + all 3 controls,
                    no server game needed        (TYPES=, `baseline` for no controls)
+  autopassmeasure.py  proves the auto-pass cookie changes what the ENGINE asks,
+                   by counting no-action CARD_ACTION_CHOICEs  (--only A|B|C)
 ```
 
 `src/` is the real thing and is where all current work happens; the two

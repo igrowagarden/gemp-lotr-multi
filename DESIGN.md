@@ -527,6 +527,21 @@ arrive* rather than *the probe does not work*. It also establishes a third
 reference-client bug — its auto-pass checkboxes are inert, and every reference
 game runs on `_autoPassDefault` whatever the boxes say.
 
+That the cookie *arrives* is not that it *does anything*, so the behaviour is
+measured separately by `harness/autopassmeasure.py`, counting the one decision
+auto-pass suppresses — a `CARD_ACTION_CHOICE` offering no cards:
+
+| cookie | no-action `CARD_ACTION_CHOICE` |
+|---|---|
+| `autoPass=false` | FELLOWSHIP 7, REGROUP 21, SHADOW 4 |
+| none (`_autoPassDefault`) | SHADOW 4 |
+| all seven phases | none |
+
+The first row is the control. The middle row is what every client gets today and
+is the sharpest evidence: the default omits SHADOW and SKIRMISH, so Shadow keeps
+asking while Fellowship and Regroup fall silent — `GameRequestHandler.java:50-54`
+made visible.
+
 The same probe measures point 2: `autoPassPhases=` at `path=/` returns **500**,
 so the empty value survives both the browser and Netty's decoder and does throw.
 That defect is currently masked by the path one — the cookie never arrives, so
