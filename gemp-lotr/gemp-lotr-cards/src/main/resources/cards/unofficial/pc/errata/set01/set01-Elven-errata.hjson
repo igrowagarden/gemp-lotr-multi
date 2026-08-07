@@ -348,9 +348,19 @@
 				select: choose(elf)
 			}
 			effect: [
+				// "reveal AN OPPONENT's hand" -- one opponent, chosen.
+				//
+				// Simpler than the original 1_44, which also discards a minion
+				// out of that hand as an `optional` COST; the errata replaced
+				// that with a plain draw, so this twin has one token and 1_44
+				// has two. Another reason not to copy a twin's fix.
+				{
+					type: ChooseOpponent
+					memorize: opponent
+				}
 				{
 					type: revealHand
-					hand: shadowPlayer
+					hand: fromMemory(opponent)
 					memorize: revealedCards
 				}
 				{
@@ -656,10 +666,19 @@
 					select: choose(name(Galadriel))
 				}
 				effect: [
+					// "3 cards at random from AN OPPONENT's hand. Place one on
+					// top of THAT PLAYER's draw deck" -- one opponent, named
+					// twice, so both `hand:` tokens read the same memory.
+					// `player: freeps` stays: the Free Peoples player is the
+					// one who picks which card goes back.
+					{
+						type: ChooseOpponent
+						memorize: opponent
+					}
 					{
 						type: revealRandomCardsFromHand
 						forced: true
-						hand: shadow
+						hand: fromMemory(opponent)
 						count: 3
 						memorize: revealedCards
 					}
@@ -667,7 +686,7 @@
 						type: putCardsFromHandOnTopOfDeck
 						select: choose(memory(revealedCards))
 						player: freeps
-						hand: shadow
+						hand: fromMemory(opponent)
 						reveal: true
 					}
 				]

@@ -459,11 +459,21 @@
 						}
 					]
 				}
-				effect: {
-					type: discardTopCardsFromDeck
-					forced: true
-					deck: shadow
-				}
+				effect: [
+					// "make A SHADOW PLAYER discard the top card of his or her
+					// draw deck" -- one opponent, chosen. The `choice` above is
+					// the COST (discard this, or remove 2 tokens) and is
+					// untouched; this is the effect.
+					{
+						type: ChooseOpponent
+						memorize: opponent
+					}
+					{
+						type: discardTopCardsFromDeck
+						forced: true
+						deck: fromMemory(opponent)
+					}
+				]
 			}
 		]
 		gametext: To play, exert 2 Dwarves.<br>When you play this, add a [dwarven] token here for each mountain site and each underground site on the adventure path.<br><b>Skirmish:</b> Discard this from play or remove 2 tokens from here to make a Shadow player discard the top card of his or her draw deck.

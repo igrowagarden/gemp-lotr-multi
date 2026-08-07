@@ -330,12 +330,25 @@
 					type: phase
 					phase: fellowship
 				}
-				effect: {
-					type: discardTopCardsFromDeck
-					forced: true
-					deck: shadow
-					count: 2
-				}
+				effect: [
+					// "CHOOSE a Shadow player who must discard the top 2 cards
+					// of HIS OR HER draw deck" -- the card says choose, and no
+					// choice was ever offered. Invisible to the census until it
+					// learned to read `deck:`, because this card has no
+					// `player:` token at all.
+					{
+						type: ChooseOpponent
+						memorize: opponent
+					}
+					{
+						// Naming the player IS the scoping: a draw deck is a
+						// per-player zone, so "his or her" needs no filter.
+						type: discardTopCardsFromDeck
+						forced: true
+						deck: fromMemory(opponent)
+						count: 2
+					}
+				]
 			}
 		]
 		gametext: When you play this companion during the fellowship phase, choose a Shadow player who must discard the top 2 cards of his or her draw deck.
@@ -546,10 +559,16 @@
 				filter: dwarf
 			}
 			effect: [
+				// "make AN OPPONENT discard 3 cards from the top of HIS OR HER
+				// draw deck" -- same text as 1_23, same fix.
+				{
+					type: ChooseOpponent
+					memorize: opponent
+				}
 				{
 					type: discardTopCardsFromDeck
 					forced: true
-					deck: shadow
+					deck: fromMemory(opponent)
 					count: 3
 				}
 			]

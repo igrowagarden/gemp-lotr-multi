@@ -24,10 +24,19 @@
 					filter: culture(gandalf),wizard
 				}
 				effect: [
+					// "return 2 minions to A SHADOW PLAYER's hand from THEIR
+					// discard pile. Reveal THEIR hand" -- one opponent named
+					// three times, on `discard:` and two `hand:` fields, with
+					// no `player:` token anywhere. Same reading as the
+					// original 17_15; the errata differs only in the count.
+					{
+						type: ChooseOpponent
+						memorize: opponent
+					}
 					{
 						type: PutCardsFromDiscardIntoHand
 						player: freeps
-						discard: shadow
+						discard: fromMemory(opponent)
 						select: choose(minion)
 						count: 2
 						memorize: chosenMinions
@@ -45,12 +54,12 @@
 						true: [
 							{
 								type: revealHand
-								hand: shadowPlayer
+								hand: fromMemory(opponent)
 								memorize: revealedCards
 							}
 							{
 								type: discardFromHand
-								hand: shadowPlayer
+								hand: fromMemory(opponent)
 								forced: true
 								player: you
 								select: choose(memory(revealedCards),minion)

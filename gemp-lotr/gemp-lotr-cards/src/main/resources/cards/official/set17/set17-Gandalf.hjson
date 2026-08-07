@@ -21,10 +21,19 @@
 				filter: culture(gandalf),wizard
 			}
 			effect: [
+				// "search A SHADOW PLAYER's discard pile ... then you may
+				// reveal THAT SHADOW PLAYER's hand" -- one opponent, named
+				// twice, across three tokens on two different zone fields
+				// (`discard:` and two `hand:`). None of them is `player:`, so
+				// this card was invisible to the census.
+				{
+					type: ChooseOpponent
+					memorize: opponent
+				}
 				{
 					type: PutCardsFromDiscardIntoHand
 					player: freeps
-					discard: shadow
+					discard: fromMemory(opponent)
 					select: choose(minion)
 					count: 1
 					memorize: chosenMinions
@@ -42,12 +51,15 @@
 					true: [
 						{
 							type: revealHand
-							hand: shadowPlayer
+							hand: fromMemory(opponent)
 							memorize: revealedCards
 						}
 						{
+							// An EFFECT, not a cost, so fromMemory is fine
+							// here. `player: you` stays -- the card's
+							// controller picks which minion.
 							type: discardFromHand
-							hand: shadowPlayer
+							hand: fromMemory(opponent)
 							forced: true
 							player: you
 							select: choose(memory(revealedCards),minion)

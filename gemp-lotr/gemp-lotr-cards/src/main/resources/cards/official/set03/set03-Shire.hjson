@@ -155,10 +155,17 @@
 				filter: hobbit,companion,not(ringBearer)
 			}
 			effect: [
+				// "a card at random from AN OPPONENT's hand" -- one opponent,
+				// chosen. Chosen BEFORE the reveal, so the Free Peoples player
+				// picks a hand without knowing what is in it.
+				{
+					type: ChooseOpponent
+					memorize: opponent
+				}
 				{
 					type: revealRandomCardsFromHand
 					forced: true
-					hand: shadow
+					hand: fromMemory(opponent)
 					memorize: revealedCard
 				}
 				{

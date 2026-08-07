@@ -1766,12 +1766,23 @@
 				type: exert
 				select: bearer
 			}
-			effect: {
-				type: discardCardAtRandomFromHand
-				forced: true
-				hand: shadowPlayer
-				count: 2
-			}
+			effect: [
+				// "make AN OPPONENT discard 2 cards at random from hand." The
+				// whole ability was one `hand:` token and no `player:` token,
+				// so it never appeared in any census until the census learned
+				// to read zone fields. Note the pc errata 51_68 is a DIFFERENT
+				// ability (a preventable) and got anyShadow instead.
+				{
+					type: ChooseOpponent
+					memorize: opponent
+				}
+				{
+					type: discardCardAtRandomFromHand
+					forced: true
+					hand: fromMemory(opponent)
+					count: 2
+				}
+			]
 		}
 		gametext: <b>Tale</b>. Bearer must be an Elf companion.<br><b>Archery:</b> If bearer is an archer, exert bearer to make an opponent discard 2 cards at random from hand.
 		lore: "Straight and true, the arrows of the Golden Wood are known to leave a deadly mark."

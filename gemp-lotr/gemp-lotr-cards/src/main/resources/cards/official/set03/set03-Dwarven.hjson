@@ -229,9 +229,15 @@
 		effects: {
 			type: event
 			effect: [
+				// "a card at random from AN OPPONENT's hand" -- one opponent,
+				// chosen before the reveal.
+				{
+					type: ChooseOpponent
+					memorize: opponent
+				}
 				{
 					type: revealCardsFromHand
-					hand: shadow
+					hand: fromMemory(opponent)
 					select: random(1)
 					memorize: revealedCard
 				}

@@ -391,9 +391,14 @@
 					select: bearer
 				}
 				effect: [
+					// "reveal AN OPPONENT's hand" -- one opponent, chosen.
+					{
+						type: ChooseOpponent
+						memorize: opponent
+					}
 					{
 						type: revealHand
-						hand: shadowPlayer
+						hand: fromMemory(opponent)
 						memorize: revealedCards
 					}
 					{
@@ -893,10 +898,17 @@
 				type: canSpot
 				filter: name(Gandalf)
 			}
-			effect: {
-				type: revealHand
-				hand: shadowPlayer
-			}
+			effect: [
+				// "reveal AN OPPONENT's hand" -- one opponent, chosen.
+				{
+					type: ChooseOpponent
+					memorize: opponent
+				}
+				{
+					type: revealHand
+					hand: fromMemory(opponent)
+				}
+			]
 		}
 		gametext: <b>Spell</b>.<br><b>Fellowship:</b> Spot Gandalf to reveal an opponent's hand.
 		lore: "'By foul craft, Saruman has crossed Orcs with Goblin Men – he is breeding an army in the Caverns of Isengard.'"

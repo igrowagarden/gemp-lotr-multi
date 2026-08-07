@@ -92,12 +92,23 @@
 				}
 			]
 			effect: [
+				// "CHOOSE an opponent who must reveal HIS OR HER hand."
 				{
+					type: ChooseOpponent
+					memorize: opponent
+				}
+				{
+					// A hand is a per-player zone, so naming the player is all
+					// the scoping "his or her" asks for.
 					type: revealHand
-					hand: shadow
+					hand: fromMemory(opponent)
 					memorize: revealedCards
 				}
 				{
+					// "Wound A minion" -- no owner word, so the selection stays
+					// unscoped and may reach any opponent's minion, as on 11_34
+					// and 10_72. The count comes from the revealed hand, which
+					// is already narrowed by memory.
 					type: wound
 					select: choose(minion)
 					times: {

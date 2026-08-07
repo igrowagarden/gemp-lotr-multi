@@ -1295,9 +1295,14 @@
 				select: bearer
 			}
 			effect: [
+				// "reveal AN OPPONENT's hand" -- one opponent, chosen.
+				{
+					type: ChooseOpponent
+					memorize: opponent
+				}
 				{
 					type: revealHand
-					hand: shadowPlayer
+					hand: fromMemory(opponent)
 					memorize: revealedCards
 				}
 				{

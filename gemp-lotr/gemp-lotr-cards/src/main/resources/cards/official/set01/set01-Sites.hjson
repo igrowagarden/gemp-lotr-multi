@@ -1346,10 +1346,17 @@
 				type: exert
 				select: choose(elf)
 			}
-			effect: {
-				type: lookAtHand
-				hand: shadowPlayer
-			}
+			effect: [
+				// "look at AN OPPONENT's hand" -- one opponent, chosen.
+				{
+					type: ChooseOpponent
+					memorize: opponent
+				}
+				{
+					type: lookAtHand
+					hand: fromMemory(opponent)
+				}
+			]
 		}
 		gametext: <b>Sanctuary</b>. <b>Fellowship:</b> Exert an Elf to look at an opponent's hand.
 		lore: ""

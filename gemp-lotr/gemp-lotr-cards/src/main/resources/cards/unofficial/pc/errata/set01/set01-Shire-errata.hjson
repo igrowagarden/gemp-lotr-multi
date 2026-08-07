@@ -323,9 +323,17 @@
 				select: bearer
 			}
 			effect: [
+				// "4 cards at random from AN OPPONENT's hand" -- one opponent,
+				// chosen. Errata twin of 1_313, converted in the same batch;
+				// the two happen to want the same fix, which is not something
+				// to assume (see 1_44 vs 51_44, 1_68 vs 51_68).
+				{
+					type: ChooseOpponent
+					memorize: opponent
+				}
 				{
 					type: revealrandomcardsfromhand
-					hand: shadowPlayer
+					hand: fromMemory(opponent)
 					forced: true
 					memorize: revealedCards
 					count: 4

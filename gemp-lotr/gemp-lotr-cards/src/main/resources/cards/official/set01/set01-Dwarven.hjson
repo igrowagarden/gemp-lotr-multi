@@ -1054,12 +1054,21 @@
 				type: winsSkirmish
 				filter: dwarf
 			}
-			effect: {
-				type: discardTopCardsFromDeck
-				deck: shadowPlayer
-				count: 3
-				forced: true
-			}
+			effect: [
+				// "make AN OPPONENT discard 3 cards from the top of HIS OR HER
+				// draw deck" -- one opponent, chosen. 12_11 reprints this text
+				// and gets the same fix.
+				{
+					type: ChooseOpponent
+					memorize: opponent
+				}
+				{
+					type: discardTopCardsFromDeck
+					deck: fromMemory(opponent)
+					count: 3
+					forced: true
+				}
+			]
 		}
 		gametext: <b>Response:</b> If a Dwarf wins a skirmish, make an opponent discard 3 cards from the top of his or her draw deck.
 		lore: "'My folk have never had dealings with any of the servants of the Enemy.'"

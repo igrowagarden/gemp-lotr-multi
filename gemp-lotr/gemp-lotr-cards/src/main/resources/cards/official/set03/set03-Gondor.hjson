@@ -292,10 +292,16 @@
 				filter: culture(gondor),companion
 			}
 			effect: [
+				// "a card at random from AN OPPONENT's hand" -- one opponent,
+				// chosen before the reveal.
+				{
+					type: ChooseOpponent
+					memorize: opponent
+				}
 				{
 					type: revealRandomCardsFromHand
 					forced: true
-					hand: shadow
+					hand: fromMemory(opponent)
 					memorize: revealedCard
 				}
 				{

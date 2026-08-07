@@ -1998,10 +1998,21 @@
 						memory: chosenCompanion
 						filter: mounted
 					}
-					true: {
-						type: putRandomCardFromHandBeneathDrawDeck
-						hand: shadow
-					}
+					// INSIDE the true: branch, not before the If. "If that Man
+					// is mounted, CHOOSE an opponent who must place a random
+					// card from hand beneath HIS OR HER draw deck" -- the
+					// choice is part of the consequence, so an unmounted Man
+					// must not put a decision to anybody.
+					true: [
+						{
+							type: ChooseOpponent
+							memorize: opponent
+						}
+						{
+							type: putRandomCardFromHandBeneathDrawDeck
+							hand: fromMemory(opponent)
+						}
+					]
 				}
 			]
 		}

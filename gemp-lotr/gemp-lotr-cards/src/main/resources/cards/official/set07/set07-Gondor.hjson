@@ -1337,9 +1337,15 @@
 				filter: culture(gondor),companion
 			}
 			effect: [
+				// "the top 5 cards of AN OPPONENT's draw deck" -- one
+				// opponent, and the reshuffle at the end is the same deck.
+				{
+					type: ChooseOpponent
+					memorize: opponent
+				}
 				{
 					type: revealTopCardsOfDrawDeck
-					deck: shadow
+					deck: fromMemory(opponent)
 					count: 5
 					memorize: revealedCards
 				}
@@ -1366,7 +1372,7 @@
 				}
 				{
 					type: shuffleDeck
-					deck: shadow
+					deck: fromMemory(opponent)
 				}
 			]
 		}

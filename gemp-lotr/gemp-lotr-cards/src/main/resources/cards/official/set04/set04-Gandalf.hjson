@@ -924,15 +924,23 @@
 					select: self
 				}
 				effect: [
+					// "the top 10 cards of AN OPPONENT's draw deck ... YOUR
+					// OPPONENT reshuffles" -- one opponent across all four
+					// tokens, including the shuffle. Chosen before the reveal,
+					// so the deck is picked without seeing into it.
+					{
+						type: ChooseOpponent
+						memorize: opponent
+					}
 					{
 						type: revealTopCardsOfDrawDeck
-						deck: shadow
+						deck: fromMemory(opponent)
 						count: 10
 						memorize: revealedCards
 					}
 					{
 						type: discardCardsFromDrawDeck
-						deck: shadow
+						deck: fromMemory(opponent)
 						select: choose(side(shadow),memory(revealedCards))
 						showAll: false
 						shuffle: false
@@ -940,7 +948,7 @@
 					}
 					{
 						type: discardCardsFromDrawDeck
-						deck: shadow
+						deck: fromMemory(opponent)
 						select: choose(side(free),memory(revealedCards))
 						showAll: false
 						shuffle: false
@@ -948,7 +956,7 @@
 					}
 					{
 						type: shuffleDeck
-						deck: shadow
+						deck: fromMemory(opponent)
 					}
 				]
 			}

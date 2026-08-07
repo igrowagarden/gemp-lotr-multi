@@ -280,20 +280,38 @@
 							memory: fpDiscardedCards
 						}
 					}
+					// "make EACH PLAYER count the number of cards in HIS OR HER
+					// hand, discard each of them and draw the same number" --
+					// not a choice, an every-player effect. The Free Peoples
+					// half above is left exactly as it was; this half used to
+					// be one `hand:`/`player:` pair naming getFirstShadowPlayer,
+					// so at five seats three opponents were skipped entirely.
+					//
+					// The memory limit that stopped 3_11 does not bite here:
+					// setCardMemory clears before writing, so a memorize inside
+					// forEachPlayer holds only the LAST iteration -- but this
+					// count is written and read WITHIN one iteration, never
+					// accumulated across them.
 					{
-						type: discardFromHand
-						hand: shadow
-						forced: true
-						select: all(any)
-						memorize: shadowDiscardedCards
-					}
-					{
-						type: drawCards
-						player: shadow
-						count: {
-							type: forEachInMemory
-							memory: shadowDiscardedCards
-						}
+						type: forEachPlayer
+						player: eachShadow
+						effect: [
+							{
+								type: discardFromHand
+								hand: you
+								forced: true
+								select: all(any)
+								memorize: shadowDiscardedCards
+							}
+							{
+								type: drawCards
+								player: you
+								count: {
+									type: forEachInMemory
+									memory: shadowDiscardedCards
+								}
+							}
+						]
 					}
 				]
 			}
