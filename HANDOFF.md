@@ -1747,3 +1747,51 @@ one — and the reference-client reading (`gameUi.js`, `CardGroup.js`,
 needs no coordination at all. Prefer that copy.
 
 Nothing here is pushed anywhere, because nothing here is in a repository.
+
+---
+
+## OPEN AND IMPORTANT: today's oracle edits broke the REPLAY differential
+
+`diffrun.sh` reports **0 of 3 games agreeing**, every mismatch a
+`CARD_ACTION_CHOICE`. It was clean before today.
+
+Bisected with git rather than guessed at, after two theories had already been
+wrong:
+
+| tree | result |
+|---|---|
+| everything at the initial commit | **3 of 3 AGREE** |
+| today's CLIENT + baseline ORACLE | **3 of 3 AGREE** |
+| today's client + today's oracle | 0 of 3 |
+
+So **the client changes are not implicated at all** -- the fault is in
+`src/dev/oldharness.html`. Two candidates were tested individually and cleared:
+the `actionableCard` class gate on `offers()` (since reverted, with the reasoning
+kept in place) and the `ui.hand` Proxy stub. Neither fixed it.
+
+Remaining suspects, all added today, in rough order of how much they could touch
+a replay's offers:
+
+1. the `<select>` reader branch in `offers()`
+2. `PlaySound` stubbed to a no-op
+3. `window.confirm`/`alert`/`prompt` stubs
+4. `selectionDebounceMs = 0`
+5. `clickAny` (additive; least likely)
+
+Bisecting the rest is now cheap and should be done ONE AT A TIME with a
+`diffrun.sh 3 25` between each:
+
+    git checkout 4c44d79 -- src/dev/oldharness.html   # known-good oracle
+    # re-apply one edit, bash harness/sync.sh, bash harness/diffrun.sh 3 25
+
+**Until this is closed:** `decisionfuzz.html` (47/47) is unaffected and can be
+trusted -- it was validated against this same oracle all day and its controls
+fire. `diff.html` and `livediff.html` cannot be, because they consume the same
+`offers()` and are exactly what is failing. Do not read a clean `livediffrun.sh`
+as evidence while this is open.
+
+The lesson, and it is the same one twice in one day: **a shared file with three
+consumers cannot be edited to suit one of them.** Every edit here was made to
+make `decisionfuzz.html` work, none was re-checked against the two older pages
+until the end, and the one that broke them is still unidentified.
+
