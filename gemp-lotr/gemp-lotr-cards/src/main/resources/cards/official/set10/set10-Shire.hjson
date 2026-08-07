@@ -348,9 +348,16 @@
 				count: 2
 			},
 			effect: [
+				// "A Shadow player ... THAT player" -- one opponent, and both
+				// counts fall on the same one.
 				{
+					type: ChooseOpponent
+					memorize: opponent
+				}
+				{
+					// "discard A minion", no owner word.
 					type: discard
-					player: shadow
+					player: fromMemory(opponent)
 					select: choose(minion)
 					count: {
 						type: Conditional

@@ -905,11 +905,19 @@
 					type: exert
 					select: self
 				}
-				effect: {
-					type: wound
-					player: shadow
-					select: choose(minion)
-				}
+				effect: [
+					{
+						type: ChooseOpponent
+						memorize: opponent
+					}
+					{
+						// "wound A minion", no owner word -- deliberately
+						// unscoped, as on 11_34 and 10_72.
+						type: wound
+						player: fromMemory(opponent)
+						select: choose(minion)
+					}
+				]
 			}
 		]
 		gametext: <b>Regroup:</b> Exert this companion to make a Shadow player wound a minion.

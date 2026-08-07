@@ -99,11 +99,18 @@
 					culture: shire
 					count: 2
 				}
-				effect: {
-					type: discard
-					player: shadow
-					select: choose(minion)
-				}
+				effect: [
+					{
+						type: ChooseOpponent
+						memorize: opponent
+					}
+					{
+						// "discard A minion from play", no owner word.
+						type: discard
+						player: fromMemory(opponent)
+						select: choose(minion)
+					}
+				]
 			}
 		]
 		gametext: Bearer must be a Ring-bound Hobbit.<br>When you play Bill the Pony, you may reinforce a [shire] token.<br><b>Regroup:</b> Spot 2 minions and remove 2 [shire] tokens to make a Shadow player discard a minion from play.

@@ -94,11 +94,20 @@
 					type: discard
 					select: self
 				}
-				effect: {
-					type: returnToHand
-					player: shadowPlayer
-					select: choose(minion,MaxStrength(6))
-				}
+				effect: [
+					{
+						type: ChooseOpponent
+						memorize: opponent
+					}
+					{
+						// "A minion ... to ITS OWNER'S hand" -- "its owner"
+						// names the destination, not a restriction on which
+						// minion, so the selection stays unscoped.
+						type: returnToHand
+						player: fromMemory(opponent)
+						select: choose(minion,MaxStrength(6))
+					}
+				]
 			}
 		]
 		gametext: To play, spot an Elf. Bearer must be an Elf or Hobbit.<br><b>Maneuver:</b> Discard this possession to make a Shadow player return a minion with strength 6 or less to its owner's hand.

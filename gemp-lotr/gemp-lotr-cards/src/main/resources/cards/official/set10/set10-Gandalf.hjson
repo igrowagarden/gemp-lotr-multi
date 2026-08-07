@@ -239,9 +239,17 @@
 						select: choose(culture(gandalf),condition)
 					}
 					{
+						type: ChooseOpponent
+						memorize: opponent
+					}
+					{
+						// "one of HIS OR HER conditions" -- an owner word, so
+						// the selection IS scoped. side(shadow) does not scope
+						// it: at five seats every opponent's cards are
+						// shadow-side.
 						type: discard
-						player: shadow
-						select: choose(side(shadow),condition)
+						player: fromMemory(opponent)
+						select: choose(ownedByPlayerFromMemory(opponent),side(shadow),condition)
 					}
 				]
 			}
