@@ -20,13 +20,13 @@ public class CantUseSpecialAbilities implements ModifierSourceProducer {
         String filter = FieldUtils.getString(object.get("filter"), "filter", "any");
 
         final Requirement[] requirements = environment.getRequirementFactory().getRequirements(conditionArray, environment);
-        PlayerSource playerSource = player != null ? PlayerResolver.resolvePlayer(player) : null;
+        PlayersSource playerSource = player != null ? PlayerResolver.resolvePlayers(player) : null;
         FilterableSource filterableSource = environment.getFilterFactory().generateFilter(filter, environment);
 
         return new ModifierSource() {
             @Override
             public Modifier getModifier(ActionContext actionContext) {
-                String bannedPlayer = (playerSource != null) ? playerSource.getPlayer(actionContext) : null;
+                java.util.Collection<String> bannedPlayer = (playerSource != null) ? playerSource.getPlayers(actionContext) : null;
 
                 return new CantUseSpecialAbilitiesModifier(actionContext.getSource(),
                         RequirementCondition.createCondition(requirements, actionContext), phase, bannedPlayer, filterableSource.getFilterable(actionContext));

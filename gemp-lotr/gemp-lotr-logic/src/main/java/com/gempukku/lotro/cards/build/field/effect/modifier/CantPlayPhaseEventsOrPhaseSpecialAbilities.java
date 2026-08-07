@@ -20,12 +20,12 @@ public class CantPlayPhaseEventsOrPhaseSpecialAbilities implements ModifierSourc
         final JSONObject[] conditionArray = FieldUtils.getObjectArray(object.get("requires"), "requires");
 
         final Requirement[] requirements = environment.getRequirementFactory().getRequirements(conditionArray, environment);
-        PlayerSource playerSource = player != null ? PlayerResolver.resolvePlayer(player) : null;
+        PlayersSource playerSource = player != null ? PlayerResolver.resolvePlayers(player) : null;
 
         return new ModifierSource() {
             @Override
             public Modifier getModifier(ActionContext actionContext) {
-                String bannedPlayer = playerSource != null ? playerSource.getPlayer(actionContext) : null;
+                java.util.Collection<String> bannedPlayer = playerSource != null ? playerSource.getPlayers(actionContext) : null;
                 return new CantPlayPhaseEventsOrphaseSpecialAbilitiesModifier(actionContext.getSource(),
                         RequirementCondition.createCondition(requirements, actionContext), phase, bannedPlayer);
             }

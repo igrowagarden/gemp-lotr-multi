@@ -55,6 +55,28 @@ public class PlayerResolver {
                 return shadowPlayers;
             };
         }
+        if (type.equalsIgnoreCase("opponentsOfOwner")) {
+            // Everyone except the card's own controller -- which is what "your
+            // opponent(s)" means on a permanent, and is NOT the same as
+            // anyShadow.
+            //
+            // anyShadow is relative to getCurrentPlayerId(), so it names the
+            // opponents of whoever is taking their turn. That coincides with
+            // the owner's opponents only while the owner IS the current player.
+            // For a prohibition that can bite on somebody else's turn -- Pippin
+            // (1_306) protects your [shire] tales from being discarded at any
+            // time -- anyShadow would ban the card's own controller and permit
+            // the one opponent who happens to be the current player. Exactly
+            // backwards.
+            return (actionContext) -> {
+                final String owner = actionContext.getSource().getOwner();
+                List<String> others = new ArrayList<>();
+                for (String player : GameUtils.getAllPlayers(actionContext.getGame()))
+                    if (!player.equals(owner))
+                        others.add(player);
+                return others;
+            };
+        }
         final PlayerSource single = resolvePlayer(type);
         return (actionContext) -> Collections.singletonList(single.getPlayer(actionContext));
     }
