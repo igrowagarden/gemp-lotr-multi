@@ -1770,6 +1770,34 @@ inventing a verdict — read the SKIP line, it names which.
 
 ## Open
 
+- **BACKLOGGED: animate the `.cardgroup`, not each card in it.** Optional, and
+  probably not worth it -- recorded so the reasoning is not re-derived.
+
+  `playFlip` animates every `.card[data-card-id]` independently
+  (`view/animate.js:36,54`), so a host and the cards riding it each compute
+  their own delta. In a shared `.cardgroup` those deltas agree, and `flipcheck`
+  measures how well:
+
+      host  {dx:-0.5, dy:-17.890625}
+      rider {dx: 0,   dy:-17.890625}
+
+  Identical vertically, half a pixel apart horizontally -- sub-pixel rounding of
+  two nodes at different x-offsets. Below sight, and below `playFlip`'s own 2px
+  churn guard, so it cannot grow into a visible separation.
+
+  Animating the WRAPPER instead would make separation structurally impossible
+  rather than arithmetically small. **Not done** because it is a real refactor
+  of the animation path for a sub-pixel gain, and the failure it would prevent
+  has never been observed. What guards against it meanwhile is `flipcheck`,
+  which prints the measured gap on every run and asserts it under 1px -- so
+  drift toward the limit surfaces rather than hiding behind a pass, and that is
+  the signal that would justify taking this up.
+
+  The failure mode that WOULD be visible -- one card animating while its rider
+  snaps, because the 2px guard is applied per card -- is separately asserted and
+  has never fired.
+
+
 - ~~**A Shadow condition on a companion VANISHES under the Shadow filter.**~~
   **DECIDED AND FIXED** — a filtered band now keeps a card carrying somebody
   else's attachment; see `DESIGN.md`, "Filtering opponents by side". The
