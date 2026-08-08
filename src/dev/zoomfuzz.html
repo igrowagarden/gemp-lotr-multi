@@ -47,27 +47,14 @@ import { createZoom } from "../view/piles.js";
 import { decodeEvents } from "../net/protocol.js";
 import { CASES, STATES, VIEWER, baseBoard, FREE_BACK, SHADOW_BACK }
   from "./zoomshapes.js";
+import { createReporter, bootOracle, query } from "./harness.js";
 
-const q = new URLSearchParams(location.search);
+const q = query();
 const sabotage = q.get("sabotage");
-const out = document.getElementById("out");
-const lines = [];
-const say = (t, cls) => { lines.push(cls ? `<span class="${cls}">${t}</span>` : t);
-                          out.innerHTML = lines.join("\n"); };
+const report = createReporter({ failWord: "DIFF" });
+const say = report.say;
 
-async function ready(frame) {
-  for (let i = 0; i < 300; i++) {
-    if (frame.contentWindow?.OLD) return frame.contentWindow.OLD;
-    await new Promise((r) => setTimeout(r, 50));
-  }
-  throw new Error("old harness never came up");
-}
-const frame = document.getElementById("old");
-const OLD = await ready(frame);
-OLD.boot({ gameId: "1", participantId: VIEWER });
-OLD.feedBatch(OLD.parseEvents(baseBoard()));
-const ui = OLD.ui;
-const $ = frame.contentWindow.$;
+const { ui, $, frame } = await bootOracle({ participantId: VIEWER, board: baseBoard() });
 const az = ui.autoZoom;
 
 /**
@@ -189,7 +176,6 @@ function newPreview(c, suppressedState) {
 }
 
 // ---------------------------------------------------------------- the compare
-let pass = 0, diff = 0;
 const fired = [];
 
 for (const state of STATES) {
@@ -205,19 +191,16 @@ for (const state of STATES) {
     // The oracle against its own transcription FIRST -- if zoomshapes.js has
     // misread handleMouseOver, every verdict below rests on the misreading.
     if ((o ?? null) !== expected) {
-      diff++;
-      say(`  HARNESS  ${c.name}: zoomshapes says ${expected} but the oracle ` +
-          `previewed ${o}`, "bad");
+      report.ok(`HARNESS ${c.name}`, false,
+                `zoomshapes says ${expected} but the oracle previewed ${o}`);
       continue;
     }
 
     if ((o ?? null) === (m ?? null)) {
-      pass++;
-      say(`  ok       ${c.name}: ${o ?? "no preview"}`, "ok");
+      report.ok(`${c.name}: ${o ?? "no preview"}`, true);
     } else {
-      diff++;
       if (sabotage) fired.push(c.name);
-      say(`  DIFF     ${c.name}: old ${o ?? "no preview"} vs new ${m ?? "no preview"}`, "bad");
+      report.ok(c.name, false, `old ${o ?? "no preview"} vs new ${m ?? "no preview"}`);
     }
   }
 }
@@ -227,7 +210,5 @@ if (sabotage) {
   say(`control ${sabotage} fired on: ${fired.length ? fired.length + " cell(s)" : "NOTHING"}`,
       fired.length ? "note" : "bad");
 }
-const total = pass + diff;
-say(diff === 0 ? `RESULT: ALL PASS (${total})` : `RESULT: ${diff} DIFF of ${total}`,
-    diff === 0 ? "ok" : "bad");
+report.result();
 </script></body></html>
