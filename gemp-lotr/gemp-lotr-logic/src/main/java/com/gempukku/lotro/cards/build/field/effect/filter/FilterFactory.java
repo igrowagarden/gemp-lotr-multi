@@ -218,13 +218,29 @@ public class FilterFactory {
         simpleFilters.put("your", (actionContext) -> Filters.owner(actionContext.getPerformingPlayer()));
         // Owned by the Free Peoples player of the CURRENT turn -- the fellowship
         // being faced, as distinct from `your`, which is the performing player.
-        // The two are the same thing at two seats and come apart above them:
-        // every seat has its own fellowship and its own companions on the table.
         //
         // Southron Troop (4_256) is the first card to need it. Its prevention
         // lets the minion's controller discard a companion, and `your` there
         // resolves against whichever player the discard names -- the Shadow
-        // player -- so it would have scoped to exactly the wrong side.
+        // player -- so it would have scoped to exactly the wrong SIDE. That is
+        // the whole reason this filter exists: side, not seat.
+        //
+        // WHAT THIS IS NOT FOR, because an earlier version of this comment said
+        // it was and cost a day. It does NOT exist because several fellowships
+        // share the table. Only ONE set of fellowship cards is on the board at a
+        // time -- the active Free Peoples player's. Several SHADOW players are
+        // active at once against that one fellowship, and that asymmetry is
+        // where the real multiplayer defects live.
+        //
+        // So a bare `companion`, `dwarf` or `valiant Man` in a card cannot reach
+        // another seat's copy: there is no other seat's copy in play. Do not
+        // "fix" unscoped Free Peoples selections. Unscoped SHADOW selections --
+        // minions, machines, artifacts -- are the ones worth reading, because
+        // several players really do hold those simultaneously.
+        //
+        // The speculative half of the old comment was later read back as
+        // established fact and 22 cards were wrongly marked defective on the
+        // strength of it. A comment is not evidence.
         simpleFilters.put("ownedbyfreepeoplesplayer",
                 (actionContext) -> Filters.owner(actionContext.getGame().getGameState().getCurrentPlayerId()));
 
