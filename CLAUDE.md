@@ -18,6 +18,10 @@ test and differential harnesses; `harness/` drives the server.
   client, backlogged here rather than filed upstream. Read it before concluding
   anything about script handling in the log, in either client.
 
+`src/` layers one way — `view -> model -> nothing`, `state -> model`, `net`
+self-contained. Keep it that way. `view/board.js` (494 code lines) is the one
+file that does too much; the entry points no longer do.
+
 ## Do not touch these trees
 
 ```
@@ -44,16 +48,27 @@ bash harness/sync.sh
 The differentials, all green and all proven capable of failing:
 
 ```bash
-bash harness/fuzzrun.sh            # 48 decision shapes x 7 types + 3 controls
+bash harness/fuzzrun.sh            # 48 decision shapes x 7 types + 3 controls (~20 min)
 bash harness/pilerun.sh            # 4 viewer configs x 5 piles + 3 controls
 bash harness/logrun.sh             # game log + chat message shapes + 4 controls
 bash harness/inforun.sh            # card info: 7 id kinds x live/replay + 3 controls
 bash harness/zoomrun.sh            # zoom: 6 hover targets x 3 states + 4 controls
 bash harness/replayrun.sh          # replay speed + play/pause + 3 controls
 bash harness/optsrun.sh            # concede + cancel x player/spectator + 4 controls
+bash harness/reorderrun.sh         # which zones drag + 3 controls
 bash harness/diffrun.sh 12 40      # replay differential over recorded games
 bash harness/livediffrun.sh 4 70   # live, with the ENGINE judging
 ```
+
+**Run the DIFFERENTIAL FIRST and read its last line**, for anything touching
+`view/` or `state/`. Sixteen green assertion suites did not catch a real
+`CARD_ACTION_CHOICE` regression that `diffrun` caught immediately — and a commit
+went in claiming the differential was clean when its final line already said
+otherwise. See the open regression at the top of `HANDOFF.md`.
+
+**`SEED=` does NOT pin a before/after comparison.** It pins the shuffle, not the
+corpus, and live runs add recordings — so two runs at the same seed can compare
+different games. Only `IDS=` pins a game.
 
 The server:
 

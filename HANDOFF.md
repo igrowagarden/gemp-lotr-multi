@@ -10,12 +10,85 @@ behaviour.
 
 ## Start here
 
+### OPEN REGRESSION, and it is the first thing to read
+
+**Extracting `model/selection.js` out of `view/board.js` breaks the replay
+differential. Reverted; do not re-attempt it without reading this.**
+
+    43aa51e  the extraction          -> 3 MISMATCH of 30
+    d8d70c5  the revert              -> AGREE on all 30   (HEAD is good)
+
+Confirmed by pinning the exact game and running each tree twice:
+
+    IDS='dave$oizsis9e43f2gbfx' bash harness/diffrun.sh
+
+    before the change   AGREE on all 30    (x2)
+    after  the change   3 MISMATCH of 30   (x2)
+
+All three are `CARD_ACTION_CHOICE` **offers** -- which cards each client lights
+as playable, not which answer it sends. That matters for where to look: the
+`is-actionable` path, not the selection state the change was about.
+
+**What was already ruled out.** Every substitution in the diff reads as
+semantically equivalent. The one genuine difference -- `picked.clear()` clearing
+everything where the originals cleared only the cards *or* only the assignment
+-- was restored to the original partial semantics and the mismatches PERSISTED.
+So the cause is elsewhere and is not yet known.
+
+To pick it up:
+
+    git revert --no-commit d8d70c5     # put the change back
+    bash harness/sync.sh
+    # then read the three mismatches, in a browser or by grepping the EMITTED
+    # lines (a naive grep also matches the say(...) calls that produce them):
+    #   dev/diff.html?replayId=dave$oizsis9e43f2gbfx&max=30
+
+`model/selection.js` and `dev/selectioncheck.html` went with the revert. The
+suite was sound -- 28 assertions, two proven able to fail -- and should come
+back with the extraction once the cause is understood.
+
+### Two process failures this cost, both worth more than the bug
+
+1. **A false claim was committed.** `43aa51e`'s message said "diffrun SEED=7
+   2-of-2 agreeing". The run had already printed `1 disagreeing` on screen. The
+   fourteen green suites were read, the differential's last line was not. **Run
+   the differential FIRST for anything touching `view/` or `state/`**, and read
+   its final line before writing anything down.
+
+2. **`SEED=` does not pin a comparison.** It pins the shuffle, not the CORPUS --
+   and this session's live games added recordings, so a "before" and an "after"
+   run at the same seed sampled DIFFERENT games. Only `IDS=` pins a game. This
+   file already said so about bisecting and it still caught somebody out.
+
+
 **There is a git repository now.** `git log` is the real record; the commit
 messages carry the reasoning, not just the change. That is new as of the last
 session and it replaces the old advice about reconstructing state from file
 mtimes.
 
-**Three harnesses, all green and all PROVEN CAPABLE OF FAILING:**
+**Ten harnesses, all green and all PROVEN CAPABLE OF FAILING.** The three
+originals plus seven surface differentials added since:
+
+    bash harness/fuzzrun.sh      48 decision shapes x 7 types + 3 controls  ~20 min
+    bash harness/pilerun.sh      4 viewer configs x 5 piles + 3 controls
+    bash harness/logrun.sh       game log + chat, 14 message shapes + 4 controls
+    bash harness/inforun.sh      card info, 7 id kinds x live/replay + 3 controls
+    bash harness/zoomrun.sh      zoom, 6 hover targets x 3 states + 4 controls
+    bash harness/replayrun.sh    replay speed + play/pause + 3 controls
+    bash harness/optsrun.sh      concede + cancel x player/spectator + 4 controls
+    bash harness/reorderrun.sh   which zones drag + 3 controls
+    bash harness/diffrun.sh 12 40    replay differential over recorded games
+    bash harness/livediffrun.sh 4 70 live, with the ENGINE judging
+
+Plus `harness/autopassmeasure.py`, which proves the auto-pass cookie changes
+what the ENGINE asks rather than merely what it parses.
+
+**SIXTEEN assertion suites**, up from twelve: `sessioncheck` (21) and
+`replaycheck` (27) are new this session and cover code that was previously
+unreachable by anything; `attachcheck` (19) is the first thing ever to exercise
+a cross-side attachment.
+
+The original three, for reference:
 
     bash harness/fuzzrun.sh      48 cases x 7 decision types + 3 controls   ~6 min
     bash harness/diffrun.sh 12 40    replay differential over recorded games
@@ -467,8 +540,11 @@ is an explicit requirement, not a preference.
 
 **Where it stands.** The client plays a real five-player game end to end. Every
 decision type is implemented and verified against the old client with the engine
-judging the answers. **Thirteen assertion suites, all passing** -- re-run at the
+judging the answers. **Sixteen assertion suites, all passing** -- re-run at the
 end of this session, plus `tests.html` at 197:
+
+    sessioncheck 21   replaycheck 27   attachcheck 19   <- new this session
+
 
     wirecheck 12   actioncheck 19   assigncheck 6    pickcheck 17
     pathcheck 9    navcheck 9       flipcheck 4      zoomcheck 6
@@ -1765,6 +1841,44 @@ inventing a verdict — read the SKIP line, it names which.
    normaliser is `Phase.findPhase` (Phase.java:37-39) and `phaseName()` mirrors
    it. **When a value crosses a boundary, check the spelling on BOTH sides
    against real captured data, not against the enum you happen to be holding.**
+
+---
+
+## Where the production code stands
+
+Read this before proposing a refactor; two of the obvious ones are already done
+and one is a trap.
+
+**The layering is sound and should not be changed.** Every import points one
+way -- `view -> model` (15), `view -> state` (5), `state -> model` (1),
+`layout -> model` (1) -- with no upward dependencies, and `net/` is entirely
+self-contained. Measured, not assumed.
+
+**Entry points are composition again.** `live.html` 409 -> 348 and
+`replay.html` 193 -> 161. Both used to carry real behaviour in a file nothing
+imports, which put it outside every suite:
+
+  * `view/session.js` (169 lines) -- the eight reactions: when the picker
+    opens, the auto-pass arm and its double-answer guard, who may concede, what
+    counts as unread, when a decision alerts, when the path opens itself, what
+    flyouts yield to. Covered by `sessioncheck` (21).
+  * `state/replayer.js` (107 lines) -- position, pacing, and the state at any
+    point. Timers are INJECTED, so `replaycheck` (27) drives playback with a
+    fake clock instead of sleeping.
+
+**`view/board.js` is still 494 code lines** and is the file most like the
+`gameUi.js` this project replaced: focus, filter, selection, assignment
+pairing, drag order, band rendering and the decision strip. Splitting it is the
+remaining architectural work -- but see the open regression at the top of this
+file before touching the selection state. `renderPrompt` (~157 lines) is the
+cleaner cut: it is rendering, not shared mutable state.
+
+**Comment density is NOT a useful signal here.** A measurement of comment lines
+over total lines named `protocol.js`, `transport.js`, `hall.js` and `detach.js`
+as under-documented. Reading them showed the opposite -- the metric penalises a
+file that is mostly a flat code table or one carrying a single dense header. The
+real gaps were narrow, were about design decisions rather than behaviour, and
+are fixed. Do not re-run that measurement and act on it.
 
 ---
 
