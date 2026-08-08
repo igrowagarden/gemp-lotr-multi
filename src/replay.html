@@ -56,15 +56,13 @@
  *
  *   replay.html?replayId=asdf$06g7k8qg1z5em444
  */
-import { initialState, reduce } from "./state/reduce.js";
 import { createStore } from "./state/store.js";
+import { createReplayer } from "./state/replayer.js";
 import { decodeEvents } from "./net/protocol.js";
 import { createBoard } from "./view/board.js";
 import { createPathPanel, createChatPanel } from "./view/panels.js";
 import { createZoom, createPileViewer } from "./view/piles.js";
 import { createCardInfo } from "./view/cardinfo.js";
-import { slower, faster, intervalFor, speedLabel, SPEED_DEFAULT }
-  from "./model/replayctl.js";
 import { loadImageTable } from "./model/images.js";
 
 const q = new URLSearchParams(location.search);
@@ -96,60 +94,30 @@ createZoom(boardEl, { suppressed: () => !!cardInfo?.isOpen });
 cardInfo = createCardInfo(boardEl, { replay: true, fetchInfo: () => Promise.resolve("") });
 store.subscribe((s) => { path.paint(s); chat.paint(s); piles.paint(s); });
 
+// Position, pacing and the state at any point live in state/replayer.js, not
+// here -- seek and the speed model were the untested half of this page, and an
+// off-by-one in seek would show the board one event early for a whole replay
+// without anyone noticing. See replaycheck.html.
 let events = [];
-let at = 0;
-let timer = null;
-
-/** Rebuild the state from scratch up to `n`. Pure reducer, so this is cheap. */
-function seek(n) {
-  at = Math.max(0, Math.min(n, events.length));
-  let state = initialState(viewerId);
-  for (let i = 0; i < at; i++) state = reduce(state, events[i]);
-  store.replace(state);
-  scrub.value = String(at);
-  atEl.textContent = `${at} / ${events.length}`;
-}
-
-// Replay speed, which this client had no control for at all. Same bounds and
-// the same inversion as the reference (model/replayctl.js) -- applied to the
-// interval rather than to animation durations, because that is what this client
-// paces on.
-let speed = SPEED_DEFAULT;
 const speedEl = document.getElementById("speed");
 
-function stop() {
-  if (timer) { clearInterval(timer); timer = null; }
-  playBtn.textContent = "Play";
-}
-
-function start() {
-  // Restart rather than adjust: setInterval's period is fixed once set, so a
-  // speed change during playback would otherwise not take effect until the run
-  // was stopped and started by hand.
-  if (timer) clearInterval(timer);
-  playBtn.textContent = "Pause";
-  timer = setInterval(() => {
-    if (at >= events.length) return stop();
-    seek(at + 1);
-  }, intervalFor(speed));
-}
-
-function setSpeed(next) {
-  speed = next;
-  speedEl.textContent = speedLabel(speed);
-  if (timer) start();
-}
-
-document.getElementById("slower").addEventListener("click", () => setSpeed(slower(speed)));
-document.getElementById("faster").addEventListener("click", () => setSpeed(faster(speed)));
-
-playBtn.addEventListener("click", () => {
-  if (timer) return stop();
-  start();
+const replayer = createReplayer({
+  store, viewerId,
+  onPosition: ({ at, length, playing, label }) => {
+    scrub.value = String(at);
+    atEl.textContent = `${at} / ${length}`;
+    playBtn.textContent = playing ? "Pause" : "Play";
+    speedEl.textContent = label;
+  }
 });
-document.getElementById("fwd").addEventListener("click", () => { stop(); seek(at + 1); });
-document.getElementById("back").addEventListener("click", () => { stop(); seek(at - 1); });
-scrub.addEventListener("input", () => { stop(); seek(Number(scrub.value)); });
+
+document.getElementById("slower").addEventListener("click", () => replayer.slower());
+document.getElementById("faster").addEventListener("click", () => replayer.faster());
+playBtn.addEventListener("click", () => replayer.toggle());
+document.getElementById("fwd").addEventListener("click", () => replayer.step(1));
+document.getElementById("back").addEventListener("click", () => replayer.step(-1));
+// Scrubbing is a deliberate act; it takes over from playback.
+scrub.addEventListener("input", () => { replayer.pause(); replayer.seek(Number(scrub.value)); });
 
 loadImageTable().then(() => board.repaint());
 
@@ -176,6 +144,7 @@ if (!replayId.includes("$")) {
     const xml = await res.text();
     events = decodeEvents(xml);
     scrub.max = String(events.length);
+    replayer.load(events);
 
     // The <info> header is not an event, so it is read separately -- it is the
     // only place the outcome is recorded.
@@ -183,7 +152,6 @@ if (!replayId.includes("$")) {
                                 .getElementsByTagName("info")[0];
     const winner = info?.getAttribute("winner");
     say(`${events.length} events` + (winner ? ` · won by ${winner}` : ""));
-    seek(0);
   } catch (e) {
     say("Could not load replay: " + (e.message ?? e), true);
   }
