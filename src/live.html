@@ -54,7 +54,6 @@
  * authenticated.
  */
 import { createStore } from "./state/store.js";
-import { currentSite, spokenTo } from "./state/reduce.js";
 import { createTransport, TransportStatus } from "./net/transport.js";
 import { createChatClient } from "./net/chat.js";
 import { createBoard } from "./view/board.js";
@@ -66,11 +65,10 @@ import { createCardInfo } from "./view/cardinfo.js";
 import { createPreGame } from "./view/pregame.js";
 import { createPileViewer, createZoom } from "./view/piles.js";
 import { createDetacher } from "./view/detach.js";
+import { createSession } from "./view/session.js";
 import { createSettingsPanel } from "./view/settings.js";
-import { shouldClientAutoPass, effectivePhases, PASS } from "./model/autopass.js";
-import { canConcede, canCancel } from "./model/gameopts.js";
 import { loadImageTable } from "./model/images.js";
-import { closeTopmost, allFlyouts } from "./view/flyout.js";
+import { closeTopmost } from "./view/flyout.js";
 
 const q = new URLSearchParams(location.search);
 const gameId = q.get("gameId") ?? "1";
@@ -87,9 +85,6 @@ function show(status, detail) {
 }
 
 let answeredId = null;
-let autoPassed = null;   // the decision object the arm answered, not its id
-let lastSite = null;
-let seenFirstSite = false;
 const store = createStore(participantId);
 const board = createBoard(document.getElementById("board"), store, {
   // The prompt renders controls for the decision's shape; answering rides on
@@ -243,76 +238,20 @@ cancelBtn.addEventListener("click", async () => {
     show("failed", "cancel " + (e.status ?? e.message));
   }
 });
-let lastChat = 0;
 
-store.subscribe((s) => {
-  path.paint(s);
-  chat.paint(s);
-  piles.paint(s);
-
-  // The picker follows the decision rather than being opened by hand: it
-  // appears when one arrives for us and goes when it is answered or withdrawn.
-  const d = s.decision;
-  if (d && d.decisionType === "ARBITRARY_CARDS" && !s.spectating &&
-      d.forPlayer === s.viewerId) picker.show(d);
-  else picker.hide();
-
-  // The client-side arm, off unless asked for. The store repaints more than
-  // once per decision, so this needs a guard or it sends a second POST against
-  // a decision the server has already closed.
-  //
-  // The guard is the decision OBJECT, not its id. Decision ids are not unique
-  // -- 22 call sites pass `1` -- so remembering "we passed id 1" would sit out
-  // the next unrelated decision that also came in as 1. The reducer builds a
-  // fresh object per DECISION event (reduce.js:271) and every other event
-  // spreads the old state, carrying the same reference through, which makes
-  // identity mean exactly "this decision, still the one we answered".
-  if (settings.clientArm && d && !s.spectating && d.forPlayer === s.viewerId &&
-      d !== autoPassed &&
-      shouldClientAutoPass(d, s.phase, {
-        enabled: true, phases: effectivePhases(document.cookie)
-      })) {
-    autoPassed = d;
-    transport.answer(d.id, PASS);
-    detailEl.textContent = `auto-passed ${d.id} in ${s.phase}`;
-  }
-
-  // Only a seated player may leave a game; a spectator has nothing to concede.
-  concedeBtn.hidden = !canConcede(s);
-  cancelBtn.hidden = !canCancel(s);
-
-  // Unread counts PEOPLE talking. The game log is a running commentary on every
-  // action -- counting it meant the badge was permanently lit and told you
-  // nothing, so a real message could not stand out.
-  const said = spokenTo(s).length;
-  if (said > lastChat) { chat.notify(said - lastChat); lastChat = said; }
-
-  // Sound and a flashing tab title when a decision is waiting and the tab is
-  // not being looked at. In a five-player game the gap between your turns is
-  // long enough that nobody watches continuously.
-  alerts.update(d && !s.spectating && d.forPlayer === s.viewerId ? d : null);
-  // Shown until the first card reaches the table, then never again.
-  pregame.update(s);
-  // The path opens itself when the fellowship reaches a new site.
-  const here = s.stats ? currentSite(s) : null;
-  if (here && here.siteNumber !== lastSite) {
-    lastSite = here.siteNumber;
-    if (lastSite != null && !path.isOpen && seenFirstSite) path.open();
-    seenFirstSite = true;
-  }
-  // Windows yield only while covering something that wants attention -- and
-  // cards on the board count, not just the ones a decision has lit up. The path
-  // window is wide enough to sit over real cards, and staying opaque over them
-  // is the whole complaint about floating windows. Hovering one brings it back
-  // to full opacity, and parked in dead space it still costs nothing.
-  //
-  // `.band .card` and not `.card`: the pile viewer and the zoom preview are
-  // themselves full of cards, and a window must not yield to its own contents.
-  const hot = [];
-  const prompt = boardEl.querySelector(".prompt.yours");
-  if (prompt) hot.push(prompt.getBoundingClientRect());
-  boardEl.querySelectorAll(".band .card").forEach((c) => hot.push(c.getBoundingClientRect()));
-  for (const f of allFlyouts()) f.yieldTo(hot);
+// Everything the client DOES as state arrives lives in view/session.js, not
+// here. It used to be this file's subscribe body, which meant eight
+// behavioural rules -- when the picker opens, the auto-pass arm, who may
+// concede, what counts as unread -- sat in an HTML file that nothing imports
+// and therefore nothing tests. See sessioncheck.html.
+createSession({
+  store,
+  transport,
+  boardEl,
+  panels: { path, chat, piles, picker, alerts, pregame },
+  settings,
+  buttons: { concede: concedeBtn, cancel: cancelBtn },
+  onNote: (t) => { detailEl.textContent = t; }
 });
 
 // Dev-only: open panels on load so a headless run can capture their contents.

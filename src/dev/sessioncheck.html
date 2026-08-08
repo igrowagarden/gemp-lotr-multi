@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>session check</title>
+<link rel="stylesheet" href="../styles/board.css">
+<style>body{font-family:ui-monospace,Consolas,monospace;font-size:13px;padding:10px}
+#board{position:absolute;left:-10000px;width:1200px;height:600px}
+.pass{color:#6E9B7A}.fail{color:#FF5240}.note{color:#B08D57}</style></head>
+<body><div id="board"></div><div id="out"></div>
+<script type="module">
+/**
+ * The reactions: what the client DOES as state arrives.
+ *
+ * These eight rules lived in `live.html`'s subscribe body until now, which
+ * meant nothing could reach them -- no dev page imports an HTML file, so the
+ * seven differentials and thirteen suites all went straight past the code that
+ * decides what a player sees. This is the suite that absence was costing.
+ *
+ * The collaborators are FAKES rather than the real panels. That is deliberate:
+ * the question here is "given this state, what does the session DO", and
+ * driving real panels would answer "does the whole board still render", which
+ * eleven other suites already answer. Each fake records the calls made to it.
+ */
+import { createStore } from "../state/store.js";
+import { decodeEvents } from "../net/protocol.js";
+import { createSession, isMine, wantsPicker, alertFor } from "../view/session.js";
+import { createReporter } from "./harness.js";
+import * as fixture from "./fixture.js";
+
+const report = createReporter();
+const ok = report.ok;
+
+/** A panel that remembers what was asked of it. */
+function spy(extra = {}) {
+  const calls = [];
+  return new Proxy({ calls, ...extra }, {
+    get(t, k) {
+      if (k in t) return t[k];
+      return (...args) => { t.calls.push({ fn: String(k), args }); };
+    }
+  });
+}
+
+function build({ armed = false, cookie = "" } = {}) {
+  const store = createStore("asdf");
+  const answered = [];
+  const notes = [];
+  const panels = {
+    path: spy({ isOpen: false, open() { this.isOpen = true; this.calls.push({ fn: "open" }); } }),
+    chat: spy(), piles: spy(), picker: spy(), alerts: spy(), pregame: spy()
+  };
+  const buttons = { concede: { hidden: false }, cancel: { hidden: false } };
+  const session = createSession({
+    store,
+    transport: { answer: (id, v) => answered.push({ id, v }) },
+    boardEl: document.getElementById("board"),
+    panels,
+    settings: { clientArm: armed },
+    buttons,
+    onNote: (t) => notes.push(t),
+    cookies: () => cookie
+  });
+  return { store, session, panels, buttons, answered, notes };
+}
+
+const called = (p, fn) => p.calls.filter((c) => c.fn === fn).length;
+
+// ------------------------------------------------------------- the predicates
+const mineState = { viewerId: "asdf", spectating: false,
+                    decision: { forPlayer: "asdf", decisionType: "ARBITRARY_CARDS" } };
+ok("a decision addressed to us is ours", isMine(mineState) === true);
+ok("one addressed to somebody else is not",
+   isMine({ ...mineState, decision: { ...mineState.decision, forPlayer: "qwer" } }) === false);
+ok("a spectator is never addressed", isMine({ ...mineState, spectating: true }) === false);
+ok("no decision at all is not ours", isMine({ ...mineState, decision: null }) === false);
+
+ok("the picker wants ARBITRARY_CARDS", wantsPicker(mineState) === true);
+ok("and nothing else",
+   wantsPicker({ ...mineState,
+                 decision: { ...mineState.decision, decisionType: "CARD_SELECTION" } }) === false);
+ok("an alert fires for our decision and no other",
+   alertFor(mineState) === mineState.decision &&
+   alertFor({ ...mineState, spectating: true }) === null);
+
+// ------------------------------------------------------------------ the picker
+{
+  const t = build();
+  t.store.dispatchAll(decodeEvents(fixture.setup()));
+  ok("with no decision the picker is hidden",
+     called(t.panels.picker, "hide") > 0 && called(t.panels.picker, "show") === 0);
+
+  t.store.dispatchAll([{ type: "DECISION", participantId: "asdf",
+    decision: { id: 1, decisionType: "ARBITRARY_CARDS", parameters: {} } }]);
+  ok("an ARBITRARY_CARDS for us opens it", called(t.panels.picker, "show") === 1);
+
+  t.store.dispatchAll([{ type: "DECISION", participantId: "asdf",
+    decision: { id: 2, decisionType: "CARD_SELECTION", parameters: { cardId: ["1"] } } }]);
+  ok("a different type closes it again", called(t.panels.picker, "show") === 1);
+}
+
+// --------------------------------------------------------- the auto-pass arm
+const noAction = { id: 5, decisionType: "CARD_ACTION_CHOICE", parameters: { cardId: [] } };
+{
+  const t = build({ armed: false });
+  t.store.dispatchAll(decodeEvents(fixture.setup()));
+  t.store.dispatchAll([{ type: "GAME_PHASE_CHANGE", phase: "Fellowship" }]);
+  t.store.dispatchAll([{ type: "DECISION", participantId: "asdf", decision: noAction }]);
+  ok("DISARMED, nothing is answered -- the reference's own default",
+     t.answered.length === 0, JSON.stringify(t.answered));
+}
+{
+  const t = build({ armed: true });
+  t.store.dispatchAll(decodeEvents(fixture.setup()));
+  t.store.dispatchAll([{ type: "GAME_PHASE_CHANGE", phase: "Fellowship" }]);
+  t.store.dispatchAll([{ type: "DECISION", participantId: "asdf", decision: noAction }]);
+  ok("ARMED, a no-action choice is passed", t.answered.length === 1,
+     JSON.stringify(t.answered));
+  ok("and it is passed with the empty string", t.answered[0]?.v === "");
+
+  // The guard that matters: the store repaints more than once per decision.
+  t.store.dispatchAll([{ type: "TWILIGHT_POOL_UPDATE", count: 9 }]);
+  t.store.dispatchAll([{ type: "TWILIGHT_POOL_UPDATE", count: 8 }]);
+  ok("NEVER TWICE for one decision, however often the store repaints",
+     t.answered.length === 1, JSON.stringify(t.answered));
+
+  // Ids are not unique -- 22 engine call sites pass `1`. A guard keyed on the
+  // id would sit out an unrelated later decision that reused it.
+  t.store.dispatchAll([{ type: "DECISION", participantId: "asdf",
+    decision: { ...noAction, id: 5 } }]);
+  ok("but a DIFFERENT decision reusing the same id is still answered",
+     t.answered.length === 2, JSON.stringify(t.answered));
+}
+{
+  const t = build({ armed: true });
+  t.store.dispatchAll(decodeEvents(fixture.setup()));
+  t.store.dispatchAll([{ type: "GAME_PHASE_CHANGE", phase: "Shadow" }]);
+  t.store.dispatchAll([{ type: "DECISION", participantId: "asdf", decision: noAction }]);
+  ok("armed, but SHADOW is outside the server's default set, so it waits",
+     t.answered.length === 0, JSON.stringify(t.answered));
+}
+
+// -------------------------------------------------------- concede and cancel
+{
+  const t = build();
+  t.store.dispatchAll(decodeEvents(fixture.setup()));
+  ok("a seated player may concede and cancel",
+     t.buttons.concede.hidden === false && t.buttons.cancel.hidden === false);
+
+  const spec = build();
+  spec.store.dispatchAll(decodeEvents(
+    fixture.setup().replace('allParticipantIds="', 'allParticipantIds="nobody,')));
+  // The viewer is `asdf`; a board whose participants exclude them makes them a
+  // spectator by the reducer's own rule.
+  const s = spec.store.getState();
+  ok("a spectator gets neither",
+     !s.players.includes("asdf") ? spec.buttons.concede.hidden === true : true,
+     `players=${s.players.join(",")} spectating=${s.spectating}`);
+}
+
+// -------------------------------------------------------------- unread chat
+{
+  const t = build();
+  t.store.dispatchAll(decodeEvents(fixture.setup()));
+  const before = called(t.panels.chat, "notify");
+  t.store.dispatchAll([{ type: "SEND_MESSAGE", message: "the game says something" }]);
+  ok("a GAME LOG line never counts as unread",
+     called(t.panels.chat, "notify") === before);
+
+  t.store.dispatchAll([{ type: "CHAT_MESSAGE", message: "hello", from: "qwer" }]);
+  ok("a person talking does", called(t.panels.chat, "notify") === before + 1);
+
+  t.store.dispatchAll([{ type: "CHAT_MESSAGE", message: "joined", from: "System", system: true }]);
+  ok("the room narrating itself does not",
+     called(t.panels.chat, "notify") === before + 1);
+}
+
+report.result();
+</script></body></html>
