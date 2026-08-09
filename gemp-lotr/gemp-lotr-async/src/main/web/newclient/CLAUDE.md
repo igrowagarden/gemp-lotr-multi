@@ -126,6 +126,21 @@ DOCKER="$HOME/AppData/Local/Programs/DockerDesktop/resources/bin/docker.exe"
 
 ## Traps that will cost you an hour each
 
+- **Shell heredocs EAT BACKSLASHES on this machine.** A python script fed
+  through a Bash-tool heredoc arrives with every `\\` halved, so patterns
+  meant to match Windows paths silently miss — it cost three failed edit
+  attempts in one session, each failing differently. Anything containing
+  backslashes goes in a real file (Write tool), run with `python file.py`.
+- **`seat_table.sh` prints `gameId="N"` — WITH quotes.** A grep for
+  `gameId=[0-9]` matches nothing, the empty id 404s every request, and the
+  measurement reports empty tables that look like a broken server. Extract
+  with `grep -oE 'gameId="[0-9]+"'`.
+- **Every commit in this repo must be `igrowagarden` — no real name, email,
+  or machine username anywhere.** The repo-local git config is set; do not
+  override it. Audit before push (commands in HANDOFF's current-state box).
+  `logs/nohup.out` is tracked and always dirty: stash it around
+  filter-branch and subtree operations.
+
 - **Run headless Chrome from bash, not PowerShell.** PowerShell returns nothing
   at all from `chrome --dump-dom`.
 - **Block the card-art CDN for `decisionfuzz`, and never for `cardstatecheck`.**

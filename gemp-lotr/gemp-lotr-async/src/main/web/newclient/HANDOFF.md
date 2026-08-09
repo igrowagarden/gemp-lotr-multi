@@ -10,12 +10,44 @@ behaviour.
 
 ## Start here
 
-### THE PROJECT MOVED, and the server runs a NEW ENGINE (2026-08-09)
+### CURRENT STATE (2026-08-09, end of the migration session) — PUSHED
 
-**Moved:** this whole project now lives inside the engine fork at
-`gemp_multiplayer/vendor/gemp-lotr/gemp-lotr/gemp-lotr-async/src/main/web/newclient/`,
-imported by `git subtree` with full history (fork commit `d51f13367`). This
-directory is the retired pre-merge snapshot; the fork copy is canonical.
+Everything below this box is done, verified, and public. The branch is
+pushed to `fork` (github.com/igrowagarden/gemp-lotr-multi) at `9decc75d2`.
+
+- **Nothing is open in this sub-project.** The board.js split is finished
+  (selection, prompt), the standalone suite exists (`harness/fastrun.sh`,
+  ~1 min, no Docker/no oracle), the oldharness stale-dropdown gate is in,
+  the engine swap is verified, auto-pass is re-measured (table below), and
+  dual-launch was considered and dropped (`LAUNCHING.md` covers launching).
+- **Privacy is a STANDING RULE, not a one-time fix:** every commit in this
+  repo must carry the `igrowagarden` identity (repo-local git config does
+  this; never override it), and no real name, email, or machine username
+  may enter tracked content. Audit before any push:
+  `git log fork/multiplayer/five-players..HEAD --format='%an <%ae>' | sort -u`
+  must return only igrowagarden, and a case-insensitive `git grep` for the
+  owner's first name, surname, gmail address, and Windows username must find
+  nothing new — write the patterns BRACKETED (e.g. `emer[s]`) so the audit
+  command never becomes its own hit; that exact self-match has already been
+  pushed and force-purged once. Benign pre-existing hits: card names like
+  "Rohirrim Steed" and upstream jQuery AUTHORS emails. All 78 pre-push
+  commits were identity-rewritten and the tree scrubbed on 2026-08-09; paths
+  are now $HOME/%USERPROFILE%-relative.
+- **Project-level next thing** (from `gemp_multiplayer/HANDOFF.md`): a real
+  HUMAN-PLAYED game at 3–5 seats in a browser. `LAUNCHING.md` at the repo
+  root is the how-to. The differentials have driven full engine-judged
+  games through both clients; nobody has *played* one.
+- Hygiene candidate: this repo tracks `logs/nohup.out`, so every git
+  operation trips over it (stash it around filter-branch/subtree). Untrack
+  it in a future session.
+
+### The move, and the NEW ENGINE (2026-08-09)
+
+**Moved:** this project lives inside the engine fork at
+`web/newclient/`, imported by `git subtree` with full history (fork commit
+`d51f13367`) — `git log -- .` from this directory has every pre-merge
+commit. `Documents/gemp_gui` is the retired pre-merge snapshot; THIS copy is
+canonical.
 fastrun was run from the fork copy after import: ALL PASS, controls fired.
 
 **New engine:** the gemp2 runtime was updated from the fork at `5e2a2a273`
