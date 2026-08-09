@@ -7,8 +7,8 @@
   --surface: #17130F;
   --sunken: #070605;
   --ink: #E8E0D4;
-  --ink-2: #A79A88;
-  --ink-3: #7A6E60;
+  --ink-2: #C9BBA8;
+  --ink-3: #A08F7C;
   --rule: #2C241D;
   --rule-2: #3F332A;
   --brass: #C89A3C;
@@ -63,7 +63,7 @@ body {
   border: 1px solid var(--rule-2);
   border-radius: 2px;
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 11.5px;
   letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--ink-3);
@@ -76,7 +76,7 @@ body {
 
 .seg { display: flex; border: 1px solid var(--rule-2); border-radius: 2px; overflow: hidden; }
 .seg-btn {
-  font-family: var(--mono); font-size: 8px; letter-spacing: 0.05em;
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.05em;
   text-transform: uppercase; padding: 3px 8px; cursor: pointer;
   background: var(--surface); color: var(--ink-3); border: none;
 }
@@ -96,10 +96,10 @@ body {
 .seat.mine .nm { color: var(--brass); }
 .seat.deciding .nm::after { content: " ◆"; color: var(--brass); animation: pulse 1.4s ease-in-out infinite; }
 .seat .nm {
-  font-family: var(--mono); font-size: 9.5px; color: var(--ink-2);
+  font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--ink);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.seat .vitals { display: flex; gap: 5px; font-family: var(--mono); font-size: 8px; color: var(--ink-3); }
+.seat .vitals { display: flex; gap: 12px; justify-content: flex-start; font-family: var(--mono); font-size: 10.5px; color: var(--ink-2); }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
 /* ------------------------------------------------------------------ bands */
@@ -119,12 +119,12 @@ body {
 .band.is-dim  { opacity: 0.55; }
 
 .band-label {
-  flex: none; font-family: var(--mono); font-size: 8.5px;
+  flex: none; font-family: var(--mono); font-size: 10.5px;
   letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-3);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .band--mine .band-label { color: var(--brass); }
-.band-empty { font-family: var(--mono); font-size: 8.5px; color: var(--ink-3); }
+.band-empty { font-family: var(--mono); font-size: 10.5px; color: var(--ink-2); }
 
 /* A size container so a card group can express its overlap against a definite
    dimension -- see .cardgroup. */
@@ -243,7 +243,7 @@ body {
   flex: none; height: 24px; display: flex; align-items: center; gap: 8px;
   padding: 0 8px; border: 1px solid var(--rule-2); border-radius: 2px;
   background: var(--surface);
-  font-family: var(--mono); font-size: 9.5px; color: var(--ink-3);
+  font-family: var(--mono); font-size: 11.5px; color: var(--ink-2);
   white-space: nowrap; overflow: hidden;
 }
 .prompt.yours {
@@ -262,7 +262,7 @@ body {
 /* prompt controls */
 .pactions { display: flex; gap: 4px; margin-left: auto; flex: none; }
 .pbtn {
-  font-family: var(--mono); font-size: 9px; letter-spacing: 0.05em;
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.05em;
   text-transform: uppercase; padding: 2px 9px; border-radius: 2px; cursor: pointer;
   background: var(--surface); color: var(--ink-2); border: 1px solid var(--rule-2);
 }
@@ -322,6 +322,23 @@ body {
 /* a card picked for the current decision, not yet confirmed */
 .card.is-chosen { box-shadow: 0 0 0 3px var(--brass); transform: translateY(-3px); }
 .card.is-eligible { cursor: pointer; }
+
+/* A row whose cards outgrow the width -- many cards, or fewer visible rows
+   making every card bigger -- scrolls horizontally. `scrollbar-gutter:
+   stable` reserves the bar's space up front, so when it appears it covers
+   nothing and shifts nothing. Cards must not shrink, or the overflow never
+   happens and cards silently thin instead. */
+.band .row {
+  overflow-x: auto; overflow-y: hidden;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink-3) transparent;
+}
+.band .row > .card, .band .row > .cardgroup { flex-shrink: 0; }
+.band .row::-webkit-scrollbar { height: 9px; }
+.band .row::-webkit-scrollbar-track { background: color-mix(in srgb, var(--surface) 55%, transparent); border-radius: 4px; }
+.band .row::-webkit-scrollbar-thumb { background: var(--ink-3); border-radius: 4px; }
+.band .row::-webkit-scrollbar-thumb:hover { background: var(--brass); }
 
 /* The retract rail: one vertical tab per band on the left edge. A dimmed
    tab is a hidden row waiting to come back with one click. */
