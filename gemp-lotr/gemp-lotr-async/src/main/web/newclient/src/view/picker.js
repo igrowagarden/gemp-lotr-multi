@@ -96,6 +96,21 @@ export function createPicker(host, { onAnswer } = {}) {
       const cards = pickable(current);
       const { min, max } = boundsOf(current);
 
+      // LIVE BUDGET, when the decision carries one. The starting fellowship
+      // sends each companion's current twilight cost and the unspent budget
+      // (engine: PlayerPlaysStartingFellowshipGameProcess), so the picker can
+      // grey out what the growing selection prices out BEFORE anything is
+      // sent -- the playtest checked off four companions the budget could
+      // never fit and watched the overflow silently drop. The engine's
+      // selectable flags stay authoritative; this only tightens further.
+      const costRaw = current.parameters?.twilightCost ?? [];
+      const budgetRaw = parseInt(current.parameters?.budgetRemaining?.[0] ?? "", 10);
+      const liveBudget = min === 0 && max === 1 &&
+        !Number.isNaN(budgetRaw) && costRaw.length === cards.length;
+      const costOf = new Map(cards.map((c, i) => [c.id, parseInt(costRaw[i] ?? "0", 10) || 0]));
+      const spent = [...chosen].reduce((sum, id) => sum + (costOf.get(id) ?? 0), 0);
+      const left = budgetRaw - spent;
+
       const grid = el(doc, "div", "pickgrid");
       for (const card of cards) {
         const node = el(doc, "div", "card card--compact pick");
@@ -111,7 +126,8 @@ export function createPicker(host, { onAnswer } = {}) {
           img.addEventListener("error", () => img.remove(), { once: true });
           node.appendChild(img);
         }
-        if (!card.selectable) node.classList.add("is-locked");
+        const pricedOut = liveBudget && !chosen.has(card.id) && (costOf.get(card.id) ?? 0) > left;
+        if (!card.selectable || pricedOut) node.classList.add("is-locked");
         else {
           node.classList.add("is-pickable");
           if (chosen.has(card.id)) node.classList.add("is-chosen");
@@ -151,9 +167,10 @@ export function createPicker(host, { onAnswer } = {}) {
       } else {
         const queueable = min === 0 && max === 1;
         bar.appendChild(el(doc, "span", "picknote",
-          queueable ? "pick any number · they play in click order"
-                    : min === max ? `choose ${min}`
-                    : `choose ${min}–${max}` + (count < cards.length ? ` of ${count}` : "")));
+          liveBudget ? `pick any number · they play in click order · ${left} twilight left`
+                     : queueable ? "pick any number · they play in click order"
+                     : min === max ? `choose ${min}`
+                     : `choose ${min}–${max}` + (count < cards.length ? ` of ${count}` : "")));
         const confirm = el(doc, "button", "pbtn primary",
           chosen.size ? `Confirm ${chosen.size}` : "Confirm");
         confirm.type = "button";

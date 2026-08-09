@@ -80,6 +80,15 @@ public class TimingAtTest extends AbstractAtTest {
         assertEquals("true", selectableByBlueprint.get("1_50"));
         assertEquals("false", selectableByBlueprint.get("1_48"));
 
+        // The decision carries each shown companion's current twilight cost and
+        // the unspent budget (base 4 in EVERY format -- the limit is hardcoded
+        // in PlayerPlaysStartingFellowshipGameProcess and only card modifiers
+        // move it), so a client can grey out live what a growing selection
+        // prices out before anything is sent.
+        String[] shownCosts = (String[]) firstCharacterDecision.getDecisionParameters().get("twilightCost");
+        assertEquals(shownBlueprints.length, shownCosts.length);
+        assertEquals("4", ((String[]) firstCharacterDecision.getDecisionParameters().get("budgetRemaining"))[0]);
+
         playerDecided(P1, getArbitraryCardId(firstCharacterDecision, "1_50"));
 
         // Play second character with spot requirement -- now legal, and the

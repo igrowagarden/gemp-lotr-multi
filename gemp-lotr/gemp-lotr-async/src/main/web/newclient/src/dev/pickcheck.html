@@ -229,6 +229,36 @@ ok("a DIFFERENT question abandons the queue rather than answering it",
    sent.length === 1 && picker.isOpen, JSON.stringify(sent));
 picker.hide();
 
+// ---- the live budget: checking cards greys what no longer fits -------------
+// The decision carries twilightCost per shown card and budgetRemaining; the
+// picker greys, LIVE, any unchosen card whose cost exceeds what the current
+// selection leaves -- so a combination the budget cannot fit is unpickable,
+// instead of being silently dropped after Confirm.
+sent.length = 0;
+picker.show(decision("ARBITRARY_CARDS", SF, {
+  min: ["0"], max: ["1"],
+  cardId: ["temp0", "temp1", "temp2", "temp3"],
+  blueprintId: ["1_311", "1_51", "1_365", "1_97"],
+  selectable: ["true", "true", "true", "true"],
+  twilightCost: ["2", "2", "4", "3"],
+  budgetRemaining: ["4"]
+}));
+ok("the note shows the budget",
+   picker.root.querySelector(".picknote")?.textContent.includes("4 twilight left"));
+pickables()[0].click();                                     // Sam, cost 2
+ok("after a 2-cost pick, 4- and 3-cost companions grey out live",
+   cards().filter((c) => c.classList.contains("is-locked")).length === 2 &&
+   picker.root.querySelector(".picknote")?.textContent.includes("2 twilight left"));
+ok("a still-affordable companion stays pickable",
+   !cards().find((c) => c.dataset.blueprintId === "1_51").classList.contains("is-locked"));
+cards().find((c) => c.dataset.blueprintId === "1_365").click();
+ok("a greyed card cannot join the selection",
+   picker.root.querySelectorAll(".is-chosen").length === 1);
+pickables().find((c) => c.classList.contains("is-chosen")).click();   // uncheck Sam
+ok("unchecking restores the budget and the greys lift",
+   cards().filter((c) => c.classList.contains("is-locked")).length === 0);
+picker.hide();
+
 const b = boundsOf(decision("ARBITRARY_CARDS", "x", { min: ["1"], max: ["3"] }));
 ok("bounds are read off the decision", b.min === 1 && b.max === 3, JSON.stringify(b));
 

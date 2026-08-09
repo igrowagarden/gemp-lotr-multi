@@ -65,8 +65,27 @@ public class PlayerPlaysStartingFellowshipGameProcess implements GameProcess {
     }
 
     private AwaitingDecision createChooseNextCharacterDecision(final LotroGame game, final String playerId, final Collection<PhysicalCard> allCompanions, final Collection<PhysicalCard> possibleCharacters) {
+        // Each shown companion's CURRENT twilight cost, and the budget still
+        // unspent, so a client can grey out live what a growing selection
+        // prices out BEFORE anything is sent -- the playtest picked four
+        // companions the budget could never fit and watched them silently
+        // drop. Extra parameters on the same decision; a client that ignores
+        // them behaves exactly as before, and the selectable set remains the
+        // engine's only word on what an answer may name.
+        final List<PhysicalCard> shown = new LinkedList<>(allCompanions);
+        final int limit = 4 + game.getModifiersQuerying().getStartingFellowshipCostModifier(game, playerId);
+        final int remaining = Math.max(0, limit - game.getGameState().getTwilightPool());
+        final String[] costs = new String[shown.size()];
+        int costIndex = 0;
+        for (PhysicalCard shownCard : shown)
+            costs[costIndex++] = String.valueOf(
+                    game.getModifiersQuerying().getTwilightCostToPlay(game, shownCard, null, 0, false));
         return new ArbitraryCardsSelectionDecision(1, "Starting fellowship - Choose next character or press DONE",
-                new LinkedList<>(allCompanions), new LinkedList<>(possibleCharacters), 0, 1) {
+                shown, new LinkedList<>(possibleCharacters), 0, 1) {
+            {
+                setParam("twilightCost", costs);
+                setParam("budgetRemaining", String.valueOf(remaining));
+            }
             @Override
             public void decisionMade(String result) throws DecisionResultInvalidException {
                 List<PhysicalCard> selectedCharacters = getSelectedCardsByResponse(result);
