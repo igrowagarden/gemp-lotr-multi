@@ -68,8 +68,13 @@ def params_of(decision):
     return out
 
 
-def answer(decision):
-    """The MINIMAL policy, matching harness/java/DumpGameTrace.java."""
+def answer(decision, repeats=1):
+    """The MINIMAL policy, matching harness/java/DumpGameTrace.java.
+
+    `repeats` counts consecutive same-question asks for one seat. An answer
+    the engine refuses comes back as the same decision asked again; a bot
+    that re-sends the same wrong answer loops forever, so risky branches
+    fall back to the safe answer when the question repeats."""
     kind = decision.get("decisionType")
     p = params_of(decision)
 
@@ -122,6 +127,15 @@ def answer(decision):
         except ValueError:
             lo = 0
         if lo <= 0:
+            # In --play mode, BUILD a starting fellowship rather than opening
+            # every game as a lone ring-bearer: keep picking a random
+            # selectable companion, mostly, until DONE or nothing affordable.
+            # The selectable flags are the engine's own budget verdict.
+            if PLAY and kind == "ARBITRARY_CARDS" and "Starting fellowship" in (decision.get("text") or ""):
+                sel = p.get("selectable", [])
+                picks = ["temp%d" % i for i, s in enumerate(sel) if s == "true"]
+                if picks and random.random() < 0.8:
+                    return random.choice(picks)
             return ""                                # decline
         ids = p.get("cardId", [])
         if not ids:
@@ -130,6 +144,19 @@ def answer(decision):
                   for i in range(min(lo, len(ids)))]
         return ",".join(picked)
     if kind == "ASSIGN_MINIONS":
+        if PLAY and repeats == 1:
+            # ASSIGN, as the rules mean it: the Free Peoples player pairs the
+            # minions onto companions (round-robin), and leftovers fall to the
+            # Shadow seats. A bot that always assigned nothing dumped every
+            # minion into the shadow-leftovers step, which read to the human
+            # as the engine skipping the FP assignment entirely.
+            comps = p.get("freeCharacters", [])
+            minions = p.get("minions", [])
+            if comps and minions:
+                groups = {}
+                for i, m in enumerate(minions):
+                    groups.setdefault(comps[i % len(comps)], []).append(m)
+                return ",".join(" ".join([c] + ms) for c, ms in groups.items())
         return ""                                    # assign nothing
     return ""
 
@@ -154,7 +181,10 @@ class Seat(threading.Thread):
             self.channel = int(cn)
         for ge in root.iter("ge"):
             if ge.get("type") == "D" and ge.get("participantId") == self.user:
-                return ge.get("id"), answer(ge), ge.get("decisionType"), ge.get("text")
+                sig = (ge.get("decisionType"), ge.get("text"))
+                self.repeats = self.repeats + 1 if sig == getattr(self, "prev_sig", None) else 1
+                self.prev_sig = sig
+                return ge.get("id"), answer(ge, self.repeats), ge.get("decisionType"), ge.get("text")
         return None
 
     def run(self):
