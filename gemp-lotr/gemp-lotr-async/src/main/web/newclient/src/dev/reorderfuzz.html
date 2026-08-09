@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>reorder differential</title>
+<link rel="stylesheet" href="../styles/board.css">
+<style>
+  body { font-family: ui-monospace, Consolas, monospace; font-size: 12px; padding: 10px; }
+  iframe { position: absolute; left: -10000px; top: 900px; width: 1400px; height: 900px; border: 0; }
+  pre { white-space: pre-wrap; }
+  .ok { color: #6E9B7A; } .bad { color: #FF5240; } .note { color: #B08D57; }
+</style></head>
+<body>
+<iframe id="old" src="./oldharness.html"></iframe>
+<pre id="out">RUNNING</pre>
+
+<script type="module">
+/**
+ * The REORDER differential: which cards may be dragged into your own order.
+ *
+ *   reorderfuzz.html                        baseline
+ *   reorderfuzz.html?sabotage=dragall       NEGATIVE CONTROL
+ *   reorderfuzz.html?sabotage=dragnone      NEGATIVE CONTROL
+ *   reorderfuzz.html?sabotage=nohand        NEGATIVE CONTROL
+ *
+ * The oracle is the reference's OWN lookup:
+ * `getReorganizableCardGroupForCardData(cardData)` (gameUi.js:216-247) returns
+ * the group a card can be dragged within, or null. So "is this reorderable"
+ * needs no transcription at all -- it is one call, and the answer is the
+ * reference's rather than a reading of it. That is the cleanest oracle any of
+ * these pages has had.
+ *
+ * WHAT IS DELIBERATELY NOT COMPARED. The reference's drag ends in
+ * `cardGroup.layoutCards()` and nothing else -- no request, no stored order --
+ * so its reordering is lost on the next relayout of that group. This client
+ * keeps the order per band in `orders`, so it survives repaints. That is an
+ * improvement made on purpose, not a divergence, and comparing persistence
+ * would report it as a defect.
+ *
+ * Nor is the pixel threshold compared (the reference needs 20px horizontal,
+ * this client 6px): that is interaction feel, and `cardstatecheck` already
+ * measures drag distances.
+ */
+import { canReorder, REORDERABLE_ZONES, FIXED_ZONES } from "../model/reorder.js";
+import { createReporter, bootOracle, query } from "./harness.js";
+
+const q = query();
+const sabotage = q.get("sabotage");
+const report = createReporter({ failWord: "DIFF" });
+const say = report.say;
+
+const VIEWER = "asdf";
+const OTHER = "qwer";
+const { ui } = await bootOracle({
+  participantId: VIEWER,
+  board: `<gameState><ge type="P" participantId="${VIEWER}" ` +
+    `allParticipantIds="${VIEWER},${OTHER}" discardPublic="false"/>` +
+    `<ge type="PP" participantId="${VIEWER}" index="0"/>` +
+    `<ge type="PP" participantId="${OTHER}" index="1"/></gameState>`
+});
+
+/**
+ * PREFLIGHT. The whole page is one call into the oracle; if that call is not
+ * there, every zone reports "not reorderable" and the run looks like a
+ * reference that permits nothing -- which is the opposite of the truth and
+ * indistinguishable from a client that permits nothing either.
+ */
+const have = typeof ui?.getReorganizableCardGroupForCardData === "function";
+say(`preflight: getReorganizableCardGroupForCardData=${have} ` +
+    `bottomPlayerId=${ui?.bottomPlayerId}`, have ? "note" : "bad");
+if (!have) {
+  say("");
+  say("RESULT: 1 FAILED of 1 — the oracle's group lookup is not reachable", "bad");
+  throw new Error("preflight failed");
+}
+// The reference reorders the FOCUSED opponent's cards; make one focused so the
+// opponent-side groups are live rather than silently empty.
+ui.focusedOpponent = OTHER;
+if (typeof ui.isFocusedOpponent !== "function" || !ui.isFocusedOpponent(OTHER)) {
+  ui.isFocusedOpponent = (who) => who === OTHER;
+}
+
+/** Ask the reference directly. `null` means "not draggable". */
+function oldAllows(zone, owner) {
+  try {
+    return ui.getReorganizableCardGroupForCardData({
+      zone, owner, cardId: "1", blueprintId: "1_1",
+      // Both are checked by the group predicates; a card that is assigned or in
+      // a skirmish belongs to a different group and would answer a different
+      // question than the one being asked.
+      assign: null, skirmish: null
+    }) != null;
+  } catch (e) {
+    say(`  (oracle threw on ${zone}: ${e.message})`, "note");
+    return false;
+  }
+}
+
+const ZONES = [...REORDERABLE_ZONES, ...FIXED_ZONES];
+
+/**
+ * KEPT DIVERGENCES: cells where this client deliberately differs, with the
+ * reason. Reported as DIVERGE and not counted, the way optsfuzz treats the
+ * concede confirmation -- a differential that flags a design decision as a
+ * defect trains its reader to ignore it.
+ *
+ * `SHADOW_CHARACTERS` owned by the VIEWER is the only one. The reference's
+ * `shadow` group is gated on `isFocusedOpponent(card.owner)` (gameUi.js:335),
+ * so it reorders the focused opponent's minions and not your own -- an artefact
+ * of showing one opponent at a time. This board draws minions as ONE SHARED
+ * BAND carrying every seat's (DESIGN.md), so "the focused opponent's minions"
+ * has no analogue here and reordering within that band is ordinary
+ * presentation. Owner-blind by design.
+ */
+const KEPT = new Set(["SHADOW_CHARACTERS:own"]);
+
+let kept = 0;
+const fired = [];
+
+for (const [label, owner] of [["own cards", VIEWER], ["a focused opponent's", OTHER]]) {
+  say("");
+  say(`--- ${label}`);
+  for (const zone of ZONES) {
+    const o = oldAllows(zone, owner);
+    let m = canReorder(zone, { spectating: false, own: owner === VIEWER });
+    if (sabotage === "dragall") m = true;
+    if (sabotage === "dragnone") m = false;
+    if (sabotage === "nohand" && zone === "HAND") m = false;
+
+    const cell = `${zone}:${owner === VIEWER ? "own" : "opp"}`;
+    if (o === m) report.ok(`${zone}: ${o ? "reorderable" : "fixed"}`, true);
+    else if (KEPT.has(cell) && !sabotage) {
+      kept++;
+      say(`  DIVERGE  ${zone} (${owner === VIEWER ? "own" : "opponent"}): old ` +
+          `${o ? "reorderable" : "fixed"} vs new ${m ? "reorderable" : "fixed"} ` +
+          `— deliberate, one shared minion band`, "note");
+    } else {
+      if (sabotage) fired.push(cell);
+      report.ok(`${zone} (${owner === VIEWER ? "own" : "opponent"})`, false,
+                `old ${o ? "reorderable" : "fixed"} vs new ${m ? "reorderable" : "fixed"}`);
+    }
+  }
+}
+
+say("");
+report.result(kept ? `, ${kept} kept divergence` : "");
+if (sabotage) {
+  say(`control ${sabotage} fired on: ${fired.length ? fired.join(", ") : "NOTHING"}`,
+      fired.length ? "note" : "bad");
+}
+</script></body></html>

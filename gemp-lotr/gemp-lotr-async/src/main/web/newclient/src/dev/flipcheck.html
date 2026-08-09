@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>flip check</title>
+<link rel="stylesheet" href="../styles/board.css">
+<style>body{font-family:ui-monospace,Consolas,monospace;font-size:13px;padding:12px}
+#out{color:#E8E0D4}.pass{color:#6E9B7A}.fail{color:#FF5240}#board{height:70vh}</style>
+</head><body>
+<div id="board"></div><div id="out"></div>
+<script type="module">
+import { createStore } from "../state/store.js";
+import { decodeEvents } from "../net/protocol.js";
+import { createBoard } from "../view/board.js";
+import { allCards } from "../state/reduce.js";
+import * as fixture from "./fixture.js";
+
+const out = document.getElementById("out");
+let pass = 0, fail = 0;
+const ok = (l, c, d) => { const e = document.createElement("div");
+  e.className = c ? "pass" : "fail";
+  e.textContent = (c ? "PASS  " : "FAIL  ") + l + (c || !d ? "" : "  -> " + d);
+  out.appendChild(e); c ? pass++ : fail++; };
+
+const store = createStore("asdf");
+const boardEl = document.getElementById("board");
+const board = createBoard(boardEl, store, {});
+
+// Count animations started during the second paint, and record the DELTA each
+// card was animated by -- keyed by card id, so a host and the cards riding it
+// can be compared directly.
+let started = 0, moves = 0, entries = 0;
+let deltas = {};
+const real = Element.prototype.animate;
+Element.prototype.animate = function (...args) {
+  started++;
+  const first = args[0]?.[0] ?? {};
+  const t = String(first.transform ?? "");
+  if (t.startsWith("translate")) {
+    moves++;
+    const m = t.match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/);
+    if (m && this.dataset?.cardId) {
+      deltas[this.dataset.cardId] = { dx: +m[1], dy: +m[2] };
+    }
+  } else entries++;
+  return real.apply(this, args);
+};
+
+store.dispatchAll(decodeEvents(fixture.setup()));
+const afterFirst = started;
+ok("first paint animates entries", afterFirst > 0, String(afterFirst));
+
+started = 0;
+store.dispatchAll(decodeEvents(fixture.shadowPhase()));
+ok("a state change animates the cards it moved or added", started > 0, String(started));
+
+started = moves = entries = 0;
+store.dispatchAll(decodeEvents("<events><ge type=\"TP\" count=\"11\"/></events>"));
+ok("a change that moves nothing animates nothing",
+   started === 0, `moves=${moves} entries=${entries}`);
+
+ok("cards still render", boardEl.querySelectorAll(".card").length > 0,
+   String(boardEl.querySelectorAll(".card").length));
+
+// ------------------------------------- an attachment stays glued to its host
+//
+// Riders are ordinary `.card[data-card-id]` nodes, so the FLIP animates each
+// ONE INDEPENDENTLY (animate.js:36,54) -- a rider is not carried by its host's
+// transform. In a shared `.cardgroup` both compute the same delta and travel in
+// lockstep, which is why it looks right. But `playFlip` skips a card whose
+// movement is under 2px, PER CARD:
+//
+//     if (Math.abs(dx) < 2 && Math.abs(dy) < 2 && ...) continue;
+//
+// so a relayout that moved a host 3px and its rider 1.5px would animate one and
+// snap the other. Nothing tested that they stay together; this does.
+const st = store.getState();
+const rider = allCards(st).find((c) => c.zone === "ATTACHED");
+const hostId = rider?.attachedTo;
+ok("the fixture supplies an attachment at all", !!rider && !!hostId,
+   rider ? `rider ${rider.cardId} on ${hostId}` : "none");
+
+// MAKING SOMETHING ACTUALLY MOVE IS THE HARD PART, and the assertion below
+// ("the host actually moved") exists because the first attempt did not.
+//
+// Band heights are FLEX WEIGHTS, not content-driven (layout/bands.js), so
+// adding a card to a band above moves nothing at all -- a card appended to a
+// left-aligned row does not shift its siblings either. What moves cards is a
+// band CHANGING WEIGHT: the skirmish band appearing pushes everything below it
+// down. So the host has to be in a band below that, which means one of the
+// VIEWER'S OWN companions (`selfFree`), not the fixture's cross-side rider on
+// another seat's card.
+//
+// A same-owner rider is the right instrument here anyway: this is about the
+// FLIP treating a rider and its host as one, which has nothing to do with who
+// owns either. The cross-side case is about filtering, and attachcheck has it.
+const mine = allCards(st).find((c) => c.zone === "FREE_CHARACTERS" && c.owner === "asdf");
+store.dispatchAll(decodeEvents(
+  `<events><ge type="PCIP" cardId="7778" blueprintId="1_2" zone="ATTACHED" ` +
+  `participantId="asdf" targetCardId="${mine.cardId}" targetType="attached"/></events>`));
+
+deltas = {};
+store.dispatchAll(decodeEvents(fixture.skirmish()));
+
+const hd = deltas[String(mine.cardId)];
+const rd = deltas["7778"];
+ok("the host actually moved, so this comparison is not vacuous", !!hd,
+   `host delta=${JSON.stringify(hd)} — if absent, the change moved nothing`);
+ok("the attachment was animated too, not left to snap", !!rd,
+   `rider delta=${JSON.stringify(rd)}`);
+// TOLERANCE, AND WHY IT IS NOT ZERO. Measured, host vs rider:
+//
+//     host  {dx:-0.5, dy:-17.890625}
+//     rider {dx: 0,   dy:-17.890625}
+//
+// Identical vertically; half a pixel apart horizontally, which is sub-pixel
+// layout rounding of two nodes at different x-offsets in the same group. It is
+// below the threshold of sight and below `playFlip`'s own 2px churn guard, so
+// it cannot become a visible separation. 1px is the tolerance; the measured
+// difference is printed either way, so a drift toward the limit is visible
+// rather than hidden behind a pass.
+const gap = hd && rd
+  ? { dx: Math.abs(hd.dx - rd.dx), dy: Math.abs(hd.dy - rd.dy) } : null;
+ok("host and attachment move together, within a pixel",
+   !!gap && gap.dx < 1 && gap.dy < 1,
+   `gap=${JSON.stringify(gap)} host=${JSON.stringify(hd)} rider=${JSON.stringify(rd)}`);
+
+// THE FAILURE THAT WOULD ACTUALLY BE VISIBLE: one animating while the other
+// snaps, because `playFlip` applies its 2px guard per card. Asserted separately
+// from the delta, since a large but EQUAL delta is fine and this is not.
+ok("neither is left behind by the 2px churn guard",
+   (!!hd) === (!!rd), `host animated=${!!hd} rider animated=${!!rd}`);
+
+const r = document.createElement("div");
+r.id = "result";
+r.className = fail === 0 ? "pass" : "fail";
+r.textContent = fail === 0 ? `RESULT: ALL PASS (${pass})` : `RESULT: ${fail} FAILED of ${pass + fail}`;
+document.body.appendChild(r);
+</script></body></html>

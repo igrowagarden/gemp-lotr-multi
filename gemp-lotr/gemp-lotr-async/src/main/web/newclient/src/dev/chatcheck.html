@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>chat panel</title>
+<link rel="stylesheet" href="../styles/board.css">
+<style>body{font-family:ui-monospace,Consolas,monospace;font-size:13px;padding:10px}
+#host{position:relative;height:60vh;border:1px solid #444}
+.pass{color:#6E9B7A}.fail{color:#FF5240}</style></head>
+<body><div id="host"></div><div id="host2" style="position:relative;height:220px;border:1px solid #444"></div><div id="out"></div>
+<script type="module">
+/**
+ * The chat window can be typed into, and says who spoke.
+ *
+ * Chat arrives on its own connection (net/chat.js) because the game channel
+ * never carries it -- the server declares CHAT_MESSAGE("CM") and emits it
+ * nowhere. So this covers the panel and the reducer; net/chat.js's decoding is
+ * covered in tests.html.
+ */
+import { createStore } from "../state/store.js";
+import { decodeEvents } from "../net/protocol.js";
+import { createChatPanel, renderMessage } from "../view/panels.js";
+import { decodeChat } from "../net/chat.js";
+import { chatLog, spokenTo } from "../state/reduce.js";
+import * as fixture from "./fixture.js";
+
+const out = document.getElementById("out");
+let pass = 0, fail = 0;
+const ok = (l, c, d) => { const e = document.createElement("div");
+  e.className = c ? "pass" : "fail";
+  e.textContent = (c ? "PASS  " : "FAIL  ") + l + (d ? "  -> " + d : "");
+  out.appendChild(e); c ? pass++ : fail++; };
+
+const said = [];
+const store = createStore("asdf");
+const panel = createChatPanel(document.getElementById("host"), store, {
+  onSend: (text) => said.push(text)
+});
+store.dispatchAll(decodeEvents(fixture.setup()));
+panel.open();
+panel.paint(store.getState());
+
+const input = () => panel.root.querySelector(".chat-say input");
+ok("the window has a text entry box", !!input());
+
+if (input()) {
+  input().value = "well met";
+  panel.root.querySelector(".chat-say").dispatchEvent(
+    new Event("submit", { bubbles: true, cancelable: true }));
+  ok("submitting sends what was typed", said.length === 1 && said[0] === "well met",
+     JSON.stringify(said));
+  ok("and clears the box afterwards", input().value === "");
+}
+
+// A repaint arrives with every game event; it must not eat what is half-typed.
+input().value = "half typ";
+store.dispatchAll(decodeEvents(`<events><ge type="M" message="a game log line"/></events>`));
+panel.paint(store.getState());
+ok("a repaint does not discard what is being typed", input().value === "half typ",
+   JSON.stringify(input().value));
+
+// The room narrating itself is not somebody speaking.
+const feed = decodeChat(
+  `<chat roomName="Game1">` +
+  `<message date="1" from="System">watcher joined the room</message>` +
+  `<message date="2" from="qwer">&lt;p&gt;well met&lt;/p&gt;&lt;br/&gt;</message>` +
+  `</chat>`);
+ok("markdown is flattened to text", feed.messages[1].text === "well met",
+   JSON.stringify(feed.messages[1].text));
+ok("a System line is marked system", feed.messages[0].system === true);
+ok("a player line is not", feed.messages[1].system === false);
+
+store.dispatchAll(feed.messages.map((m) => ({
+  type: "CHAT_MESSAGE", message: m.text, from: m.from, system: m.system, date: m.date })));
+panel.paint(store.getState());
+const s = store.getState();
+ok("only people count towards unread", spokenTo(s).length === 1,
+   `${chatLog(s).length} chat lines, ${spokenTo(s).length} from people`);
+ok("the speaker is shown", !!panel.root.querySelector(".chat-who"),
+   panel.root.querySelector(".chat-who")?.textContent ?? "none");
+
+// The game log embeds card references as markup. Rendered as text they showed
+// up as literal <div class='cardHint' ...> tags in the transcript.
+store.dispatchAll(decodeEvents(
+  `<events><ge type="M" message="&lt;div class='cardHint' value='1_340'&gt;Rivendell Terrace&lt;/div&gt; required triggered effect is used"/></events>`));
+panel.paint(store.getState());
+const hint = panel.root.querySelector(".cardhint");
+ok("a card named in the log becomes a hint", !!hint, hint?.textContent ?? "none");
+ok("carrying its blueprint id", hint?.dataset.blueprintId === "1_340",
+   hint?.dataset.blueprintId ?? "none");
+// The line holding the hint, NOT the last span -- log lines render before chat
+// lines, so .pop() picked a chat line and the assertion passed without ever
+// looking at the log line it was written for.
+const logLine = hint?.closest(".chat-lines > span");
+ok("and no markup survives as text", logLine && !/[<>]/.test(logLine.textContent),
+   JSON.stringify(logLine?.textContent.slice(0, 70) ?? "none"));
+
+// Anything we do not understand contributes its words and nothing else.
+// The closing script tag is split: written literally it would end THIS inline
+// module at parse time, and the whole page would go silent.
+const frag = renderMessage(
+  `<img src=x onerror=1><b>bold</b> and <script>evil()</scr` + `ipt>plain`, document);
+const holder = document.createElement("div");
+holder.appendChild(frag);
+ok("unknown markup is reduced to its text", !holder.querySelector("img,script,b"),
+   JSON.stringify(holder.textContent));
+
+// ---- interleaving, and not stealing the scroll ----------------------------
+
+const store2 = createStore("asdf");
+const panel2 = createChatPanel(document.getElementById("host2"), store2, {
+  onSend: () => {}
+});
+panel2.open();
+const say = (text, from) => store2.dispatchAll([
+  { type: "CHAT_MESSAGE", message: text, from, system: false }]);
+const logs = (text) => store2.dispatchAll(decodeEvents(
+  `<events><ge type="M" message="${text}"/></events>`));
+
+logs("Start of turn.");
+say("first", "qwer");
+logs("Moving added 3 twilight");
+say("second", "dave");
+panel2.paint(store2.getState());
+ok("chat and the game log share one chronological list",
+   store2.getState().log.map((e) => e.kind).join(",") === "game,chat,game,chat",
+   store2.getState().log.map((e) => e.kind).join(","));
+
+const shown = [...panel2.root.querySelectorAll(".chat-lines > span")].map((n) => n.textContent);
+ok("and are drawn in that order",
+   shown.join(" | ").indexOf("first") < shown.join(" | ").indexOf("Moving added"),
+   shown.join(" | ").slice(0, 90));
+
+// Scroll anchoring: fill it, scroll up, and make sure new text stays put.
+const lines2 = () => panel2.root.querySelector(".chat-lines");
+for (let i = 0; i < 60; i++) logs(`filler line ${i}`);
+panel2.paint(store2.getState());
+// Without this the two scroll assertions below pass whatever the code does:
+// a transcript that fits has scrollTop 0 and nothing to hold.
+ok("the transcript overflows, so scrolling means something",
+   lines2().scrollHeight > lines2().clientHeight + 40,
+   `${lines2().scrollHeight}px of lines in ${lines2().clientHeight}px`);
+lines2().scrollTop = lines2().scrollHeight;   // at the tail
+panel2.paint(store2.getState());
+ok("following the tail keeps following it",
+   lines2().scrollHeight - lines2().scrollTop - lines2().clientHeight < 24,
+   `${(lines2().scrollHeight - lines2().scrollTop - lines2().clientHeight).toFixed(0)}px from bottom`);
+
+lines2().scrollTop = 0;                        // reading back
+const held = lines2().scrollTop;
+logs("something new arrives");
+panel2.paint(store2.getState());
+ok("but reading back is not interrupted", lines2().scrollTop === held,
+   `held at ${lines2().scrollTop}, was ${held}`);
+
+const r = document.createElement("div");
+r.id = "result"; r.className = fail === 0 ? "pass" : "fail";
+r.textContent = fail === 0 ? `RESULT: ALL PASS (${pass})` : `RESULT: ${fail} FAILED of ${pass + fail}`;
+document.body.appendChild(r);
+</script></body></html>

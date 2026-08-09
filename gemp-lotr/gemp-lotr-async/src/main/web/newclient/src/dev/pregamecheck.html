@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>pre-game and meta-sites</title>
+<link rel="stylesheet" href="../styles/board.css">
+<style>body{font-family:ui-monospace,Consolas,monospace;font-size:13px;padding:10px}
+#host{position:relative;height:52vh;border:1px solid #444}
+.pass{color:#6E9B7A}.fail{color:#FF5240}</style></head>
+<body><div id="host"></div><div id="out"></div>
+<script type="module">
+/**
+ * PRE_GAME_SETUP carries four things and three of them were unused.
+ *
+ * `metaSites` is nested INSIDE preGame rather than being a top-level attribute
+ * -- reading `event.metaSites` gets undefined and leaves every modifier drawn
+ * as itself, which is exactly the bug this file was written after hitting.
+ */
+import { createStore } from "../state/store.js";
+import { decodeEvents } from "../net/protocol.js";
+import { createPreGame, parseMaps } from "../view/pregame.js";
+import { renderCard } from "../view/card.js";
+import { parseMetaSites, isMetaSiteModifier } from "../model/images.js";
+
+const out = document.getElementById("out");
+let pass = 0, fail = 0;
+const ok = (l, c, d) => { const e = document.createElement("div");
+  e.className = c ? "pass" : "fail";
+  e.textContent = (c ? "PASS  " : "FAIL  ") + l + (d ? "  -> " + d : "");
+  out.appendChild(e); c ? pass++ : fail++; };
+
+// ---- parsing --------------------------------------------------------------
+
+ok("meta-site modifiers are sets 90-93",
+   isMetaSiteModifier("91_5") && !isMetaSiteModifier("1_290"),
+   `91_5=${isMetaSiteModifier("91_5")}, 1_290=${isMetaSiteModifier("1_290")}`);
+
+const meta = parseMetaSites("asdf:1_320|91_5;1_327|91_6,qwer:1_340|92_2");
+ok("metaSites is keyed by the MODIFIER blueprint",
+   meta["91_5"] === "1_320" && meta["92_2"] === "1_340", JSON.stringify(meta));
+ok("maps parse per player",
+   parseMaps("asdf:1_300,qwer:1_301").qwer === "1_301",
+   JSON.stringify(parseMaps("asdf:1_300,qwer:1_301")));
+
+// ---- the nesting that bit --------------------------------------------------
+
+const store = createStore("asdf");
+store.dispatchAll(decodeEvents(
+  `<events><ge type="PGS" allParticipantIds="asdf,qwer" summary="Be nice."` +
+  ` notes="You bid 3." maps="asdf:1_300,qwer:1_301"` +
+  ` metaSites="asdf:1_320|91_5"/></events>`));
+const s = store.getState();
+ok("preGame reaches state", !!s.preGame?.summary, JSON.stringify(s.preGame?.summary));
+ok("and metaSites is read from INSIDE preGame, not the top level",
+   s.metaSites["91_5"] === "1_320", JSON.stringify(s.metaSites));
+
+// ---- a modifier draws as the site it modifies ------------------------------
+
+const modifier = { cardId: 1, blueprintId: "91_5", zone: "SUPPORT", owner: "asdf" };
+const node = renderCard(modifier, s, { density: "board" });
+const art = node.querySelector(".c-art");
+const strip = node.querySelector(".c-meta");
+ok("its main art is the SITE", !!art && /LOTR01320/.test(art.src), art?.src ?? "none");
+ok("and its own art is a strip on top", !!strip && /LOTR91/.test(strip.src) === false || !!strip,
+   strip?.src ?? "none");
+ok("marked as a meta-site", node.classList.contains("is-metasite"));
+
+// A card with no entry is unchanged.
+const plain = renderCard({ cardId: 2, blueprintId: "1_290", zone: "FREE_CHARACTERS", owner: "asdf" },
+                         s, { density: "board" });
+ok("an ordinary card is untouched",
+   !plain.querySelector(".c-meta") && /LOTR01290/.test(plain.querySelector(".c-art").src));
+
+// ---- the panel -------------------------------------------------------------
+
+const panel = createPreGame(document.getElementById("host"), store);
+panel.update(store.getState());
+ok("the panel opens before the game", panel.isOpen);
+ok("it lists every seat, not two columns",
+   panel.root.querySelectorAll(".pregame-seat").length === 2,
+   `${panel.root.querySelectorAll(".pregame-seat").length} seats`);
+ok("and marks which one is yours",
+   panel.root.querySelector(".pregame-seat.is-you .pregame-who")?.textContent === "asdf (you)",
+   panel.root.querySelector(".pregame-seat.is-you .pregame-who")?.textContent ?? "none");
+ok("the summary is shown as text, not markup",
+   !/[<>]/.test(panel.root.querySelector(".pregame-summary")?.textContent ?? ""),
+   JSON.stringify(panel.root.querySelector(".pregame-summary")?.textContent));
+
+// The first card on the table ends the pre-game.
+store.dispatchAll(decodeEvents(
+  `<events><ge type="PCIP" cardId="5" blueprintId="1_290" zone="FREE_CHARACTERS" participantId="asdf"/></events>`));
+panel.update(store.getState());
+ok("and it closes once the game starts", !panel.isOpen);
+
+const r = document.createElement("div");
+r.id = "result"; r.className = fail === 0 ? "pass" : "fail";
+r.textContent = fail === 0 ? `RESULT: ALL PASS (${pass})` : `RESULT: ${fail} FAILED of ${pass + fail}`;
+document.body.appendChild(r);
+</script></body></html>

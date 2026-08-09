@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>assignment alignment</title>
+<link rel="stylesheet" href="../styles/board.css">
+<style>body{font-family:ui-monospace,Consolas,monospace;font-size:13px;padding:10px}
+#board{height:70vh}.pass{color:#6E9B7A}.fail{color:#FF5240}</style></head>
+<body><div id="board"></div><div id="out"></div>
+<script type="module">
+/**
+ * An assigned minion lines up under the companion it will fight.
+ *
+ * Assignment is the step BEFORE the skirmish starts, so the skirmish band has
+ * not gathered the two sides yet -- the minion is in the shared band and the
+ * companion in the contested one, at different card widths. The pairing is
+ * measured, so this checks the measurement rather than the intent.
+ */
+import { createStore } from "../state/store.js";
+import { decodeEvents } from "../net/protocol.js";
+import { createBoard } from "../view/board.js";
+import * as fixture from "./fixture.js";
+
+const out = document.getElementById("out");
+let pass = 0, fail = 0;
+const ok = (l, c, d) => { const e = document.createElement("div");
+  e.className = c ? "pass" : "fail";
+  e.textContent = (c ? "PASS  " : "FAIL  ") + l + (d ? "  -> " + d : "");
+  out.appendChild(e); c ? pass++ : fail++; };
+
+const boardEl = document.getElementById("board");
+const store = createStore("asdf");
+const board = createBoard(boardEl, store, {});
+store.dispatchAll(decodeEvents(fixture.setup()));
+store.dispatchAll(decodeEvents(fixture.shadowPhase()));
+
+/**
+ * Finish any FLIP in flight before measuring. `getBoundingClientRect` on an
+ * animating element returns its ANIMATED position, so a board that has just
+ * repainted reports where the cards came FROM. This cost a false failure here:
+ * the alignment was correct and the test was reading the slide.
+ */
+const settle = () => {
+  for (const n of boardEl.querySelectorAll(".card[data-card-id]")) {
+    for (const a of n.getAnimations?.() ?? []) a.finish();
+  }
+};
+const centre = (n) => { settle(); const r = n.getBoundingClientRect(); return r.left + r.width / 2; };
+const minionRow = () => boardEl.querySelector('[data-band="minions"] .row');
+const companions = () =>
+  [...boardEl.querySelectorAll('[data-band="contested"] .card[data-card-id]')];
+
+const minionsBefore = [...minionRow().children];
+const comps = companions();
+ok("the fixture gives us something to pair", minionsBefore.length >= 2 && comps.length >= 2,
+   `${minionsBefore.length} minions, ${comps.length} companions`);
+
+// Pair the LAST minion in the row with the FIRST companion, so a correct
+// implementation has to reorder rather than nudge.
+const minionId = minionsBefore[minionsBefore.length - 1].dataset.cardId;
+const compId = comps[0].dataset.cardId;
+const drift0 = Math.abs(centre(minionsBefore[minionsBefore.length - 1]) - centre(comps[0]));
+
+store.dispatchAll(decodeEvents(
+  `<events><ge type="AA" cardId="${compId}" otherCardIds="${minionId}"/></events>`));
+
+const minionNode = boardEl.querySelector(`[data-band="minions"] .card[data-card-id="${minionId}"]`);
+const compNode = boardEl.querySelector(`[data-band="contested"] .card[data-card-id="${compId}"]`);
+ok("the assigned minion is still drawn", !!minionNode && !!compNode);
+
+const drift = Math.abs(centre(minionNode) - centre(compNode));
+ok("it lines up vertically with its companion", drift < 2,
+   `${drift.toFixed(1)}px off centre (was ${drift0.toFixed(1)}px)`);
+ok("and it is marked as paired", minionNode.classList.contains("is-assigned"));
+
+// A second minion on the same companion cannot also be centred; it must sit
+// beside the first rather than on top of it.
+const other = [...minionRow().children].find((n) => n.dataset.cardId !== minionId);
+store.dispatchAll(decodeEvents(
+  `<events><ge type="AA" cardId="${compId}" otherCardIds="${minionId},${other.dataset.cardId}"/></events>`));
+
+settle();
+const rects = [...minionRow().children]
+  .filter((n) => n.dataset.assignedTo)
+  .map((n) => n.getBoundingClientRect())
+  .sort((a, b) => a.left - b.left);
+const overlap = rects.some((r, i) => i > 0 && r.left < rects[i - 1].right - 0.5);
+ok("two minions on one companion do not overlap", rects.length === 2 && !overlap,
+   `${rects.length} paired`);
+
+// Unassigning puts it back.
+store.dispatchAll(decodeEvents(`<events><ge type="RA" cardId="${compId}"/></events>`));
+const cleared = [...minionRow().children].every((n) => !n.style.left && !n.dataset.assignedTo);
+ok("removing the assignment clears the offset", cleared);
+
+const r = document.createElement("div");
+r.id = "result"; r.className = fail === 0 ? "pass" : "fail";
+r.textContent = fail === 0 ? `RESULT: ALL PASS (${pass})` : `RESULT: ${fail} FAILED of ${pass + fail}`;
+document.body.appendChild(r);
+</script></body></html>

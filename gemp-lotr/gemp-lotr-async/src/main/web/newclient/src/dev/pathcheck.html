@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>site path growth</title>
+<link rel="stylesheet" href="../styles/board.css">
+<style>body{font-family:ui-monospace,Consolas,monospace;font-size:13px;padding:10px}
+#host{position:relative;height:900px;width:2000px;border:1px solid #444}
+.pass{color:#6E9B7A}.fail{color:#FF5240}</style></head>
+<body><div id="host"></div><div id="out"></div>
+<script type="module">
+/**
+ * The path window grows with the path. It used to open at the size of all nine
+ * sites and spread two of them across it, which read as a full path from the
+ * first turn.
+ */
+import { createStore } from "../state/store.js";
+import { decodeEvents } from "../net/protocol.js";
+import { createPathPanel } from "../view/panels.js";
+import * as fixture from "./fixture.js";
+
+const out = document.getElementById("out");
+let pass = 0, fail = 0;
+const ok = (l, c, d) => { const e = document.createElement("div");
+  e.className = c ? "pass" : "fail";
+  e.textContent = (c ? "PASS  " : "FAIL  ") + l + (d ? "  -> " + d : "");
+  out.appendChild(e); c ? pass++ : fail++; };
+
+const store = createStore("asdf");
+const panel = createPathPanel(document.getElementById("host"), store);
+store.dispatchAll(decodeEvents(fixture.setup()));
+panel.open();
+panel.paint(store.getState());
+
+// The path lies LEFT TO RIGHT by default, so the axis that grows is the width.
+const h = () => panel.root.getBoundingClientRect().width;
+const sites = () => panel.root.querySelectorAll(".site").length;
+
+const h0 = h(), n0 = sites();
+ok("draws only what has been played, plus one placeholder", n0 > 0 && n0 < 9,
+   `${n0} site node(s)`);
+ok("and lies left to right by default", panel.root.classList.contains("horiz"));
+
+// Card size and per-site step across, kept in step with panels.js.
+const SITE_H = 151 * 7 / 5, STEP = 104;
+
+// Chrome is whatever the frame costs; derive it once so the rest can be exact.
+const chrome = h0 - (SITE_H + (n0 - 1) * STEP);
+
+// Nine sites' worth of window, for comparison. The old layout opened at this
+// size whatever had been played.
+const nine = SITE_H + 8 * STEP + chrome;
+ok("does not open at the size of the whole path", h0 < nine - 1,
+   `${h0.toFixed(0)}px vs ${nine.toFixed(0)}px for nine`);
+
+// The real invariant: one more site is one more step of window, no more.
+const playSite = (cardId, index) => store.dispatchAll(decodeEvents(
+  `<gameState cn="1"><ge type="PCIP" cardId="${cardId}" blueprintId="1_356"` +
+  ` zone="ADVENTURE_PATH" participantId="asdf" index="${index}"/></gameState>`));
+
+playSite(9001, n0 + 1);
+panel.paint(store.getState());
+const h1 = h(), n1 = sites();
+ok("one more site is one more step of window", n1 === n0 + 1 && Math.abs(h1 - h0 - STEP) < 1,
+   `${n0}->${n1} sites, ${h0.toFixed(0)}->${h1.toFixed(0)}px (+${(h1 - h0).toFixed(0)})`);
+
+playSite(9002, n0 + 2);
+panel.paint(store.getState());
+ok("and it keeps growing one step at a time", Math.abs(h() - h1 - STEP) < 1,
+   `${h1.toFixed(0)}->${h().toFixed(0)}px`);
+
+// The docked tab has to hold the whole label. It reads "Site path · N/9" set
+// vertically, which is longer than the title, and at 92px it lost the "/9".
+panel.close();
+const tabBox = panel.root.querySelector(".flyout-tab").getBoundingClientRect();
+const wordBox = panel.root.querySelector(".flyout-word").getBoundingClientRect();
+ok("the docked tab fits its whole label", wordBox.height <= tabBox.height,
+   `label ${wordBox.height.toFixed(0)}px in a ${tabBox.height.toFixed(0)}px tab` +
+   ` ("${panel.root.querySelector(".flyout-word").textContent}")`);
+panel.open();
+panel.paint(store.getState());
+
+// Nothing should scroll at the size the panel chose for itself. `chrome` used
+// to leave the body's own padding out of the total, so the content area came
+// out padding-narrower than asked for and both scrollbars appeared over content
+// that was meant to fit exactly.
+const bodyEl = panel.root.querySelector(".flyout-body");
+ok("no scrollbars at the size it chose",
+   bodyEl.scrollWidth <= bodyEl.clientWidth && bodyEl.scrollHeight <= bodyEl.clientHeight,
+   `content ${bodyEl.scrollWidth}x${bodyEl.scrollHeight} in ${bodyEl.clientWidth}x${bodyEl.clientHeight}`);
+
+// And the cards are not wedged against the frame.
+const first = panel.root.querySelector(".site").getBoundingClientRect();
+const bodyBox = bodyEl.getBoundingClientRect();
+ok("there is room above and below the cards",
+   first.top - bodyBox.top >= 6 && bodyBox.bottom - first.bottom >= 6,
+   `${(first.top - bodyBox.top).toFixed(0)}px above, ${(bodyBox.bottom - first.bottom).toFixed(0)}px below`);
+
+// A hand resize must win over the automatic fit.
+panel.resizeTo(300, 400);
+panel.paint(store.getState());
+ok("a hand-sized window is not resized again", Math.abs(h() - 300) < 2, `${h().toFixed(0)}px`);
+
+const r = document.createElement("div");
+r.id = "result"; r.className = fail === 0 ? "pass" : "fail";
+r.textContent = fail === 0 ? `RESULT: ALL PASS (${pass})` : `RESULT: ${fail} FAILED of ${pass + fail}`;
+document.body.appendChild(r);
+</script></body></html>

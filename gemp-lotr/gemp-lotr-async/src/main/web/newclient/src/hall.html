@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>GEMP — hall</title>
+<link rel="stylesheet" href="./styles/board.css">
+<style>
+  body { padding: 22px 20px 60px; }
+  .wrap { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+  h1 { font-family: var(--mono); font-size: 15px; letter-spacing: .14em;
+       text-transform: uppercase; color: var(--brass); margin: 0; }
+  .who { font-family: var(--mono); font-size: 11px; color: var(--ink-3); }
+  .tables { display: flex; flex-direction: column; gap: 6px; }
+  .t {
+    display: flex; align-items: center; gap: 14px; padding: 10px 14px;
+    background: var(--surface); border: 1px solid var(--rule-2);
+    border-left: 3px solid var(--rule-2); border-radius: 3px;
+  }
+  .t.play { border-left-color: var(--brass); }
+  .t.watch { border-left-color: var(--shared); }
+  .t .id { font-family: var(--mono); font-size: 11px; color: var(--ink-3); min-width: 46px; }
+  .t .seats { flex: 1; font-size: 14px; color: var(--ink); }
+  .t .meta { font-family: var(--mono); font-size: 10px; color: var(--ink-3); }
+  .t a {
+    font-family: var(--mono); font-size: 11px; text-transform: uppercase;
+    letter-spacing: .06em; padding: 4px 12px; border-radius: 2px;
+    text-decoration: none; color: var(--brass); border: 1px solid var(--brass);
+  }
+  .t a:hover { background: color-mix(in srgb, var(--brass) 14%, transparent); }
+  .t.watch a { color: var(--shared); border-color: var(--shared); }
+  .empty, .note { font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
+  .note.bad { color: var(--alert); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Hall</h1>
+  <div class="who" id="who"></div>
+  <div class="tables" id="tables"></div>
+  <div class="note" id="note"></div>
+</div>
+
+<script type="module">
+/**
+ * Lists the tables you can open a board for, so a game is reached by clicking
+ * rather than by hand-editing a gameId into a URL.
+ *
+ * Read-only on purpose: creating and joining tables needs deck selection, which
+ * is the deckbuilder's job and out of scope for the board client. `harness/`
+ * has scripts for seating a table meanwhile.
+ */
+import { createHallClient, playableFor } from "./net/hall.js";
+
+const q = new URLSearchParams(location.search);
+const participantId = q.get("participantId") ?? "asdf";
+const note = document.getElementById("note");
+const say = (msg, bad) => { note.textContent = msg; note.className = "note" + (bad ? " bad" : ""); };
+
+document.getElementById("who").textContent = `as ${participantId}`;
+
+// Dev convenience, same as live.html: obtain a cookie for a headless run.
+if (q.get("login")) {
+  await fetch("/gemp-lotr-server/login", {
+    method: "POST", credentials: "same-origin",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ login: q.get("login"), password: q.get("password") ?? "" })
+  });
+}
+
+const hall = createHallClient({ participantId });
+
+function render(tables) {
+  const list = document.getElementById("tables");
+  list.textContent = "";
+  const playable = playableFor(tables, participantId);
+
+  if (!playable.length) {
+    const waiting = tables.filter((t) => !t.gameId).length;
+    list.innerHTML =
+      `<div class="empty">No game to open.${waiting ? ` ${waiting} table(s) still filling.` : ""}</div>`;
+    return;
+  }
+
+  for (const t of playable) {
+    const row = document.createElement("div");
+    row.className = "t " + t.role;
+    row.innerHTML =
+      `<span class="id">#${t.id}</span>` +
+      `<span class="seats">${t.players.join(" · ")}</span>` +
+      `<span class="meta">${t.players.length} seats · ${t.format} · ${t.statusDescription}</span>`;
+    const open = document.createElement("a");
+    open.href = `./live.html?gameId=${encodeURIComponent(t.gameId)}` +
+                `&participantId=${encodeURIComponent(participantId)}`;
+    open.textContent = t.role === "play" ? "Play" : "Watch";
+    row.appendChild(open);
+    list.appendChild(row);
+  }
+}
+
+async function refresh() {
+  try {
+    const { tables, serverTime } = await hall.list();
+    render(tables);
+    say(`${tables.length} table(s) · server ${serverTime ?? "?"}`);
+  } catch (err) {
+    say("Hall unavailable: " + (err.message ?? err), true);
+  }
+}
+
+await refresh();
+if (!q.has("once")) setInterval(refresh, 5000);
+</script>
+</body>
+</html>

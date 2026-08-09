@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>stat badge alignment</title>
+<link rel="stylesheet" href="../styles/board.css">
+<style>
+  /* Served from the GEMP origin so board.css's /gemp-lotr/images/o_icon_*.png
+     resolve. A percentage ruler over one real card, so badge placement is read
+     off the card's own printed stat column rather than judged by eye.
+
+       harness/sync.sh && open
+       http://localhost:17002/gemp-lotr/newclient/dev/statcheck.html            */
+  body { margin: 0; background: #222; font: 11px ui-monospace, monospace; padding: 8px 0 8px 62px; }
+  .stage { position: relative; height: 700px; width: max-content; }
+  .stage .card { height: 700px; }
+  .h { position: absolute; left: -60px; right: 0; height: 0; border-top: 1px solid rgba(255,0,0,.8); }
+  .h.major { border-top-color: rgba(0,255,255,.95); }
+  .h b { position: absolute; left: 0; top: -12px; color: #fff; background: #000; padding: 0 2px; }
+</style></head>
+<body>
+<div class="stage" id="stage"></div>
+<script type="module">
+import { renderCard } from "../view/card.js";
+
+// A minion with all three stats printed: strength 6, vitality 2, site 4.
+const card = { cardId: "1", blueprintId: "7_193", zone: "SHADOW_CHARACTERS", owner: "asdf" };
+const state = {
+  viewerId: "asdf", players: ["asdf"],
+  stats: { charStats: { 1: { strength: 6, vitality: 2, siteNumber: 4 } } }
+};
+const stage = document.getElementById("stage");
+stage.appendChild(renderCard(card, state, { density: "board" }));
+
+for (let p = 50; p <= 100; p += 2.5) {
+  const d = document.createElement("div");
+  d.className = "h" + (p % 10 === 0 ? " major" : "");
+  d.style.top = p + "%";
+  d.innerHTML = "<b>" + p + "</b>";
+  stage.appendChild(d);
+}
+
+// What the browser actually computed, as a fraction of the card box. Reasoning
+// about cq units from the stylesheet got this wrong twice; measuring did not.
+const cardEl = stage.querySelector(".card");
+const box = cardEl.getBoundingClientRect();
+const report = document.createElement("pre");
+report.id = "measured";
+report.style.cssText = "color:#eee;margin-left:-60px;padding-top:12px";
+const pct = (v, of) => ((v / of) * 100).toFixed(2).padStart(6) + "%";
+report.textContent =
+  `card box  ${box.width.toFixed(1)} x ${box.height.toFixed(1)}\n` +
+  [...cardEl.querySelectorAll(".c-stat")].map((n) => {
+    const r = n.getBoundingClientRect();
+    return `${n.className.replace("c-stat c-stat--", "").padEnd(12)}` +
+           ` top ${pct(r.top - box.top, box.height)}` +
+           ` bottom ${pct(r.bottom - box.top, box.height)}` +
+           ` centre ${pct((r.top + r.bottom) / 2 - box.top, box.height)}` +
+           ` left ${pct(r.left - box.left, box.width)}` +
+           ` size ${r.width.toFixed(1)}x${r.height.toFixed(1)}`;
+  }).join("\n");
+document.body.appendChild(report);
+</script>
+</body></html>

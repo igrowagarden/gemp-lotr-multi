@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>card info differential</title>
+<link rel="stylesheet" href="../styles/board.css">
+<style>
+  body { font-family: ui-monospace, Consolas, monospace; font-size: 12px; padding: 10px; }
+  iframe { position: absolute; left: -10000px; top: 900px; width: 1400px; height: 900px; border: 0; }
+  #board { position: absolute; left: -10000px; top: 0; width: 1400px; height: 800px; }
+  pre { white-space: pre-wrap; }
+  .ok { color: #6E9B7A; } .bad { color: #FF5240; } .note { color: #B08D57; }
+</style></head>
+<body>
+<iframe id="old" src="./oldharness.html"></iframe>
+<div id="board"></div>
+<pre id="out">RUNNING</pre>
+
+<script type="module">
+/**
+ * The CARD INFO differential.
+ *
+ *   infofuzz.html?mode=live      (also mode=replay)
+ *   infofuzz.html?mode=...&sabotage=alwaysask   NEGATIVE CONTROL
+ *   infofuzz.html?mode=...&sabotage=neverask    NEGATIVE CONTROL
+ *   infofuzz.html?mode=...&sabotage=neveropen   NEGATIVE CONTROL
+ *
+ * TWO INDEPENDENT DECISIONS are compared per card id -- whether the dialog
+ * opens, and whether the server is asked for modifiers. They are separate in
+ * the reference (`showCard` is called unconditionally; the query is guarded)
+ * and fusing them is precisely the bug this page found, so a comparison that
+ * folded them into one boolean could not have found it.
+ *
+ * NO ORACLE EDIT. Both observables are hooks on the reference's own objects:
+ * `ui.cardInfoDialog.showCard` and `ui.getCardModifiersFunction` are wrapped
+ * here and restored per case. That is deliberate -- oldharness.html has five
+ * consumers and every edit to it has cost this project time.
+ *
+ * `replayMode` is set directly on the ui rather than by booting a replay: it is
+ * a plain flag the reference reads in `displayCardInfo`, and driving a whole
+ * recording to flip one boolean would test the replay harness, not this rule.
+ */
+import { createStore } from "../state/store.js";
+import { createCardInfo } from "../view/cardinfo.js";
+import { decodeEvents } from "../net/protocol.js";
+import { cardInfoFor } from "../model/cardinfo.js";
+import { CASES, VIEWER, baseBoard } from "./infoshapes.js";
+
+const q = new URLSearchParams(location.search);
+const mode = q.get("mode") ?? "live";
+const replay = mode === "replay";
+const sabotage = q.get("sabotage");
+const out = document.getElementById("out");
+const lines = [];
+const say = (t, cls) => { lines.push(cls ? `<span class="${cls}">${t}</span>` : t);
+                          out.innerHTML = lines.join("\n"); };
+
+async function ready(frame) {
+  for (let i = 0; i < 300; i++) {
+    if (frame.contentWindow?.OLD) return frame.contentWindow.OLD;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  throw new Error("old harness never came up");
+}
+const frame = document.getElementById("old");
+const OLD = await ready(frame);
+
+OLD.boot({ gameId: "1", participantId: VIEWER });
+OLD.feedBatch(OLD.parseEvents(baseBoard()));
+const ui = OLD.ui;
+ui.replayMode = replay;
+
+/**
+ * PREFLIGHT. Everything below depends on `displayCardInfo` existing and on the
+ * two hooks being reachable. A run where either was missing would report "the
+ * reference never opens and never asks" for every case -- identical to a real
+ * divergence, and the shape of failure this project has shipped before.
+ */
+const haveFn = typeof ui?.displayCardInfo === "function";
+const haveDialog = !!ui?.cardInfoDialog && typeof ui.cardInfoDialog.showCard === "function";
+const haveMods = typeof ui?.getCardModifiersFunction === "function";
+say(`mode=${mode}  replayMode=${ui.replayMode}`);
+say(`preflight: displayCardInfo=${haveFn} showCard=${haveDialog} ` +
+    `getCardModifiersFunction=${haveMods}`,
+    haveFn && haveDialog && haveMods ? "note" : "bad");
+if (!(haveFn && haveDialog && haveMods)) {
+  say("");
+  say("RESULT: 1 FAILED of 1 — the oracle's card-info hooks are not reachable; " +
+      "nothing below would mean anything", "bad");
+  throw new Error("preflight failed");
+}
+
+/** Drive the reference and record the two decisions it made. */
+function oldAnswer(cardId) {
+  let shown = false, asked = null;
+  const origShow = ui.cardInfoDialog.showCard;
+  const origMods = ui.getCardModifiersFunction;
+  ui.cardInfoDialog.showCard = function () { shown = true; };
+  ui.getCardModifiersFunction = function (id) { asked = String(id); };
+  try {
+    // The reference takes a Card, and reads only `cardId` in this path.
+    ui.displayCardInfo({ cardId: cardId });
+  } catch (e) {
+    say(`  (oracle threw on ${cardId}: ${e.message})`, "note");
+  } finally {
+    ui.cardInfoDialog.showCard = origShow;
+    ui.getCardModifiersFunction = origMods;
+  }
+  return { show: shown, modifiers: asked !== null, askedWith: asked };
+}
+
+// -------------------------------------------------------------- the new client
+const store = createStore(VIEWER);
+let fetched = null;
+const info = createCardInfo(document.getElementById("board"), {
+  replay,
+  fetchInfo: (id) => { fetched = String(id); return Promise.resolve(""); }
+});
+store.dispatchAll(decodeEvents(baseBoard()));
+
+function newAnswer(cardId) {
+  fetched = null;
+  const before = info.isOpen;
+  if (info.isOpen) info.close();
+  let r = cardInfoFor(cardId, { replay });
+  // ---- negative controls, on the NEW client's reading only.
+  if (sabotage === "alwaysask") r = { ...r, modifiers: true };
+  if (sabotage === "neverask") r = { ...r, modifiers: false };
+  if (sabotage === "neveropen") r = { ...r, show: false };
+  return r;
+}
+
+// ---------------------------------------------------------------- the compare
+let pass = 0, diff = 0;
+const fired = [];
+
+for (const c of CASES) {
+  const expected = { show: c.expectShow,
+                     modifiers: replay ? false : c.expectModifiers };
+  const o = oldAnswer(c.id);
+  const m = newAnswer(c.id);
+
+  // The oracle against its own transcription FIRST. If these disagree, the
+  // reading of displayCardInfo in infoshapes.js is wrong and every verdict
+  // below rests on it -- so it is reported as a HARNESS fault, loudly, rather
+  // than folded into the client comparison.
+  if (o.show !== expected.show || o.modifiers !== expected.modifiers) {
+    diff++;
+    say(`  HARNESS  ${c.id}: infoshapes says show=${expected.show} ` +
+        `modifiers=${expected.modifiers} but the oracle did ` +
+        `show=${o.show} modifiers=${o.modifiers}`, "bad");
+    continue;
+  }
+
+  const bad = [];
+  if (o.show !== m.show) bad.push(`show old=${o.show} new=${m.show}`);
+  if (o.modifiers !== m.modifiers) bad.push(`modifiers old=${o.modifiers} new=${m.modifiers}`);
+  if (bad.length) {
+    diff++;
+    if (sabotage) fired.push(c.id);
+    say(`  DIFF     ${c.name} (${c.id}): ${bad.join("; ")}`, "bad");
+  } else {
+    pass++;
+    say(`  ok       ${c.name} (${c.id}): show=${o.show} modifiers=${o.modifiers}`, "ok");
+  }
+
+  // When the reference DOES ask, it asks with the id it was given. A client
+  // asking about a different card would agree on both booleans and still be
+  // wrong, which is the offers-only mistake in another costume.
+  if (o.modifiers && o.askedWith !== String(c.id)) {
+    diff++;
+    say(`  DIFF     ${c.id}: the oracle asked about "${o.askedWith}"`, "bad");
+  }
+}
+
+say("");
+if (sabotage) {
+  say(`control ${sabotage} fired on: ${fired.length ? fired.join(",") : "NOTHING"}`,
+      fired.length ? "note" : "bad");
+}
+const total = pass + diff;
+say(diff === 0 ? `RESULT: ALL PASS (${total})` : `RESULT: ${diff} DIFF of ${total}`,
+    diff === 0 ? "ok" : "bad");
+</script></body></html>

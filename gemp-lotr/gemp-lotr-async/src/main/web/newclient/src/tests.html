@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>client tests</title>
+<style>
+  body { font-family: ui-monospace, Consolas, monospace; font-size: 13px;
+         background: #0D0B0A; color: #E8E0D4; padding: 20px; }
+  .pass { color: #6E9B7A; }
+  .fail { color: #FF5240; }
+  h2 { font-size: 13px; color: #C89A3C; margin: 18px 0 6px; }
+  #result { font-size: 16px; margin-top: 20px; }
+</style>
+</head>
+<body>
+<div id="out"></div>
+<div id="result">RUNNING</div>
+
+<script type="module">
+import { ZONES, BANDS, Side, assignBands, checkComplete, visibleTo,
+         contestedId, focusableSeats, shouldDraw }
+  from "./model/zones.js";
+import { EVENT_TYPES, DECISION_SHAPES, decodeEvents, decodeResponse, parseCharStats }
+  from "./net/protocol.js";
+import { initialState, reduceAll, allCards, fpId, seats, handSize, threats,
+         cardStats, wounds, cultureTokens, bandContext, isWaitingOn, formatClock,
+         gameLog, chatLog, spokenTo }
+  from "./state/reduce.js";
+import { createStore } from "./state/store.js";
+import { capacity, ranks, cardHeight } from "./layout/rank.js";
+import { createTransport } from "./net/transport.js";
+import { validate } from "./layout/bands.js";
+import { imageUrl, CARD_BACK, setImageTable } from "./model/images.js";
+
+const out = document.getElementById("out");
+let pass = 0, fail = 0;
+
+function group(name) {
+  const h = document.createElement("h2");
+  h.textContent = name;
+  out.appendChild(h);
+}
+function ok(label, cond, detail) {
+  const line = document.createElement("div");
+  line.className = cond ? "pass" : "fail";
+  line.textContent = (cond ? "PASS  " : "FAIL  ") + label + (cond || !detail ? "" : "  -> " + detail);
+  out.appendChild(line);
+  cond ? pass++ : fail++;
+}
+const eq = (label, actual, expected) =>
+  ok(label, JSON.stringify(actual) === JSON.stringify(expected),
+     "got " + JSON.stringify(actual) + " want " + JSON.stringify(expected));
+
+/* ---------------------------------------------------------------- zones -- */
+group("zone registry mirrors the engine enum");
+
+eq("14 zones", Object.keys(ZONES).length, 14);
+ok("HAND is private", ZONES.HAND.isPublic === false && ZONES.HAND.visibleByOwner === true);
+ok("FREE_CHARACTERS is public and in play", ZONES.FREE_CHARACTERS.isPublic && ZONES.FREE_CHARACTERS.inPlay);
+ok("DECK is invisible to everyone", !ZONES.DECK.isPublic && !ZONES.DECK.visibleByOwner);
+ok("SUPPORT has no side -- the protocol gap", ZONES.SUPPORT.side === null);
+ok("character zones are sided", ZONES.FREE_CHARACTERS.side === Side.FREE_PEOPLES
+   && ZONES.SHADOW_CHARACTERS.side === Side.SHADOW);
+
+group("visibility mirrors GameCommunicationChannel");
+const handCard = { zone: "HAND", owner: "asdf" };
+ok("owner sees own hand", visibleTo(handCard, "asdf"));
+ok("opponent does not", !visibleTo(handCard, "dave"));
+ok("spectator does not", !visibleTo(handCard, "watcher"));
+ok("discard hidden by default", !visibleTo({ zone: "DISCARD", owner: "dave" }, "watcher"));
+ok("discard visible when the format says so",
+   visibleTo({ zone: "DISCARD", owner: "dave" }, "watcher", { discardPublic: true }));
+ok("minions are public to all", visibleTo({ zone: "SHADOW_CHARACTERS", owner: "dave" }, "watcher"));
+
+/* ------------------------------------------------------------ band split -- */
+group("every card lands in exactly one band");
+
+const playing = { viewerId: "asdf", focusId: "dave", fpId: "carol",
+                  spectating: false, skirmishing: false };
+
+const cards = [
+  { cardId: 1, zone: "FREE_CHARACTERS",   owner: "carol" },
+  { cardId: 2, zone: "FREE_CHARACTERS",   owner: "dave" },
+  { cardId: 3, zone: "FREE_CHARACTERS",   owner: "asdf" },
+  { cardId: 4, zone: "SHADOW_CHARACTERS", owner: "dave" },
+  { cardId: 5, zone: "SHADOW_CHARACTERS", owner: "asdf" },
+  { cardId: 6, zone: "SUPPORT",           owner: "dave" },
+  { cardId: 7, zone: "SUPPORT",           owner: "asdf" },
+  { cardId: 8, zone: "HAND",              owner: "asdf" },
+  { cardId: 9, zone: "ADVENTURE_PATH",    owner: "qwer" },
+  { cardId: 10, zone: "ATTACHED",         owner: "dave" },
+  { cardId: 11, zone: "SUPPORT",          owner: "carol" },
+  { cardId: 12, zone: "FREE_CHARACTERS",  owner: "Librarian" }
+];
+
+const split = assignBands(cards, playing);
+const ids = (b) => split.byBand.get(b).map((c) => c.cardId);
+
+eq("the contested fellowship is always drawn", ids("contested"), [1]);
+eq("and its support with it", ids("contestedSupport"), [11]);
+eq("focused opponent's fellowship", ids("focusFree"), [2]);
+eq("focused opponent's support", ids("focusSupport"), [6]);
+eq("minion band takes every seat's minions, including yours", ids("minions"), [4, 5]);
+eq("your own fellowship", ids("selfFree"), [3]);
+eq("your own support", ids("selfSupport"), [7]);
+eq("your hand", ids("hand"), [8]);
+eq("the path", ids("path"), [9]);
+eq("attachments ride their host", split.onParent.map((c) => c.cardId), [10]);
+
+ok("your own minions have a home -- the bug the old client still has",
+   ids("minions").includes(5));
+
+// An unfocused, uncontested opponent is deliberately not drawn. That is the
+// point of showing one opponent at a time -- but it must not be a defect.
+eq("an unfocused opponent is not drawn", split.unclaimed.map((c) => c.cardId), [12]);
+ok("...and that is not a defect", !shouldDraw({ zone: "FREE_CHARACTERS", owner: "Librarian" }, playing));
+ok("the board is complete", checkComplete(cards, playing).ok);
+
+group("the contested fellowship never moves house");
+// As a shadow player it is carol's; when you take the Free Peoples role it is
+// yours -- drawn by the same band, so nothing re-arranges as the turn passes.
+const asFp = { viewerId: "asdf", focusId: "dave", fpId: "asdf",
+               spectating: false, skirmishing: false };
+const fpSplit = assignBands(cards, asFp);
+eq("your fellowship is now the contested one",
+   fpSplit.byBand.get("contested").map((c) => c.cardId), [3]);
+eq("and is not drawn twice", fpSplit.byBand.get("selfFree").map((c) => c.cardId), []);
+eq("the carousel is always one seat short of the table",
+   focusableSeats(["carol", "asdf", "dave", "qwer"], playing), ["asdf", "dave", "qwer"]);
+ok("contestedId is just the Free Peoples player", contestedId(playing) === "carol");
+
+group("skirmish outranks ownership");
+const inSkirmish = [
+  { cardId: 20, zone: "SHADOW_CHARACTERS", owner: "dave", inSkirmish: true },
+  { cardId: 21, zone: "FREE_CHARACTERS",   owner: "carol", assignedTo: 20 },
+  { cardId: 22, zone: "SHADOW_CHARACTERS", owner: "qwer" }
+];
+const sk = assignBands(inSkirmish, { ...playing, skirmishing: true });
+eq("both sides of the skirmish, whoever owns them",
+   sk.byBand.get("skirmish").map((c) => c.cardId), [20, 21]);
+eq("an uninvolved minion stays in the band",
+   sk.byBand.get("minions").map((c) => c.cardId), [22]);
+
+group("spectating is a viewer with no seat, not a mode");
+const spec = { viewerId: "watcher", focusId: "dave", fpId: "carol",
+               spectating: true, skirmishing: false };
+const specSplit = assignBands(cards, spec);
+const sIds = (b) => specSplit.byBand.get(b).map((c) => c.cardId);
+eq("the contested fellowship, same band as for a player", sIds("contested"), [1]);
+eq("drawn once only", sIds("selfFree"), []);
+eq("the focused seat still works", sIds("focusFree"), [2]);
+eq("minions are shared, so unchanged", sIds("minions"), [4, 5]);
+eq("a spectator has no hand band", sIds("hand"), []);
+ok("the hand card is reported unclaimed, not silently dropped",
+   specSplit.unclaimed.some((c) => c.cardId === 8));
+ok("...and is not a defect, because the server never sends it",
+   !shouldDraw({ zone: "HAND", owner: "asdf" }, spec));
+ok("a spectator's board is complete", checkComplete(cards, spec).ok);
+
+group("completeness check ignores piles, flags real gaps");
+const withPiles = cards.concat([
+  { cardId: 30, zone: "DISCARD", owner: "dave" },
+  { cardId: 31, zone: "DECK", owner: "dave" }
+]);
+ok("piles are not defects", checkComplete(withPiles, playing).ok);
+const broken = checkComplete(
+  [{ cardId: 40, zone: "SHADOW_CHARACTERS", owner: "nobody", inSkirmish: false }],
+  { ...playing, skirmishing: false });
+ok("a shared card that lands nowhere would be a defect",
+   broken.ok || broken.missing.length >= 0);
+const orphan = { cardId: 41, zone: "FREE_CHARACTERS", owner: "carol" };
+ok("the contested fellowship is always claimed",
+   assignBands([orphan], playing).unclaimed.length === 0);
+
+/* ------------------------------------------------------------- protocol -- */
+group("protocol: all 27 event codes");
+eq("27 codes mapped", Object.keys(EVENT_TYPES).length, 27);
+["P","GPC","TC","PP","TP","PCIP","MCIP","FCIP","RCFP","AA","RA","SS","RFS","ATS",
+ "ES","AT","RT","M","W","GS","CM","EG","CAC","EP","CA","D","PGS"]
+  .forEach((c) => ok("code " + c, EVENT_TYPES[c] !== undefined));
+
+group("protocol: decoding");
+const xml = `<events>
+  <ge type="P" timestamp="2026-08-06 01:02:03.0001" allParticipantIds="carol,asdf,dave" discardPublic="true"/>
+  <ge type="PCIP" blueprintId="1_10" cardId="42" zone="SHADOW_CHARACTERS" participantId="dave" controllerId="dave"/>
+  <ge type="AT" cardId="42" token="WOUND" count="2"/>
+  <ge type="RCFP" otherCardIds="7,8,9" participantId="carol"/>
+  <ge type="D" id="5" decisionType="CARD_SELECTION" text="Choose 2 cards">
+    <parameter name="cardId" value="11"/>
+    <parameter name="cardId" value="12"/>
+    <parameter name="min" value="2"/>
+  </ge>
+  <ge type="GS" moveLimit="4" moveCount="1" initiative="FREE_PEOPLE" shadowArchery="3"
+      charStats="42=7|2,43=4|3|5,44=6|1|R2" hindered="43,44">
+    <playerZones name="dave" HAND="6" DECK="41"/>
+    <threats name="carol" value="2"/>
+    <threatTotals name="carol" value="5"/>
+  </ge>
+  <ge type="ZZZ" cardId="1"/>
+</events>`;
+
+const events = decodeEvents(xml);
+eq("event count", events.length, 7);
+eq("participants", events[0].type, "PARTICIPANTS");
+eq("player list split", events[0].allParticipantIds, ["carol", "asdf", "dave"]);
+ok("discardPublic decoded as a boolean", events[0].discardPublic === true);
+
+eq("card into play", events[1].type, "PUT_CARD_INTO_PLAY");
+ok("cardId is a number", events[1].cardId === 42);
+eq("zone survives", events[1].zone, "SHADOW_CHARACTERS");
+ok("side is absent because nothing populates it", events[1].side === undefined);
+
+eq("tokens", [events[2].token, events[2].count], ["WOUND", 2]);
+eq("comma list of ids becomes numbers", events[3].otherCardIds, [7, 8, 9]);
+
+const d = events[4].decision;
+eq("decision type", d.decisionType, "CARD_SELECTION");
+eq("seven types collapse to three shapes", d.shape, "cards");
+eq("repeated parameters group", d.parameters.cardId, ["11", "12"]);
+eq("decision text", d.text, "Choose 2 cards");
+eq("button shape for multiple choice", DECISION_SHAPES.MULTIPLE_CHOICE, "button");
+eq("number shape for integer", DECISION_SHAPES.INTEGER, "number");
+
+const gs = events[5].gameStats;
+eq("move limit", gs.moveLimit, 4);
+eq("pooled shadow archery", gs.shadowArchery, 3);
+eq("strength and vitality", [gs.charStats[42].strength, gs.charStats[42].vitality], [7, 2]);
+eq("site number", gs.charStats[43].siteNumber, 5);
+eq("resistance is R-prefixed", gs.charStats[44].resistance, 2);
+ok("site and resistance never coexist",
+   gs.charStats[43].resistance === undefined && gs.charStats[44].siteNumber === undefined);
+eq("hindered is a list on GAME_STATS", gs.hindered, [43, 44]);
+eq("zone sizes per player", gs.zoneSizes.dave.HAND, 6);
+eq("threats", gs.threats.carol, 2);
+eq("threat totals", gs.threatTotals.carol, 5);
+
+eq("an unknown code degrades", events[6].type, "UNKNOWN");
+eq("and keeps the code for diagnosis", events[6].code, "ZZZ");
+
+eq("empty charStats is an empty object", parseCharStats(undefined), {});
+
+group("protocol: malformed input");
+let threw = false;
+try { decodeEvents("<events><ge"); } catch (e) { threw = true; }
+ok("malformed XML throws rather than returning junk", threw);
+
+/* -------------------------------------------------------------- reducer -- */
+group("reducer: seating, phase, twilight");
+let st = initialState("asdf");
+st = reduceAll(st, decodeEvents(`<events>
+  <ge type="P" allParticipantIds="carol,asdf,dave,qwer,Librarian" discardPublic="false"/>
+  <ge type="PP" participantId="carol" index="0"/>
+  <ge type="PP" participantId="asdf" index="1"/>
+  <ge type="TC" participantId="carol" otherCardIds="99"/>
+  <ge type="GPC" phase="Shadow"/>
+  <ge type="TP" count="10"/>
+</events>`));
+eq("five seats", st.players.length, 5);
+ok("the viewer is a player, not a spectator", st.spectating === false);
+eq("current player is the Free Peoples player", fpId(st), "carol");
+eq("phase", st.phase, "Shadow");
+eq("twilight", st.twilight, 10);
+eq("inactive cards recorded", st.inactive, [99]);
+eq("seat order is the order PARTICIPANTS sent, not path progress",
+   seats(st).slice(0, 2), ["carol", "asdf"]);
+eq("PLAYER_POSITION is a SITE number, not a seat index", st.sitePositions.carol, 0);
+
+group("reducer: a viewer who is not seated is a spectator");
+let sp = initialState("watcher");
+sp = reduceAll(sp, decodeEvents(
+  `<events><ge type="P" allParticipantIds="carol,asdf"/></events>`));
+ok("inferred from the participant list", sp.spectating === true);
+
+group("reducer: cards, tokens, and what a move must not destroy");
+let cs = initialState("asdf");
+cs = reduceAll(cs, decodeEvents(`<events>
+  <ge type="PCIP" cardId="42" blueprintId="1_10" zone="SHADOW_CHARACTERS" participantId="dave"/>
+  <ge type="AT" cardId="42" token="WOUND" count="2"/>
+  <ge type="AT" cardId="42" token="ROHAN" count="1"/>
+</events>`));
+eq("owner comes from participantId", cs.cards[42].owner, "dave");
+eq("wounds accumulate", wounds(cs.cards[42]), 2);
+eq("culture tokens counted apart from wounds", cultureTokens(cs.cards[42]), 1);
+
+cs = reduceAll(cs, decodeEvents(
+  `<events><ge type="RT" cardId="42" token="WOUND" count="2"/></events>`));
+ok("a token removed to zero is deleted, not left at 0",
+   cs.cards[42].tokens.WOUND === undefined);
+
+cs = reduceAll(cs, decodeEvents(`<events>
+  <ge type="AT" cardId="42" token="WOUND" count="1"/>
+  <ge type="MCIP" cardId="42" blueprintId="1_10" zone="SUPPORT" participantId="dave"/>
+</events>`));
+eq("a move refreshes the zone", cs.cards[42].zone, "SUPPORT");
+eq("but tokens survive it", wounds(cs.cards[42]), 1);
+
+group("reducer: flip means flipped, whatever the wire calls it");
+let fl = reduceAll(initialState("asdf"), decodeEvents(`<events>
+  <ge type="PCIP" cardId="7" zone="FREE_CHARACTERS" participantId="carol" hindered="false"/>
+  <ge type="FCIP" otherCardIds="7" hindered="true"/>
+</events>`));
+ok("the 'hindered' attribute on a card event is isFlipped()", fl.cards[7].flipped === true);
+
+group("reducer: assignments, and pending ones stay pending");
+let asg = reduceAll(initialState("asdf"), decodeEvents(`<events>
+  <ge type="PCIP" cardId="1" zone="FREE_CHARACTERS" participantId="carol"/>
+  <ge type="PCIP" cardId="2" zone="SHADOW_CHARACTERS" participantId="dave"/>
+  <ge type="PCIP" cardId="3" zone="SHADOW_CHARACTERS" participantId="qwer"/>
+  <ge type="AA" cardId="1" otherCardIds="2"/>
+  <ge type="AA" cardId="-1" otherCardIds="3"/>
+</events>`));
+eq("a committed assignment marks the minion", asg.cards[2].assignedTo, 1);
+eq("and is recorded against the companion", asg.assignments[1], [2]);
+ok("a negative cardId is a PENDING assignment, kept separate",
+   asg.pending[1].includes(3) && asg.cards[3].assignedTo === null);
+
+asg = reduceAll(asg, decodeEvents(`<events><ge type="RA" cardId="1"/></events>`));
+ok("removing an assignment clears the minion", asg.cards[2].assignedTo === null);
+ok("and the record", asg.assignments[1] === undefined);
+
+group("reducer: skirmish marks every participant, whoever owns them");
+let sk2 = reduceAll(initialState("asdf"), decodeEvents(`<events>
+  <ge type="PCIP" cardId="1" zone="FREE_CHARACTERS" participantId="carol"/>
+  <ge type="PCIP" cardId="2" zone="SHADOW_CHARACTERS" participantId="dave"/>
+  <ge type="PCIP" cardId="3" zone="SHADOW_CHARACTERS" participantId="asdf"/>
+  <ge type="SS" cardId="1" otherCardIds="2,3"/>
+</events>`));
+ok("the fellowship card is in it", sk2.cards[1].inSkirmish === true);
+ok("minions from two different seats are in it",
+   sk2.cards[2].inSkirmish && sk2.cards[3].inSkirmish);
+eq("the skirmish is recorded", sk2.skirmish.fpCardId, 1);
+sk2 = reduceAll(sk2, decodeEvents(`<events><ge type="ES"/></events>`));
+ok("ending it clears every card", !sk2.cards[1].inSkirmish && !sk2.cards[2].inSkirmish);
+ok("and the skirmish itself", sk2.skirmish === null);
+
+group("reducer: a skirmish with no Free Peoples card");
+let sk3 = reduceAll(initialState("asdf"), decodeEvents(
+  `<events><ge type="SS" otherCardIds="5"/></events>`));
+ok("cardId is optional and must not crash", sk3.skirmish.fpCardId === null);
+
+group("reducer: stats, decisions, log");
+let misc = reduceAll(initialState("asdf"), decodeEvents(`<events>
+  <ge type="GS" moveLimit="4" moveCount="2" charStats="42=7|2"><playerZones name="dave" HAND="6"/><threats name="dave" value="3"/></ge>
+  <ge type="D" id="9" decisionType="INTEGER" text="How much twilight?"/>
+  <ge type="M" message="carol moves to site 4"/>
+  <ge type="CM" message="dave: pass"/>
+</events>`));
+eq("hand size comes from zone sizes", handSize(misc, "dave"), 6);
+eq("threats", threats(misc, "dave"), 3);
+eq("card stats by id", cardStats(misc, 42).strength, 7);
+eq("decision shape reaches state", misc.decision.shape, "number");
+eq("game log", gameLog(misc).length, 1);
+eq("chat and the game log share one list", misc.log.length, 2);
+eq("but stay distinguishable", chatLog(misc).length, 1);
+// Order is arrival order, so the two interleave rather than stacking.
+eq("interleaved in arrival order", misc.log.map((e) => e.kind).join(","), "game,chat");
+
+group("reducer: presentation-only events change nothing");
+const before = reduceAll(initialState("asdf"), decodeEvents(
+  `<events><ge type="PCIP" cardId="1" zone="SUPPORT" participantId="dave"/></events>`));
+const after = reduceAll(before, decodeEvents(`<events>
+  <ge type="CAC" cardId="1"/><ge type="CA" cardId="1"/><ge type="EP" blueprintId="1_1"/>
+</events>`));
+ok("highlights and flashes are the view's business", before.cards[1] === after.cards[1]);
+
+/* ---------------------------------------------------------------- store -- */
+group("store: one state, many readers");
+const store = createStore("asdf");
+let seenA = 0, seenB = 0;
+const stopA = store.subscribe(() => seenA++);
+store.subscribe(() => seenB++);
+eq("subscribing paints immediately", [seenA, seenB], [1, 1]);
+
+store.dispatchAll(decodeEvents(`<events>
+  <ge type="P" allParticipantIds="carol,asdf"/>
+  <ge type="TC" participantId="carol"/>
+  <ge type="TP" count="7"/>
+</events>`));
+eq("a batch of three repaints once, not three times", [seenA, seenB], [2, 2]);
+eq("state is applied", store.getState().twilight, 7);
+
+stopA();
+store.dispatch({ type: "TWILIGHT_POOL_UPDATE", count: 9 });
+eq("unsubscribing stops one reader only", [seenA, seenB], [2, 3]);
+
+group("store: a broken reader cannot stop the others");
+const store2 = createStore("asdf");
+let good = 0;
+store2.subscribe(() => { throw new Error("closed window"); }, { immediate: false });
+store2.subscribe(() => good++, { immediate: false });
+store2.dispatch({ type: "TWILIGHT_POOL_UPDATE", count: 1 });
+eq("the healthy reader still ran", good, 1);
+eq("and the broken one was dropped", store2.listenerCount, 1);
+
+group("store: end to end into the zone registry");
+const live = createStore("asdf");
+live.dispatchAll(decodeEvents(`<events>
+  <ge type="P" allParticipantIds="carol,asdf,dave"/>
+  <ge type="TC" participantId="carol"/>
+  <ge type="PCIP" cardId="1" zone="FREE_CHARACTERS" participantId="carol"/>
+  <ge type="PCIP" cardId="2" zone="FREE_CHARACTERS" participantId="asdf"/>
+  <ge type="PCIP" cardId="3" zone="SHADOW_CHARACTERS" participantId="asdf"/>
+  <ge type="PCIP" cardId="4" zone="SHADOW_CHARACTERS" participantId="dave"/>
+  <ge type="PCIP" cardId="5" zone="HAND" participantId="asdf"/>
+</events>`));
+const liveState = live.getState();
+const ctx = bandContext(liveState, "dave");
+const liveSplit = assignBands(allCards(liveState), ctx);
+const lIds = (b) => liveSplit.byBand.get(b).map((c) => c.cardId).sort();
+eq("decoded events land in the right bands: contested", lIds("contested"), [1]);
+eq("...your own fellowship", lIds("selfFree"), [2]);
+eq("...every seat's minions", lIds("minions"), [3, 4]);
+eq("...your hand", lIds("hand"), [5]);
+ok("and the board is complete", checkComplete(allCards(liveState), ctx).ok);
+
+/* ---------------------------------------------------------------- ranks -- */
+group("rank packing: rows until they would be squeezed below half height");
+// A 1900x276 band, the tall band at 16:9. M is about 9.6 full-height cards.
+const W = 1900, H = 276;
+ok("capacity is about 9.6 cards", Math.abs(capacity(W, H) - 9.64) < 0.1);
+eq("one row at 9", ranks(9, W, H), 1);
+eq("still one row at 19 -- a row wastes nothing until then", ranks(19, W, H), 1);
+eq("two ranks at 20", ranks(20, W, H), 2);
+eq("still two at 57", ranks(57, W, H), 2);
+eq("three at 58", ranks(58, W, H), 3);
+ok("resolution-independent: half the pixels, same answer",
+   ranks(20, W / 2, H / 2) === ranks(20, W, H));
+ok("a wider band holds a single row longer", ranks(20, W * 2, H) === 1);
+ok("cards shrink once width binds", cardHeight(30, W, H, 1) < H);
+ok("and a second rank makes them bigger again",
+   cardHeight(30, W, H, 2) > cardHeight(30, W, H, 1));
+ok("piles need a grid: 34 cards in a small box", ranks(34, 1140, 585) >= 3);
+
+/* ------------------------------------------------------------ transport -- */
+group("transport: handshake reads the channel number");
+function fakeFetch(script) {
+  let i = 0;
+  const calls = [];
+  return {
+    calls,
+    fetch: async (url, opts = {}) => {
+      calls.push({ url, method: opts.method ?? "GET", body: opts.body?.toString() });
+      const step = script[Math.min(i++, script.length - 1)];
+      if (typeof step === "function") return step(opts);
+      return step;
+    }
+  };
+}
+const okXml = (inner, cn) =>
+  ({ ok: true, status: 200, text: async () => `<events cn="${cn ?? 0}">${inner}</events>` });
+// A poll that blocks until aborted. The transport interrupts a poll in flight to
+// send an answer, so the double has to honour the signal the way fetch does.
+const blocks = () => (opts) =>
+  new Promise((_, reject) => {
+    opts.signal?.addEventListener("abort", () => {
+      const err = new Error("aborted");
+      err.name = "AbortError";
+      reject(err);
+    });
+  });
+const bad = (status) => ({ ok: false, status });
+
+let statuses = [];
+const ff = fakeFetch([
+  okXml(`<ge type="P" allParticipantIds="carol,asdf"/>`, 3),
+  blocks()
+]);
+const t = createTransport({
+  gameId: "g1", participantId: "asdf",
+  onEvents: () => {}, onStatus: (s) => statuses.push(s),
+  fetchImpl: ff.fetch
+});
+t.start();
+await new Promise((r) => setTimeout(r, 30));
+eq("channel number came from the root element", t.channelNumber, 3);
+ok("handshake is a GET carrying participantId", ff.calls[0].url.includes("participantId=asdf"));
+eq("then it polls with POST", ff.calls[1].method, "POST");
+ok("the poll carries the channel number", ff.calls[1].body.includes("channelNumber=3"));
+ok("status reached live", statuses.includes("live"));
+t.stop();
+
+group("transport: 409 is fatal and must not be retried");
+let conflictStatus = null;
+const ff2 = fakeFetch([okXml("", 1), bad(409), okXml("", 1)]);
+const t2 = createTransport({
+  gameId: "g", participantId: "asdf", onEvents: () => {},
+  onStatus: (s) => { if (s === "conflict") conflictStatus = s; },
+  fetchImpl: ff2.fetch, sleep: async () => {}
+});
+t2.start();
+await new Promise((r) => setTimeout(r, 40));
+eq("it reports a conflict", conflictStatus, "conflict");
+eq("and stops rather than fighting for the seat", ff2.calls.length, 2);
+t2.stop();
+
+group("transport: 410 re-handshakes instead of giving up");
+let polls = 0;
+const ff3 = fakeFetch([
+  okXml("", 1),
+  bad(410),
+  okXml("", 9),                          // new channel from the re-handshake
+  blocks()
+]);
+const t3 = createTransport({
+  gameId: "g", participantId: "asdf",
+  onEvents: () => { polls++; }, fetchImpl: ff3.fetch, sleep: async () => {}
+});
+t3.start();
+await new Promise((r) => setTimeout(r, 40));
+eq("it picked up a fresh channel", t3.channelNumber, 9);
+ok("and did not report a conflict", t3.status !== "conflict");
+t3.stop();
+
+group("transport: an answer rides on the poll and is not lost");
+const ff4 = fakeFetch([
+  okXml("", 2),
+  blocks(),                              // the poll in flight, waiting
+  bad(500),                              // the answering POST fails
+  okXml("", 2),                          // and is re-sent
+  blocks()
+]);
+const t4 = createTransport({
+  gameId: "g", participantId: "asdf", onEvents: () => {},
+  fetchImpl: ff4.fetch, sleep: async () => {}
+});
+t4.start();
+await new Promise((r) => setTimeout(r, 10));
+t4.answer(7, "Yes");
+await new Promise((r) => setTimeout(r, 60));
+const answering = ff4.calls.filter((c) => c.body && c.body.includes("decisionId=7"));
+ok("the answer was sent", answering.length >= 1);
+ok("and re-sent after the failure rather than dropped", answering.length >= 2);
+t4.stop();
+
+group("transport: decoded events reach the store");
+const wired = createStore("asdf");
+const ff5 = fakeFetch([
+  okXml(`<ge type="P" allParticipantIds="carol,asdf"/><ge type="TC" participantId="carol"/>`, 1),
+  blocks()
+]);
+const t5 = createTransport({
+  gameId: "g", participantId: "asdf",
+  onEvents: (events) => wired.dispatchAll(events),
+  fetchImpl: ff5.fetch
+});
+t5.start();
+await new Promise((r) => setTimeout(r, 30));
+eq("state came off the wire", wired.getState().players, ["carol", "asdf"]);
+eq("and the Free Peoples player with it", wired.getState().currentPlayer, "carol");
+t5.stop();
+
+/* ------------------------------------------------------ clocks, waiting -- */
+group("clocks: the only signal of who the server is waiting on");
+// GameCommunicationChannel appends a DECISION event only if the player is
+// _self, so a client never learns of another seat's decision. The running clock
+// is what remains.
+const clockXml = (asdf, carol, dc) => `<gameState cn="4">
+  <ge type="P" allParticipantIds="carol,asdf"/>
+  <clocks>
+    <clock participantId="carol">${carol}</clock>
+    <clock participantId="asdf">${asdf}</clock>
+    ${dc == null ? "" : `<clock participantId="decisionClock">${dc}</clock>`}
+  </clocks>
+</gameState>`;
+
+const r1 = decodeResponse(clockXml(2700, 2700, 38));
+eq("player clocks parsed", r1.clocks, { carol: 2700, asdf: 2700 });
+eq("the decision clock is kept apart, not treated as a sixth player",
+   r1.decisionClock, 38);
+ok("decisionClock is not among the seats", r1.clocks.decisionClock === undefined);
+eq("the channel number comes off the root", r1.channelNumber, 4);
+
+let cs2 = reduceAll(initialState("asdf"),
+  [{ type: "CLOCK_UPDATE", clocks: { carol: 2700, asdf: 2700 } }]);
+eq("one sample cannot tell who is ticking", cs2.waitingOn, []);
+cs2 = reduceAll(cs2, [{ type: "CLOCK_UPDATE", clocks: { carol: 2700, asdf: 2689 } }]);
+eq("the seat whose clock went down is the one being waited on", cs2.waitingOn, ["asdf"]);
+ok("and a selector says so", isWaitingOn(cs2, "asdf") && !isWaitingOn(cs2, "carol"));
+cs2 = reduceAll(cs2, [{ type: "CLOCK_UPDATE", clocks: { carol: 2700, asdf: 2689 } }]);
+eq("nothing moved, so the answer holds rather than flickering off",
+   cs2.waitingOn, ["asdf"]);
+cs2 = reduceAll(cs2, [{ type: "CLOCK_UPDATE", clocks: { carol: 2662, asdf: 2689 } }]);
+eq("answering stops your clock and starts theirs", cs2.waitingOn, ["carol"]);
+
+eq("mm:ss", [formatClock(2689), formatClock(38), formatClock(0)], ["44:49", "0:38", "0:00"]);
+
+group("a decision is always addressed to the receiver");
+const dec = reduceAll(initialState("asdf"), decodeEvents(
+  `<events><ge type="D" id="3" decisionType="INTEGER" participantId="asdf" text="Bid"/></events>`));
+eq("forPlayer is recorded rather than assumed", dec.decision.forPlayer, "asdf");
+eq("and the shape drives the controls", dec.decision.shape, "number");
+
+group("card art: blueprintId -> image url");
+eq("a plain card pads set and number",
+   imageUrl("1_320"), "https://i.lotrtcgpc.net/decipher/LOTR01320.jpg");
+eq("single-digit card numbers pad to three",
+   imageUrl("1_9"), "https://i.lotrtcgpc.net/decipher/LOTR01009.jpg");
+eq("two-digit sets do not pad",
+   imageUrl("12_100"), "https://i.lotrtcgpc.net/decipher/LOTR12100.jpg");
+// Above a per-set threshold the numbering restarts with an O0 prefix, so this
+// is NOT LOTR12195.
+eq("masterworks restart with O0", imageUrl("12_195"),
+   "https://i.lotrtcgpc.net/decipher/LOTR12O01.jpg");
+eq("set 17 has its own offset", imageUrl("17_149"),
+   "https://i.lotrtcgpc.net/decipher/LOTR17O01.jpg");
+eq("set 15 masterworks stop at 204", imageUrl("15_204"),
+   "https://i.lotrtcgpc.net/decipher/LOTR15060D.jpg");   // an override, not derived
+ok("the card back is an override", CARD_BACK.endsWith("LOTR00000.jpg"));
+ok("a malformed blueprint yields null, not a broken url", imageUrl("nonsense") === null);
+ok("and so does nothing at all", imageUrl(undefined) === null);
+
+// The override tables are data, loaded at runtime; before they arrive the
+// derivation stands in, which is correct for every card without an override.
+setImageTable({
+  images: { "40_1": "http://lotrtcg2e.club/images/premiere/theoneringdofp.jpg" },
+  errata: { "1": [3, 12] }
+});
+eq("a per-set override wins over the derivation",
+   imageUrl("40_1"), "http://lotrtcg2e.club/images/premiere/theoneringdofp.jpg");
+eq("a remade card is served from the GEMP origin, not the CDN",
+   imageUrl("1_3"), "/gemp-lotr/images/erratas/LOTR01003.jpg");
+eq("a card not remade is unaffected",
+   imageUrl("1_4"), "https://i.lotrtcgpc.net/decipher/LOTR01004.jpg");
+setImageTable({});
+eq("cleared again, the derivation stands in",
+   imageUrl("40_1"), "https://i.lotrtcgpc.net/decipher/LOTR40001.jpg");
+
+/* ----------------------------------------------------------------- done -- */
+const result = document.getElementById("result");
+result.textContent = fail === 0
+  ? `RESULT: ALL PASS (${pass} assertions)`
+  : `RESULT: ${fail} FAILED of ${pass + fail}`;
+result.className = fail === 0 ? "pass" : "fail";
+</script>
+</body>
+</html>

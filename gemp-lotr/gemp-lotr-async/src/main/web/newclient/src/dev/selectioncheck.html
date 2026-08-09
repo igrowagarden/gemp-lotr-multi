@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>selection check</title>
+<link rel="stylesheet" href="../styles/board.css">
+<style>body{font-family:ui-monospace,Consolas,monospace;font-size:13px;padding:10px}
+.pass{color:#6E9B7A}.fail{color:#FF5240}.note{color:#B08D57}</style></head>
+<body><div id="out"></div>
+<script type="module">
+/**
+ * The selection state machine: what has been picked but not yet sent.
+ *
+ * It lived inside `view/board.js`, where these rules were reachable only by
+ * rendering a board and clicking it -- so the assignment rules in particular
+ * were exercised incidentally by `assigncheck` and asserted directly by
+ * nothing. They are small, they have edges, and they are exactly the kind of
+ * thing that is easy to get subtly wrong: taking a minion back off a companion
+ * is the ONLY way to correct a mistake before confirming, and a client where
+ * that silently failed would be maddening and would still look like it worked.
+ *
+ * No DOM here at all, which is the point of the extraction.
+ */
+import { createSelection } from "../model/selection.js";
+import { createReporter } from "./harness.js";
+
+const report = createReporter();
+const ok = report.ok;
+
+// ---------------------------------------------------------------- card picks
+{
+  const s = createSelection();
+  ok("nothing is picked to begin with", s.size === 0 && s.cards.length === 0);
+  ok("toggling picks", s.toggle(7) === true && s.has(7));
+  ok("toggling again unpicks", s.toggle(7) === false && !s.has(7));
+  s.toggle(1); s.toggle(2); s.toggle(3);
+  ok("several can be held at once", s.size === 3, s.cards.join(","));
+  ok("and are reported in pick order", s.cards.join(",") === "1,2,3", s.cards.join(","));
+  s.clear();
+  ok("clear empties them", s.size === 0);
+}
+
+// --------------------------------------------------------------- assignment
+{
+  const s = createSelection();
+  ok("no minion is held to begin with", s.held === null);
+  ok("nothing is assigned", s.assignedCount === 0 && s.pairs.size === 0);
+
+  ok("clicking a minion picks it up", s.clickMinion(50) === "held" && s.held === 50);
+  ok("clicking the SAME minion puts it down again",
+     s.clickMinion(50) === "released" && s.held === null);
+
+  // A companion click means nothing with empty hands. Without this a stray
+  // click on a companion would do something invisible.
+  ok("a companion click with nothing held is ignored",
+     s.clickCompanion(9) === "ignored" && s.pairs.size === 0);
+
+  s.clickMinion(50);
+  ok("a companion click with a minion held assigns it",
+     s.clickCompanion(9) === "assigned");
+  ok("the minion is no longer held", s.held === null);
+  ok("and it is promised to that companion", s.pairedTo(50) === 9);
+  ok("the count follows", s.assignedCount === 1);
+
+  // THE CORRECTION PATH: the only way to undo a mistake before confirming.
+  ok("clicking an ASSIGNED minion takes it back",
+     s.clickMinion(50) === "unassigned");
+  ok("it is promised to nobody now", s.pairedTo(50) === null);
+  ok("and it is not left held either -- taking back is not picking up",
+     s.held === null);
+  ok("the companion with no minions left is dropped entirely",
+     s.pairs.size === 0, `pairs=${s.pairs.size}`);
+}
+
+// ------------------------------------------------- several minions, several hosts
+{
+  const s = createSelection();
+  s.clickMinion(50); s.clickCompanion(9);
+  s.clickMinion(51); s.clickCompanion(9);
+  ok("one companion can take several minions",
+     s.pairs.get(9).size === 2 && s.assignedCount === 2);
+
+  s.clickMinion(52); s.clickCompanion(10);
+  ok("and several companions can each take some",
+     s.pairs.size === 2 && s.assignedCount === 3);
+
+  s.clickMinion(51);
+  ok("taking one back leaves the others alone",
+     s.pairedTo(50) === 9 && s.pairedTo(51) === null && s.assignedCount === 2);
+  ok("and its companion survives, still holding the other",
+     s.pairs.get(9).size === 1);
+}
+
+// ------------------------------------------------------------- the encoding
+{
+  const s = createSelection();
+  ok("an empty assignment encodes to the empty string", s.encode() === "");
+  s.clickMinion(50); s.clickCompanion(9);
+  const one = s.encode();
+  ok("one pair encodes to something non-empty", one.length > 0, one);
+  s.clickMinion(51); s.clickCompanion(9);
+  ok("a second minion on the same companion changes it", s.encode() !== one,
+     `${one} -> ${s.encode()}`);
+}
+
+// ---------------------------------------------------------- clearing is total
+{
+  const s = createSelection();
+  s.toggle(1); s.clickMinion(50); s.clickCompanion(9); s.clickMinion(51);
+  ok("before clearing there is something of each kind",
+     s.size === 1 && s.assignedCount === 1 && s.held === 51);
+  s.clear();
+  // A selection left behind leaks into the NEXT decision -- a card picked for
+  // one question becoming part of the answer to another.
+  ok("clear takes cards, pairs AND the held minion",
+     s.size === 0 && s.assignedCount === 0 && s.held === null && s.pairs.size === 0);
+}
+
+report.result();
+</script></body></html>

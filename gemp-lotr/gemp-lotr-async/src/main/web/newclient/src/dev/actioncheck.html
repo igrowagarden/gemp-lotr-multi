@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>actions and assignment</title>
+<link rel="stylesheet" href="../styles/board.css">
+<style>body{font-family:ui-monospace,Consolas,monospace;font-size:13px;padding:10px}
+#board{height:62vh}.pass{color:#6E9B7A}.fail{color:#FF5240}</style></head>
+<body><div id="board"></div><div id="out"></div>
+<script type="module">
+/**
+ * The two decisions that answer with something other than a list of card ids.
+ *
+ * CARD_ACTION_CHOICE answers with an ACTION INDEX -- the engine does
+ * `Integer.parseInt(result)` into its own action list. Sending card ids there
+ * is not merely rejected: a card id lower than the number of actions parses
+ * fine and performs a different action.
+ *
+ * ASSIGN_MINIONS answers with GROUPS -- "fp minion minion,fp minion" -- and its
+ * parameters are `freeCharacters`/`minions`, never `cardId`.
+ */
+import { createStore } from "../state/store.js";
+import { decodeEvents } from "../net/protocol.js";
+import { createBoard } from "../view/board.js";
+import { cardActions, isActionChoice } from "../model/actions.js";
+import { assignable, encodeAssignments } from "../model/assign.js";
+import * as fixture from "./fixture.js";
+
+const out = document.getElementById("out");
+let pass = 0, fail = 0;
+const ok = (l, c, d) => { const e = document.createElement("div");
+  e.className = c ? "pass" : "fail";
+  e.textContent = (c ? "PASS  " : "FAIL  ") + l + (d ? "  -> " + d : "");
+  out.appendChild(e); c ? pass++ : fail++; };
+
+const sent = [];
+const boardEl = document.getElementById("board");
+const store = createStore("asdf");
+const board = createBoard(boardEl, store, { onAnswer: (id, v) => sent.push([id, v]) });
+store.dispatchAll(decodeEvents(fixture.setup()));
+store.dispatchAll(decodeEvents(fixture.shadowPhase()));
+
+const cardNodes = () => [...boardEl.querySelectorAll(".card[data-card-id]")];
+const eligible = () => cardNodes().filter((n) => n.classList.contains("is-eligible"));
+const settle = () => cardNodes().forEach((n) =>
+  (n.getAnimations?.() ?? []).forEach((a) => a.finish()));
+
+// Two real minions to work with, and a companion.
+const minionIds = [...boardEl.querySelectorAll('[data-band="minions"] .card')]
+  .map((n) => Number(n.dataset.cardId));
+const compIds = [...boardEl.querySelectorAll('[data-band="contested"] .card')]
+  .map((n) => Number(n.dataset.cardId));
+ok("the fixture has minions and companions", minionIds.length >= 2 && compIds.length >= 2,
+   `${minionIds.length} minions, ${compIds.length} companions`);
+
+const decide = (attrs, params) => {
+  const ps = Object.entries(params)
+    .flatMap(([k, vs]) => vs.map((v) => `<parameter name="${k}" value="${v}"/>`)).join("");
+  store.dispatchAll(decodeEvents(
+    `<events><ge type="D" id="9" forPlayer="asdf" ${attrs}>${ps}</ge></events>`));
+};
+
+// ---- CARD_ACTION_CHOICE ---------------------------------------------------
+
+// One action on one card: clicking the card resolves it outright.
+sent.length = 0;
+decide(`decisionType="CARD_ACTION_CHOICE" text="Play Shadow action or Pass"`, {
+  actionId: ["0"], cardId: [String(minionIds[0])],
+  blueprintId: ["inPlay"], actionText: ["Use special ability"]
+});
+ok("the card carrying an action is lit", eligible().length === 1,
+   `${eligible().length} eligible`);
+eligible()[0].click();
+ok("clicking it answers with the ACTION id, not the card id",
+   sent.length === 1 && sent[0][1] === "0",
+   `${JSON.stringify(sent)} (card was ${minionIds[0]})`);
+
+// Two actions on one card: the click must offer a choice, not guess.
+sent.length = 0;
+decide(`decisionType="CARD_ACTION_CHOICE" text="Choose"`, {
+  actionId: ["0", "1"], cardId: [String(minionIds[0]), String(minionIds[0])],
+  blueprintId: ["inPlay", "inPlay"],
+  actionText: ["Exert to make Nazgul stronger", "Discard to draw a card"]
+});
+eligible()[0].click();
+const menu = boardEl.querySelector(".actionmenu");
+ok("two actions on one card open a menu", !!menu,
+   menu ? `${menu.querySelectorAll(".actionitem").length} items` : "no menu");
+ok("nothing was answered by the click alone", sent.length === 0);
+ok("the menu names the actions",
+   [...(menu?.querySelectorAll(".actionitem") ?? [])].map((b) => b.textContent)
+     .includes("Discard to draw a card"));
+[...menu.querySelectorAll(".actionitem")][1].click();
+ok("picking the second sends action 1", sent.length === 1 && sent[0][1] === "1",
+   JSON.stringify(sent));
+
+// A virtual action has no card on the board and must still be reachable.
+sent.length = 0;
+decide(`decisionType="CARD_ACTION_CHOICE" text="Play Shadow action or Pass"`, {
+  actionId: ["0", "1"], cardId: [String(minionIds[0]), "9999"],
+  blueprintId: ["inPlay", "1_154"],
+  actionText: ["On the board", "Play from your discard pile"]
+});
+const acts = cardActions(store.getState().decision);
+ok("a virtual action is separated from the board ones",
+   acts.byCard.size === 1 && acts.virtual.length === 1,
+   `${acts.byCard.size} on board, ${acts.virtual.length} virtual`);
+const virtualBtn = [...boardEl.querySelectorAll(".prompt .pbtn")]
+  .find((b) => b.textContent === "Play from your discard pile");
+ok("and it is offered in the prompt", !!virtualBtn);
+virtualBtn?.click();
+ok("choosing it sends its action id", sent.length === 1 && sent[0][1] === "1",
+   JSON.stringify(sent));
+
+// Pass is always available and sends "".
+sent.length = 0;
+decide(`decisionType="CARD_ACTION_CHOICE" text="Play Shadow action or Pass"`, {
+  actionId: ["0"], cardId: [String(minionIds[0])],
+  blueprintId: ["inPlay"], actionText: ["Something"]
+});
+[...boardEl.querySelectorAll(".prompt .pbtn")].find((b) => b.textContent === "Pass")?.click();
+ok("passing sends an empty answer", sent.length === 1 && sent[0][1] === "", JSON.stringify(sent));
+
+// ---- ASSIGN_MINIONS -------------------------------------------------------
+
+sent.length = 0;
+decide(`decisionType="ASSIGN_MINIONS" text="Assign minions"`, {
+  freeCharacters: compIds.slice(0, 2).map(String),
+  minions: minionIds.slice(0, 2).map(String)
+});
+const d = store.getState().decision;
+ok("its parameters are freeCharacters/minions, not cardId",
+   !d.parameters.cardId && assignable(d).minions.length === 2,
+   JSON.stringify(Object.keys(d.parameters)));
+ok("both sides are clickable", eligible().length === 4, `${eligible().length} eligible`);
+
+const nodeFor = (id) => cardNodes().find((n) => Number(n.dataset.cardId) === id);
+nodeFor(minionIds[0]).click();                 // hold a minion
+ok("holding a minion marks it", nodeFor(minionIds[0]).classList.contains("is-chosen"));
+nodeFor(compIds[0]).click();                   // pair it
+settle();
+ok("pairing tags the minion with its companion",
+   nodeFor(minionIds[0])?.dataset.assignedTo === String(compIds[0]),
+   nodeFor(minionIds[0])?.dataset.assignedTo ?? "none");
+
+nodeFor(minionIds[1]).click();
+nodeFor(compIds[0]).click();                   // two minions on one companion
+[...boardEl.querySelectorAll(".prompt .pbtn")].find((b) => b.textContent.startsWith("Confirm"))?.click();
+ok("the answer is grouped: companion first, minions after",
+   sent.length === 1 &&
+   sent[0][1] === `${compIds[0]} ${minionIds[0]} ${minionIds[1]}`,
+   JSON.stringify(sent));
+
+// Taking a minion back before confirming.
+sent.length = 0;
+decide(`decisionType="ASSIGN_MINIONS" text="Assign minions"`, {
+  freeCharacters: compIds.slice(0, 2).map(String),
+  minions: minionIds.slice(0, 2).map(String)
+});
+nodeFor(minionIds[0]).click();
+nodeFor(compIds[0]).click();
+nodeFor(minionIds[0]).click();                 // click an assigned minion = unassign
+[...boardEl.querySelectorAll(".prompt .pbtn")].find((b) => b.textContent.startsWith("Confirm"))?.click();
+ok("an unassigned minion is not in the answer", sent[0][1] === "", JSON.stringify(sent));
+
+// Encoding rules, directly.
+ok("a companion with no minions is not sent",
+   encodeAssignments(new Map([[1, new Set()], [2, new Set([7])]])) === "2 7",
+   encodeAssignments(new Map([[1, new Set()], [2, new Set([7])]])));
+ok("groups are comma separated",
+   encodeAssignments(new Map([[1, new Set([5])], [2, new Set([7, 8])]])) === "1 5,2 7 8");
+
+const r = document.createElement("div");
+r.id = "result"; r.className = fail === 0 ? "pass" : "fail";
+r.textContent = fail === 0 ? `RESULT: ALL PASS (${pass})` : `RESULT: ${fail} FAILED of ${pass + fail}`;
+document.body.appendChild(r);
+</script></body></html>

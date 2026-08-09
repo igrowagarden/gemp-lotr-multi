@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>replayer check</title>
+<link rel="stylesheet" href="../styles/board.css">
+<style>body{font-family:ui-monospace,Consolas,monospace;font-size:13px;padding:10px}
+.pass{color:#6E9B7A}.fail{color:#FF5240}.note{color:#B08D57}</style></head>
+<body><div id="out"></div>
+<script type="module">
+/**
+ * The replay controller: position, pacing, and the state at any point.
+ *
+ * This was `replay.html`'s own code until now, which put it outside every suite
+ * -- the same gap `view/session.js` had. It matters more than it looks: an
+ * off-by-one in `seek` shows the board one event early for an entire replay,
+ * and nobody watching would know.
+ *
+ * TIMERS ARE FAKE HERE. `createReplayer` takes them injected, so playback is
+ * DRIVEN rather than waited for: `tick()` advances one interval. A suite that
+ * slept on real timers would be testing setInterval, would take seconds, and
+ * would be flaky on a loaded machine.
+ */
+import { createStore } from "../state/store.js";
+import { createReplayer } from "../state/replayer.js";
+import { initialState, reduce, allCards } from "../state/reduce.js";
+import { decodeEvents } from "../net/protocol.js";
+import { SPEED_MIN, SPEED_MAX, intervalFor } from "../model/replayctl.js";
+import { createReporter } from "./harness.js";
+import * as fixture from "./fixture.js";
+
+const report = createReporter();
+const ok = report.ok;
+
+const EVENTS = decodeEvents(fixture.setup());
+
+/** A fake clock: records the period asked for, and fires on demand. */
+function fakeTimers() {
+  let fn = null, period = null, live = false;
+  return {
+    api: {
+      set(f, ms) { fn = f; period = ms; live = true; return 1; },
+      clear() { live = false; }
+    },
+    tick(n = 1) { for (let i = 0; i < n && live; i++) fn(); },
+    get period() { return period; },
+    get live() { return live; }
+  };
+}
+
+function build() {
+  const store = createStore("asdf");
+  const clock = fakeTimers();
+  const seen = [];
+  const replayer = createReplayer({
+    store, viewerId: "asdf", timers: clock.api,
+    onPosition: (p) => seen.push(p)
+  });
+  replayer.load(EVENTS);
+  return { store, replayer, clock, seen };
+}
+
+ok("the fixture supplies enough events to seek within", EVENTS.length > 10,
+   String(EVENTS.length));
+
+// ------------------------------------------------------------------- seeking
+{
+  const { replayer, store } = build();
+  ok("a fresh replay starts at zero", replayer.at === 0);
+  ok("and its board is empty at zero", allCards(store.getState()).length === 0,
+     String(allCards(store.getState()).length));
+
+  replayer.seek(5);
+  ok("seek moves the position", replayer.at === 5);
+
+  /**
+   * THE ASSERTION THAT MATTERS: the state at n is the reducer over n events,
+   * exactly. An off-by-one here shows the board one event early for a whole
+   * replay and nobody watching would know.
+   *
+   * IT HAS TO BE TESTED WHERE ONE EVENT MAKES A DIFFERENCE. The first version
+   * compared only `.cards` at position 5 -- and the fixture's first events are
+   * P, PP x5, TC, GPC, TP, none of which add a card. So an injected off-by-one
+   * changed nothing it looked at and the suite passed while the sabotage was
+   * live. The position is now FOUND rather than picked, and the search itself
+   * is the proof that the comparison can see a single event.
+   */
+  const stateAt = (n) => {
+    let st = initialState("asdf");
+    for (let i = 0; i < n; i++) st = reduce(st, EVENTS[i]);
+    return JSON.stringify(st);
+  };
+  let probe = -1;
+  for (let n = 1; n < EVENTS.length; n++) {
+    if (stateAt(n) !== stateAt(n + 1)) { probe = n; break; }
+  }
+  ok("there is a position where ONE more event changes the state -- without " +
+     "which the check below could not see an off-by-one", probe > 0, String(probe));
+
+  for (const n of [probe, probe + 1, Math.floor(EVENTS.length / 2), EVENTS.length]) {
+    replayer.seek(n);
+    ok(`the state at ${n} is exactly the reducer over the first ${n} events`,
+       JSON.stringify(store.getState()) === stateAt(n));
+  }
+  replayer.seek(5);
+
+  replayer.seek(-3);
+  ok("seeking before the start clamps to zero", replayer.at === 0);
+  replayer.seek(9999);
+  ok("seeking past the end clamps to the length -- a valid position, meaning " +
+     "'after the last event'", replayer.at === EVENTS.length);
+
+  replayer.seek(4);
+  replayer.step(-1);
+  ok("stepping BACKWARD works, which the reference cannot do at all",
+     replayer.at === 3);
+  replayer.step(1);
+  ok("and forward", replayer.at === 4);
+}
+
+// ----------------------------------------------------------------- playback
+{
+  const { replayer, clock } = build();
+  ok("nothing is playing to begin with", replayer.playing === false);
+
+  replayer.play();
+  ok("play starts a timer", replayer.playing === true && clock.live);
+  clock.tick(3);
+  ok("each tick advances exactly one event", replayer.at === 3, String(replayer.at));
+
+  replayer.pause();
+  ok("pause stops it", replayer.playing === false && !clock.live);
+  const at = replayer.at;
+  clock.tick(5);
+  ok("and a paused replay does not advance", replayer.at === at);
+}
+{
+  const { replayer, clock } = build();
+  replayer.seek(EVENTS.length - 1);
+  replayer.play();
+  clock.tick(5);
+  ok("playback stops itself at the end rather than running past it",
+     replayer.at === EVENTS.length && replayer.playing === false,
+     `at=${replayer.at}/${EVENTS.length} playing=${replayer.playing}`);
+}
+{
+  const { replayer } = build();
+  replayer.play();
+  replayer.step(1);
+  ok("stepping takes over from playback", replayer.playing === false);
+}
+
+// -------------------------------------------------------------------- speed
+{
+  const { replayer, clock } = build();
+  ok("the interval follows the speed", (replayer.play(), clock.period) === intervalFor(1),
+     `${clock.period}ms`);
+
+  replayer.slower();
+  ok("SLOWER makes the interval LONGER -- the multiplier is a duration, not a rate",
+     clock.period === intervalFor(2), `${clock.period}ms`);
+  replayer.faster(); replayer.faster();
+  ok("faster makes it shorter", clock.period === intervalFor(0.5), `${clock.period}ms`);
+
+  for (let i = 0; i < 10; i++) replayer.faster();
+  ok("and it clamps at the fastest the reference allows", replayer.speed === SPEED_MIN,
+     String(replayer.speed));
+  for (let i = 0; i < 20; i++) replayer.slower();
+  ok("and at the slowest", replayer.speed === SPEED_MAX, String(replayer.speed));
+
+  // The reason play() restarts rather than adjusting: an interval's period is
+  // fixed once set, so without this a speed change would not take effect until
+  // playback was stopped and started by hand.
+  ok("a speed change while playing takes effect immediately",
+     replayer.playing && clock.period === intervalFor(SPEED_MAX), `${clock.period}ms`);
+}
+
+// -------------------------------------------------------------- announcements
+{
+  const { replayer, seen } = build();
+  const before = seen.length;
+  replayer.seek(2);
+  const last = seen[seen.length - 1];
+  ok("every change is announced, so the page never reads the replayer directly",
+     seen.length > before && last.at === 2 && last.length === EVENTS.length,
+     JSON.stringify(last));
+}
+
+report.result();
+</script></body></html>

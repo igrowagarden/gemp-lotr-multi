@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>GEMP — five-player board</title>
+<link rel="stylesheet" href="./styles/board.css">
+<style>
+  /* Dev scaffolding only. Nothing below here ships. */
+  .devbar {
+    position: fixed; left: 50%; bottom: 10px; transform: translateX(-50%);
+    display: flex; gap: 6px; flex-wrap: wrap; justify-content: center;
+    z-index: 99; padding: 8px 10px; border-radius: 4px;
+    background: color-mix(in srgb, var(--surface) 94%, transparent);
+    border: 1px solid var(--rule-2);
+  }
+  .devbar button {
+    font-family: var(--mono); font-size: 11px; padding: 3px 9px; cursor: pointer;
+    background: transparent; color: var(--brass);
+    border: 1px solid var(--brass); border-radius: 2px;
+  }
+  .devbar button:hover { background: color-mix(in srgb, var(--brass) 14%, transparent); }
+  .devbar .note { font-family: var(--mono); font-size: 11px; color: var(--ink-3); align-self: center; }
+  .devbar .bad { color: var(--alert); }
+</style>
+</head>
+<body>
+<div id="board"></div>
+
+<div class="devbar">
+  <button id="b-shadow">Shadow phase</button>
+  <button id="b-decide">Your decision</button>
+  <button id="b-skirmish">Skirmish</button>
+  <button id="b-end">End skirmish</button>
+  <button id="b-regroup">Regroup — stay</button>
+  <button id="b-spectate">Spectate</button>
+  <span class="note" id="note"></span>
+</div>
+
+<script type="module">
+import { createStore } from "./state/store.js";
+import { decodeEvents } from "./net/protocol.js";
+import { createBoard } from "./view/board.js";
+import { validate } from "./layout/bands.js";
+import * as fixture from "./dev/fixture.js";
+
+const note = document.getElementById("note");
+const say = (text, bad) => { note.textContent = text; note.className = "note" + (bad ? " bad" : ""); };
+
+// The presentation layer and the registry must not drift. This is the check the
+// old client never had, and its absence is why a zone there is drawn by nobody.
+const bands = validate();
+if (!bands.ok) {
+  say([bands.unknown.length ? "not in registry: " + bands.unknown.join(", ") : "",
+       bands.undrawn.length ? "claimed but never drawn: " + bands.undrawn.join(", ") : ""]
+      .filter(Boolean).join(" · "), true);
+}
+
+let store = createStore("asdf");
+let board = createBoard(document.getElementById("board"), store, {
+  onDefect: (missing, dropped) =>
+    say([
+      missing.length ? `${missing.length} card(s) in no band: ` +
+        missing.map((c) => `${c.cardId}/${c.zone}`).join(" ") : "",
+      dropped.length ? `dropped by the display: ` +
+        dropped.map((d) => `${d.band}×${d.count}`).join(" ") : ""
+    ].filter(Boolean).join(" · "), true)
+});
+
+function feed(xml) {
+  store.dispatchAll(decodeEvents(xml));
+  const s = store.getState();
+  if (!note.classList.contains("bad")) {
+    say(`${Object.keys(s.cards).length} cards · ${s.phase ?? "—"} · FP ${s.currentPlayer ?? "—"}`);
+  }
+}
+
+feed(fixture.setup());
+
+// ?feed=shadowPhase,decision,skirmish lets a headless run drive the board
+// through a sequence without clicking, which is how this page gets checked.
+const steps = new URLSearchParams(location.search).get("feed");
+if (steps) {
+  for (const step of steps.split(",")) {
+    if (step === "spectate") {
+      const s = store.getState();
+      store.replace({ ...s, viewerId: "watcher", spectating: true });
+    } else if (typeof fixture[step] === "function") {
+      feed(fixture[step]());
+    } else {
+      say("no such fixture step: " + step, true);
+    }
+  }
+}
+
+document.getElementById("b-shadow").addEventListener("click", () => feed(fixture.shadowPhase()));
+document.getElementById("b-decide").addEventListener("click", () => feed(fixture.decision()));
+document.getElementById("b-skirmish").addEventListener("click", () => feed(fixture.skirmish()));
+document.getElementById("b-end").addEventListener("click", () => feed(fixture.endSkirmish()));
+document.getElementById("b-regroup").addEventListener("click", () => feed(fixture.regroupStay()));
+
+document.getElementById("b-spectate").addEventListener("click", (e) => {
+  const spectating = !store.getState().spectating;
+  // A spectator is a viewer whose id matches no seat -- nothing else changes,
+  // which is the whole point of the contested band being shared.
+  const snapshot = store.getState();
+  store.replace({ ...snapshot, viewerId: spectating ? "watcher" : "asdf", spectating });
+  e.target.textContent = spectating ? "Play as asdf" : "Spectate";
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+  const s = store.getState();
+  const others = s.players.filter((p) => p !== s.currentPlayer);
+  const at = others.indexOf(board.focusId);
+  const next = others[(at + (e.key === "ArrowRight" ? 1 : -1) + others.length) % others.length];
+  board.focus(next);
+  e.preventDefault();
+});
+</script>
+</body>
+</html>

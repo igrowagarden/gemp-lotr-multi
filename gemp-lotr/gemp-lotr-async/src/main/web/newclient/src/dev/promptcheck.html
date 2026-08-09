@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>prompt strip check</title>
+<link rel="stylesheet" href="../styles/board.css">
+<style>body{font-family:ui-monospace,Consolas,monospace;font-size:13px;padding:10px}
+.pass{color:#6E9B7A}.fail{color:#FF5240}.note{color:#B08D57}</style></head>
+<body><div id="out"></div>
+<script type="module">
+/**
+ * The decision strip, asserted branch by branch.
+ *
+ * renderPrompt lived inside `view/board.js`, reachable only by painting a
+ * whole board -- which is how `const chosen = [...selected]` survived sixteen
+ * green suites throwing a ReferenceError on every CARD_SELECTION render, and
+ * had to be dug out of the replay differential (a79b6a0). Every branch below
+ * encodes a rule with a reason: which bounds the engine enforces, when Pass
+ * is a legal offer, where each shape's answer actually lives. Those rules are
+ * what this suite pins down, over fake decisions shaped exactly as
+ * `net/protocol.js` builds them -- numeric ids, `shape` from DECISION_SHAPES,
+ * parameters as parallel arrays.
+ */
+import { renderPrompt } from "../view/prompt.js";
+import { createSelection } from "../model/selection.js";
+import { createReporter } from "./harness.js";
+
+const report = createReporter();
+const ok = report.ok;
+
+let sent = [];
+const onAnswer = (id, v) => sent.push([id, v]);
+const state = (over = {}) => ({
+  viewerId: "me", spectating: false, waitingOn: [], clocks: {}, decision: null,
+  ...over
+});
+const dec = (type, shape, over = {}) => ({
+  id: 5, forPlayer: "me", text: "Do the thing", decisionType: type, shape,
+  parameters: {}, ...over
+});
+const strip = (s, picked) => renderPrompt(document, s, picked ?? createSelection(), onAnswer);
+const buttons = (el) => [...el.querySelectorAll("button")];
+const byLabel = (el, t) => buttons(el).find((b) => b.textContent === t);
+
+// -------------------------------------------------------------- whose turn
+{
+  sent = [];
+  let s = strip(state());
+  ok("no decision reads as waiting", s.textContent.includes("Waiting…"));
+  ok("and is not marked yours", !s.classList.contains("yours"));
+
+  s = strip(state({ decision: dec("CARD_SELECTION", "cards", { forPlayer: "bob" }),
+                    waitingOn: ["bob", "me"] }));
+  ok("somebody else's decision names who is being waited on",
+     s.textContent.includes("Waiting for bob"));
+  ok("but never the viewer", !s.textContent.includes("me"));
+  ok("and offers no controls", s.querySelector(".pactions") == null);
+
+  s = strip(state({ spectating: true, decision: dec("CARD_SELECTION", "cards") }));
+  ok("a spectator gets no controls even for a decision bearing their name",
+     s.querySelector(".pactions") == null && !s.classList.contains("yours"));
+
+  s = renderPrompt(document, state({ decision: dec("CARD_SELECTION", "cards") }),
+                   createSelection(), null);
+  ok("no answer callback, no controls -- a read-only board stays read-only",
+     s.querySelector(".pactions") == null);
+
+  s = strip(state({ decision: dec("MULTIPLE_CHOICE", "button") }));
+  ok("your own decision is marked and quoted",
+     s.classList.contains("yours") && s.textContent.includes("You: Do the thing"));
+}
+
+// ------------------------------------------------------------ button shape
+{
+  sent = [];
+  const d = dec("MULTIPLE_CHOICE", "button",
+                { parameters: { results: ["Yes", "No", "x".repeat(40)] } });
+  const s = strip(state({ decision: d }));
+  const bs = buttons(s);
+  ok("one button per option", bs.length === 3);
+  ok("only the first is primary",
+     bs[0].className.includes("primary") && !bs[1].className.includes("primary"));
+  ok("labels are capped at 28 characters", bs[2].textContent.length === 28);
+  bs[1].click();
+  ok("the answer is the option's INDEX, as a string",
+     sent.length === 1 && sent[0][0] === 5 && sent[0][1] === "1",
+     JSON.stringify(sent));
+
+  const empty = strip(state({ decision: dec("MULTIPLE_CHOICE", "button") }));
+  ok("no options means no button at all -- a button that can only be refused is worse than none",
+     buttons(empty).length === 0 && empty.textContent.includes("No options offered"));
+}
+
+// ------------------------------------------------------------ number shape
+{
+  const num = (params) => {
+    const s = strip(state({ decision: dec("INTEGER", "number", { parameters: params }) }));
+    return { input: s.querySelector("input"), s };
+  };
+  ok("the engine's suggestion is where the input starts",
+     num({ min: ["0"], max: ["10"], defaultValue: ["7"] }).input.value === "7");
+  ok("no suggestion starts on the minimum",
+     num({ min: ["2"], max: ["10"] }).input.value === "2");
+  ok("a suggestion above max clamps down",
+     num({ min: ["0"], max: ["10"], defaultValue: ["15"] }).input.value === "10");
+  ok("but an INVERTED range shows min, as the reference does",
+     num({ min: ["5"], max: ["2"] }).input.value === "5");
+
+  sent = [];
+  const { input, s } = num({ min: ["0"], max: ["10"], defaultValue: ["7"] });
+  input.value = "3";
+  byLabel(s, "Accept").click();
+  ok("Accept sends whatever the input holds",
+     sent.length === 1 && sent[0][1] === "3", JSON.stringify(sent));
+}
+
+// -------------------------------------------------------------- assignment
+{
+  sent = [];
+  const d = dec("ASSIGN_MINIONS", "cards");
+  const picked = createSelection();
+
+  let s = strip(state({ decision: d }), picked);
+  ok("fresh assignment says what to do first",
+     s.textContent.includes("Choose a minion, then the companion it fights"));
+
+  picked.clickMinion(50);
+  s = strip(state({ decision: d }), picked);
+  ok("holding a minion changes the instruction",
+     s.textContent.includes("Now choose who it fights"));
+
+  picked.clickCompanion(9);
+  s = strip(state({ decision: d }), picked);
+  ok("the count reaches the Confirm label", byLabel(s, "Confirm 1") != null);
+  byLabel(s, "Confirm 1").click();
+  ok("Confirm sends the encoding, and only sends -- clearing is the answer path's job",
+     sent.length === 1 && sent[0][1] === picked.encode() && sent[0][1].length > 0,
+     JSON.stringify(sent));
+
+  sent = [];
+  byLabel(s, "Assign none").click();
+  ok("Assign none sends the empty answer", sent.length === 1 && sent[0][1] === "");
+  ok("and abandons the half-made pairing",
+     picked.assignedCount === 0 && picked.held === null);
+}
+
+// ----------------------------------------------------------- action choice
+{
+  sent = [];
+  const d = dec("CARD_ACTION_CHOICE", "cards", { parameters: {
+    actionId: ["11", "12"],
+    cardId: ["70", "71"],
+    blueprintId: ["inPlay", "5_20"],
+    actionText: ["Use ability", "Play from discard"]
+  }});
+  const picked = createSelection();
+  picked.toggle(99);
+  const s = strip(state({ decision: d }), picked);
+  ok("an action from OFF the board gets a strip button -- it has no card to click",
+     byLabel(s, "Play from discard") != null);
+  ok("an on-board action does NOT -- its card is the control",
+     byLabel(s, "Use ability") == null);
+  ok("the board cards are counted, not duplicated as buttons",
+     s.textContent.includes("1 card to choose from"));
+  byLabel(s, "Play from discard").click();
+  ok("a virtual action answers with its actionId",
+     sent.length === 1 && sent[0][1] === "12", JSON.stringify(sent));
+
+  sent = [];
+  byLabel(s, "Pass").click();
+  ok("Pass answers empty and drops any stray picks",
+     sent.length === 1 && sent[0][1] === "" && picked.size === 0);
+}
+
+// ---------------------------------------------------------- arbitrary cards
+{
+  const s = strip(state({ decision: dec("ARBITRARY_CARDS", "cards") }));
+  ok("the picker window owns ARBITRARY_CARDS -- the strip only points there",
+     buttons(s).length === 0 && s.textContent.includes("Choose in the card window"));
+}
+
+// ----------------------------------------------------------- card selection
+{
+  const d = (min, max) => dec("CARD_SELECTION", "cards",
+    { parameters: { min: [String(min)], ...(max == null ? {} : { max: [String(max)] }) } });
+
+  let s = strip(state({ decision: d(1, 2) }));
+  ok("below min, Confirm is disabled and says what would fix it",
+     byLabel(s, "Confirm").disabled && byLabel(s, "Confirm").title.includes("1"));
+  ok("Pass is NOT offered above min 0 -- its only outcome would be a rejection",
+     byLabel(s, "Pass") == null);
+
+  sent = [];
+  s = strip(state({ decision: d(0, 2) }));
+  byLabel(s, "Pass").click();
+  ok("at min 0, Pass exists and answers empty",
+     sent.length === 1 && sent[0][1] === "");
+
+  const over = createSelection();
+  over.toggle("a"); over.toggle("b");
+  s = strip(state({ decision: d(0, 1) }), over);
+  ok("above max, Confirm is disabled -- the engine enforces BOTH bounds",
+     byLabel(s, "Confirm 2").disabled);
+
+  sent = [];
+  const picked = createSelection();
+  picked.toggle("a"); picked.toggle("b");
+  s = strip(state({ decision: d(1, 2) }), picked);
+  const confirm = byLabel(s, "Confirm 2");
+  ok("inside the bounds, Confirm is live", !confirm.disabled);
+  confirm.click();
+  ok("and sends the picked ids, comma-joined, in pick order",
+     sent.length === 1 && sent[0][1] === "a,b", JSON.stringify(sent));
+  ok("sending clears the selection, so it cannot leak into the next decision",
+     picked.size === 0);
+}
+
+// ------------------------------------------------------------------- clock
+{
+  let s = strip(state({ decision: dec("MULTIPLE_CHOICE", "button"),
+                        clocks: { me: 65 } }));
+  ok("the viewer's clock renders on the strip",
+     s.querySelector(".ptimer")?.textContent === "1:05");
+  s = strip(state({ decision: dec("MULTIPLE_CHOICE", "button") }));
+  ok("no clock, no timer element", s.querySelector(".ptimer") == null);
+}
+
+report.result();
+</script></body></html>

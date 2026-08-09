@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>zoom preview</title>
+<link rel="stylesheet" href="../styles/board.css">
+<style>body{font-family:ui-monospace,Consolas,monospace;font-size:13px;padding:10px}
+#board{position:relative;height:60vh}#panels{position:relative;height:1px}
+.pass{color:#6E9B7A}.fail{color:#FF5240}</style></head>
+<body><div id="board"></div><div id="out"></div>
+<script type="module">
+/**
+ * The hover preview shows a picture, for cards AND for sites.
+ *
+ * It reuses the <img> already on the thing being hovered instead of fetching
+ * again, which means it depends on that element's class name -- and it silently
+ * showed a bare label for every site until the selector learned about `.s-art`.
+ * Cheap to check, and it was not checked at all before.
+ */
+import { createStore } from "../state/store.js";
+import { decodeEvents } from "../net/protocol.js";
+import { createBoard } from "../view/board.js";
+import { createZoom } from "../view/piles.js";
+import { createPathPanel } from "../view/panels.js";
+import * as fixture from "./fixture.js";
+
+const out = document.getElementById("out");
+let pass = 0, fail = 0;
+const ok = (l, c, d) => { const e = document.createElement("div");
+  e.className = c ? "pass" : "fail";
+  e.textContent = (c ? "PASS  " : "FAIL  ") + l + (d ? "  -> " + d : "");
+  out.appendChild(e); c ? pass++ : fail++; };
+
+const boardEl = document.getElementById("board");
+const store = createStore("asdf");
+createBoard(boardEl, store, {});
+const zoom = createZoom(boardEl);
+const panel = createPathPanel(boardEl, store);
+store.dispatchAll(decodeEvents(fixture.setup()));
+panel.open();
+panel.paint(store.getState());
+
+const hover = (node) =>
+  node.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+const art = () => zoom.node.querySelector(".z-art");
+const showing = () => zoom.node.classList.contains("on") &&
+                      art().style.display !== "none" && !!art().getAttribute("src");
+
+const card = boardEl.querySelector(".card[data-card-id]");
+ok("there is a card to hover", !!card);
+hover(card);
+ok("hovering a card shows a picture", showing(), art().getAttribute("src") ?? "no src");
+
+const site = [...boardEl.querySelectorAll(".site")].find((s) => !s.classList.contains("pending"));
+ok("there is a played site to hover", !!site);
+hover(site);
+ok("hovering a site shows a picture", showing(), art().getAttribute("src") ?? "no src");
+ok("and the preview lies on its side", zoom.node.classList.contains("landscape"));
+
+const pending = boardEl.querySelector(".site.pending");
+if (pending) {
+  hover(pending);
+  ok("an unplayed site previews nothing", !zoom.node.classList.contains("on"));
+}
+
+const r = document.createElement("div");
+r.id = "result"; r.className = fail === 0 ? "pass" : "fail";
+r.textContent = fail === 0 ? `RESULT: ALL PASS (${pass})` : `RESULT: ${fail} FAILED of ${pass + fail}`;
+document.body.appendChild(r);
+</script></body></html>
