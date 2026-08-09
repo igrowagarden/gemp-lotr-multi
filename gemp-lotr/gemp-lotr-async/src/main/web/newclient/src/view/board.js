@@ -38,6 +38,11 @@ export function createBoard(root, store, options = {}) {
   const onAnswer = options.onAnswer ?? null;
   const onPiles = options.onPiles ?? null;
   const onDetach = options.onDetach ?? null;
+  // A host-owned node adopted into the readout row, left of the filters --
+  // the connection status used to float over the bottom of the board, and
+  // the playtest wanted it in the top bar. Re-appending the SAME node each
+  // paint keeps its buttons and their listeners alive.
+  const statusNode = options.statusNode ?? null;
   // What the player has picked but not yet sent -- cards and the assignment
   // being built. A small state machine with real rules, so it lives in
   // model/selection.js where it can be tested without a board to click.
@@ -209,7 +214,13 @@ export function createBoard(root, store, options = {}) {
       b.addEventListener("click", () => { filter = mode; paint(store.getState()); });
       seg.appendChild(b);
     }
-    seg.style.marginLeft = "auto";
+    if (statusNode) {
+      statusNode.style.marginLeft = "auto";
+      bar.appendChild(statusNode);
+      seg.style.marginLeft = "12px";
+    } else {
+      seg.style.marginLeft = "auto";
+    }
     bar.appendChild(seg);
     return bar;
   }
@@ -571,11 +582,12 @@ export function createBoard(root, store, options = {}) {
       arrow.addEventListener("click", () => step(delta));
       root.appendChild(arrow);
     }
-    const live = focusable(state);
-    const chip = el(doc, "div", "poschip", skirmishing
-      ? "skirmish · every seat shown"
-      : `${live.indexOf(focusId) + 1} / ${live.length}${state.spectating ? " · spectating" : ""}`);
-    root.appendChild(chip);
+    // The top-centre position chip ("1 / 4") is GONE by playtest ruling; the
+    // seat strip already shows which opponent is focused. The skirmish state
+    // keeps its one useful message, folded into the poschip slot only then.
+    if (skirmishing) {
+      root.appendChild(el(doc, "div", "poschip", "skirmish · every seat shown"));
+    }
 
     // Before FLIP, so the offsets are part of the position it measures.
     alignAssignments(state);

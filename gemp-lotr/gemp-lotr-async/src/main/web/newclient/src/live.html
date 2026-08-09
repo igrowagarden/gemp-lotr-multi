@@ -5,13 +5,15 @@
 <title>GEMP — live board</title>
 <link rel="stylesheet" href="./styles/board.css">
 <style>
+  /* Lives INSIDE the board's readout row, left of the filter buttons -- the
+     board adopts the node each paint (createBoard's statusNode option). It
+     floated over the bottom of the board until the playtest moved it. */
   .statusbar {
-    position: fixed; left: 50%; bottom: 10px; transform: translateX(-50%);
-    display: flex; gap: 10px; align-items: center; z-index: 99;
-    padding: 7px 12px; border-radius: 4px;
-    background: color-mix(in srgb, var(--surface) 94%, transparent);
-    border: 1px solid var(--rule-2);
-    font-family: var(--mono); font-size: 11px; color: var(--ink-3);
+    display: flex; gap: 8px; align-items: center; min-width: 0;
+    font-family: var(--mono); font-size: 9.5px; color: var(--ink-3);
+  }
+  .statusbar #detail {
+    max-width: 34ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-3); }
   .dot.live { background: var(--free); }
@@ -125,8 +127,8 @@ const sendAnswer = createAnswerGate(
 );
 
 const board = createBoard(document.getElementById("board"), store, {
-  // The prompt renders controls for the decision's shape; answering rides on
-  // the next poll, interrupting the one in flight.
+  // The status bar renders in the readout row, left of the filters.
+  statusNode: document.querySelector(".statusbar"),
   onAnswer: sendAnswer,
   onPiles: (playerId) => piles.show(playerId),
   onDetach: (playerId) => detacher.detach(playerId),
