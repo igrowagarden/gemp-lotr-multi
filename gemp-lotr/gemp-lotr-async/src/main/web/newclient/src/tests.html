@@ -144,21 +144,30 @@ eq("with no contested row, every seat is focusable",
    ["carol", "asdf", "dave", "qwer"]);
 ok("contestedId is just the Free Peoples player", contestedId(playing) === "carol");
 
-group("skirmish display: the shadow viewer's own fellowship row hides");
-// Ruled in the playtest: "when I'm shadow and we are resolving skirmishes
-// you can hide my fellowship bar." The Free Peoples viewer keeps theirs --
-// those cards are the fight -- and `undrawn` treats the drop as deliberate.
+group("skirmish display: bands hide by marking, never by vanishing");
+// Ruled in the playtest: the shadow viewer's fellowship hides during a
+// skirmish, the fight sits mid-screen under the opponent's rows, and
+// ANYTHING hidden -- by ruling or by the player's retract rail -- must be
+// offered back. So displayFor marks autoHide rather than filtering, and
+// undrawn trusts the ctx.hidden set the board computes.
 const skShadowCtx = { viewerId: "asdf", fpId: "carol", focusId: "dave",
                       spectating: false, skirmishing: true };
-ok("hidden for a shadow viewer during a skirmish",
-   !displayFor(skShadowCtx).some((b) => b.id === "selfFree"));
-ok("kept when the viewer IS the Free Peoples player",
-   displayFor({ ...skShadowCtx, fpId: "asdf" }).some((b) => b.id === "selfFree"));
-ok("kept outside skirmishes",
-   displayFor({ ...skShadowCtx, skirmishing: false }).some((b) => b.id === "selfFree"));
-ok("the hidden row is not reported as a defect",
-   undrawn(new Map([["selfFree", [{ cardId: 3 }]]]), skShadowCtx).length === 0);
-ok("but an unexplained drop still would be -- the detector can still see",
+ok("the shadow viewer's fellowship row is marked autoHide, not removed",
+   displayFor(skShadowCtx).find((b) => b.id === "selfFree")?.autoHide === true);
+ok("no autoHide when the viewer IS the Free Peoples player",
+   !displayFor({ ...skShadowCtx, fpId: "asdf" }).find((b) => b.id === "selfFree")?.autoHide);
+ok("none outside skirmishes",
+   !displayFor({ ...skShadowCtx, skirmishing: false }).find((b) => b.id === "selfFree")?.autoHide);
+ok("the skirmish band sits between the opponent rows and the minions",
+   (() => {
+     const ids = displayFor(skShadowCtx).map((b) => b.id);
+     return ids.indexOf("focusFree") < ids.indexOf("skirmish") &&
+            ids.indexOf("skirmish") < ids.indexOf("minions");
+   })());
+ok("a band in the ctx.hidden set is not reported as a drop",
+   undrawn(new Map([["selfFree", [{ cardId: 3 }]]]),
+           { ...skShadowCtx, hidden: new Set(["selfFree"]) }).length === 0);
+ok("but an unexplained drop still is -- the detector can still see",
    undrawn(new Map([["skirmish", [{ cardId: 20 }]]]),
            { ...skShadowCtx, skirmishing: false }).length === 1);
 

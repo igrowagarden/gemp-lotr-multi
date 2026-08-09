@@ -72,14 +72,19 @@ export const DISPLAY = Object.freeze([
  * unassigned minions and the rest of the fellowship -- cards the registry still
  * claims, so nothing would report them missing. They would simply be gone.
  */
-export const SKIRMISH_DISPLAY = Object.freeze([
-  {
+export const SKIRMISH_DISPLAY = Object.freeze((() => {
+  // The fight sits MID-SCREEN (playtest ruling): the focused opponent's
+  // support and fellowship stay above it, the minions and the viewer's own
+  // rows below. The other bands shrink to give it the height.
+  const scaled = DISPLAY.map((b) => ({ ...b, weight: Math.max(3, Math.round(b.weight * 0.6)) }));
+  const skirmish = {
     id: "skirmish", weight: 26, collapsed: 20, ownerTag: true,
     label: (ctx, n, seats) => `Skirmish · ${n} cards from ${seats} seats · focus suspended`,
     tone: "shared"
-  },
-  ...DISPLAY.map((b) => ({ ...b, weight: Math.max(3, Math.round(b.weight * 0.6)) }))
-]);
+  };
+  const at = scaled.findIndex((b) => b.id === "minions");
+  return [...scaled.slice(0, at), skirmish, ...scaled.slice(at)];
+})());
 
 const KNOWN = new Set(BANDS.map((b) => b.id));
 
@@ -109,24 +114,30 @@ export function undrawn(byBand, ctx) {
   const shown = new Set(displayFor(ctx).map((b) => b.id));
   const missed = [];
   for (const [id, cards] of byBand) {
-    if (id === "path" || shown.has(id) || cards.length === 0) continue;
-    // The shadow viewer's own fellowship is deliberately hidden during a
-    // skirmish (see displayFor) -- a ruling, not a drop.
-    if (id === "selfFree" && ctx.skirmishing && ctx.viewerId !== ctx.fpId) continue;
+    if (id === "path" || cards.length === 0) continue;
+    // Deliberately hidden -- auto-hidden by ruling or retracted by the
+    // player (ctx.hidden, computed by the board) -- is not a drop.
+    if (ctx.hidden?.has(id)) continue;
+    if (shown.has(id)) continue;
     missed.push({ band: id, count: cards.length });
   }
   return missed;
 }
 
+/**
+ * Bands are HIDDEN, not removed: every entry stays in the list so the
+ * retract rail can offer it back, and `autoHide: true` marks the ones a
+ * ruling hides by default -- today the shadow viewer's own fellowship
+ * during a skirmish ("you can hide my fellowship bar"): their companions
+ * are not in this fight and the vertical fight display wants the height.
+ * The board combines autoHide with the player's own retractions and passes
+ * the effective set to `undrawn` as ctx.hidden, so a deliberate hide is
+ * never reported as a drop.
+ */
 export function displayFor(ctx) {
   if (!ctx.skirmishing) return DISPLAY;
-  // While the viewer fights as SHADOW, their own fellowship row is hidden
-  // (playtest ruling) -- their companions are not in this fight, and the
-  // vertical fight display wants the height. The Free Peoples viewer keeps
-  // it: those are the cards fighting. `undrawn` knows this drop is
-  // deliberate.
   if (ctx.viewerId != null && ctx.fpId != null && ctx.viewerId !== ctx.fpId) {
-    return SKIRMISH_DISPLAY.filter((b) => b.id !== "selfFree");
+    return SKIRMISH_DISPLAY.map((b) => b.id === "selfFree" ? { ...b, autoHide: true } : b);
   }
   return SKIRMISH_DISPLAY;
 }

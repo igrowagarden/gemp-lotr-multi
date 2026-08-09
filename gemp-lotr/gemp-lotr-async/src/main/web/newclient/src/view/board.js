@@ -60,6 +60,10 @@ export function createBoard(root, store, options = {}) {
   // mousedown/mouseup straddles a repaint never fires ("Accept doesn't work").
   let promptNode = null, promptFor = null, promptWarning = null;
   let lastDecision = null;
+  // The player's own retractions, id -> "hide" | "show". "hide" retracts a
+  // band into the left rail for screen room; "show" overrides an autoHide
+  // ruling (anything auto-hidden must be easy to unhide). Session-scoped.
+  const bandOverride = new Map();
 
   /** Answer and clear, so a stale selection cannot leak into the next decision. */
   function answer(decisionId, value) {
@@ -537,6 +541,13 @@ export function createBoard(root, store, options = {}) {
       delete draft.value;
     }
     const ctx = { ...bandContext(state, focusId), viewerId: state.viewerId, fpId: fpId(state) };
+    // Which bands are hidden right now: the player's retractions plus any
+    // autoHide ruling they have not overridden. Computed before the split so
+    // the completeness detector can be told these drops are deliberate.
+    const specs = displayFor(ctx);
+    ctx.hidden = new Set(specs.filter((b) =>
+      bandOverride.get(b.id) === "hide" ||
+      (b.autoHide && bandOverride.get(b.id) !== "show")).map((b) => b.id));
     const split = assignBands(allCards(state), ctx);
 
     // `onParent` was computed from the start and never used, so every attached
@@ -554,7 +565,7 @@ export function createBoard(root, store, options = {}) {
     // stays a pure function of state and knows nothing about this.
     const before = captureRects(stack);
 
-    for (const old of root.querySelectorAll(":scope > .navarrow, :scope > .poschip")) old.remove();
+    for (const old of root.querySelectorAll(":scope > .navarrow, :scope > .poschip, :scope > .bandrail")) old.remove();
 
     // The prompt SURVIVES the wipe while the same decision stands (same
     // decision object, same warning) and its shape is answered from the strip
@@ -575,7 +586,8 @@ export function createBoard(root, store, options = {}) {
     put(renderReadout(state));
     put(renderSeats(state));
 
-    for (const spec of displayFor(ctx)) {
+    for (const spec of specs) {
+      if (ctx.hidden.has(spec.id)) continue;         // retracted into the rail
       const cards = split.byBand.get(spec.id) ?? [];
       // `collapsed: 0` means "this band has nothing to say when it is empty".
       // Rendering it anyway still costs a label, padding and a border, which is
@@ -595,6 +607,33 @@ export function createBoard(root, store, options = {}) {
       promptWarning = state.warning ?? null;
       stack.appendChild(promptNode);
     }
+
+    // THE RETRACT RAIL: a vertical strip on the left with one tab per band.
+    // Clicking a shown band retracts it for screen room; a retracted or
+    // auto-hidden one (dimmed tab) comes back with one click -- anything
+    // hidden must be easy to unhide (playtest ruling). Rebuilt per paint;
+    // the state lives in `bandOverride`.
+    const rail = el(doc, "div", "bandrail");
+    const RAIL_NAMES = {
+      focusSupport: "opp support", focusFree: "opp fellowship",
+      skirmish: "skirmish", minions: "minions",
+      selfFree: "your fellowship", selfSupport: "your support", hand: "hand"
+    };
+    for (const spec of specs) {
+      const cards = split.byBand.get(spec.id) ?? [];
+      if (!cards.length && !spec.collapsed && !ctx.hidden.has(spec.id)) continue;
+      const hiddenNow = ctx.hidden.has(spec.id);
+      const tab = el(doc, "button", "railtab" + (hiddenNow ? " off" : ""),
+                     RAIL_NAMES[spec.id] ?? spec.id);
+      tab.type = "button";
+      tab.title = hiddenNow ? "Show this row" : "Hide this row";
+      tab.addEventListener("click", () => {
+        bandOverride.set(spec.id, hiddenNow ? "show" : "hide");
+        paint(store.getState());
+      });
+      rail.appendChild(tab);
+    }
+    root.appendChild(rail);
 
     // Edge arrows. Suspended during a skirmish, which draws every seat -- they
     // go visibly dead rather than silently doing nothing.
