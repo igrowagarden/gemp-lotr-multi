@@ -6,6 +6,9 @@ test and differential harnesses; `harness/` drives the server.
 
 ## Read first
 
+- **`ARCHITECTURE.md`** — how the files work together: the event loop, the
+  layering, and a one-line tour of every module. Read it before touching
+  anything if you are new to the tree.
 - **`HANDOFF.md`, the "Start here" block** — current state, the three harness
   commands with their last verified results, what is done, what is not, and the
   lessons that cost the most. Long, but the top ~90 lines are the orientation.
