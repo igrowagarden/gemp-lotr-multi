@@ -1,12 +1,12 @@
-# gemp_gui — a new board client for five-player GEMP
+# newclient — the new board client for five-player GEMP
 
-> **THIS DIRECTORY IS RETIRED (2026-08-09).** The project was imported, with
-> full history, into the engine fork:
-> `gemp_multiplayer/vendor/gemp-lotr/gemp-lotr/gemp-lotr-async/src/main/web/newclient/`
-> (fork commit `d51f13367`, branch `multiplayer/five-players`). Work there, not
-> here. This tree stays as the tagged pre-merge snapshot
-> (`pre-merge-into-engine`) and receives no further commits after the final
-> engine-swap documentation.
+**This is the canonical home (since 2026-08-09).** The project began life as
+the standalone `gemp_gui` repository and was imported here with full history
+by `git subtree` — `git log -- .` from this directory has every commit, and
+the messages carry the reasoning. The old directory
+(`Documents/gemp_gui`, tag `pre-merge-into-engine`) is a retired snapshot;
+never commit there. The OLD client this one replaces lives two levels up, at
+the web root (`../../game.html`, `../../js/gemp-022/gameUi.js`).
 
 A rebuilt game board for GEMP LotR, replacing a client that shows one opponent at
 a time. Native ES modules, no build step. `src/` is the client; `src/dev/` is the
@@ -34,15 +34,29 @@ self-contained. Keep it that way. `view/board.js` is down to ~366 code lines
 after the selection and prompt extractions; what remains is cohesively the
 board, and no further split is planned.
 
-## Do not touch these trees
+## The geography
 
 ```
-gemp_gui/            <- this project
-gemp_multiplayer/    <- ANOTHER project, worked separately. Read only.
-  vendor/gemp-lotr/  <- the GEMP fork. Read only.
-C:\Users\emers\gemp2 <- OUR server + our copy of the reference client. Read
-                        freely; this is the one to read the old client from.
+vendor/gemp-lotr/                    <- THIS repo: the engine fork
+  gemp-lotr/.../src/main/web/        <- the OLD client (game.html, js/)
+  gemp-lotr/.../web/newclient/       <- THIS project
+C:\Users\emers\gemp2                 <- the RUNTIME: server jar + MySQL data +
+                                        the recording corpus. Deliberately
+                                        OUTSIDE OneDrive; harness/sync.sh
+                                        deploys there and docker runs there.
+                                        Never run a server off THIS tree's
+                                        database/ dir -- MySQL under OneDrive
+                                        sync is a corruption hazard.
+Documents/gemp_gui                   <- retired pre-merge snapshot. Read only.
+Documents/gemp_multiplayer           <- the engine research project wrapping
+                                        this repo. Its docs and harness are
+                                        its own; coordinate, don't clobber.
 ```
+
+Engine (Java) changes carry the engine project's own method — measured
+rulings, mvn tests (see gemp_multiplayer/HANDOFF.md). Client changes carry
+this project's method — the differentials below. The win of sharing one repo
+is that a change to both lands as ONE commit.
 
 `gemp_multiplayer/docs/GEMP_CARD_SELECTION_MAX0.md` is a bug report this project
 left there, deliberately **untracked**. Do not commit it or anything else in
