@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>shape check — the decision space, standalone</title>
+<link rel="stylesheet" href="../styles/board.css">
+<style>body{font-family:ui-monospace,Consolas,monospace;font-size:13px;padding:10px;background:#111;color:#ddd}
+.pass{color:#6E9B7A}.fail{color:#FF5240}.note{color:#B08D57}
+#board{position:absolute;left:-10000px;top:0;width:1400px;height:900px}</style></head>
+<body><div id="out"></div><div id="board"></div>
+<script type="module">
+/**
+ * The decision space, driven WITHOUT the reference client and WITHOUT a
+ * server: every case in the shape catalogue is fed to the real board, and the
+ * client's own two levels are asserted against each other --
+ *
+ *   contract   what the decision's parameters say is answerable
+ *              (`probe.contractOffers`), and
+ *   reachable  what a player could actually click on the rendered DOM
+ *              (`probe.reachableOffers`).
+ *
+ * The oracle differential (`decisionfuzz`) answers "do we match the reference".
+ * This suite answers a different question at a hundredth of the cost: "is this
+ * client internally consistent over the whole catalogue" -- every named card
+ * that exists on the board is clickable, nothing is lit that the decision did
+ * not name, the strip enforces the engine's bounds, and NO SHAPE THROWS. The
+ * last one is not hypothetical: a ReferenceError in the CARD_SELECTION strip
+ * survived sixteen green suites because nothing drove every shape through a
+ * real paint (a79b6a0).
+ *
+ * Sabotage modes, because a checker that cannot fail is indistinguishable from
+ * one that found nothing (`?sabotage=`):
+ *   nolight       strips one lit card's eligibility class before measuring --
+ *                 the "present card not reachable" detector must fire
+ *   phantomlight  injects a lit card the decision never named -- the
+ *                 "reachable beyond contract" detector must fire
+ *   mute          never prints RESULT -- the RUNNER's dead-page detector must
+ *                 report it, exactly the failure a dying module import causes
+ */
+import { createStore } from "../state/store.js";
+import { createBoard } from "../view/board.js";
+import { createPicker } from "../view/picker.js";
+import { createPathPanel } from "../view/panels.js";
+import { decodeEvents } from "../net/protocol.js";
+import { assignable } from "../model/assign.js";
+import { contractOffers, reachableOffers } from "./probe.js";
+import { CASES, WHERE, VIEWER, baseBoard, decisionXml } from "./decisionshapes.js";
+import { createReporter, query } from "./harness.js";
+
+const report = createReporter();
+const ok = report.ok;
+const sabotage = query().get("sabotage");
+const only = query().get("only");
+
+// Every card the fixture actually places. ABSENT is named by decisions and on
+// no board -- the difference between "offers nothing" and "crashes".
+const PRESENT = new Set(Object.values(WHERE).filter((id) => id !== WHERE.ABSENT));
+
+// Same wiring as live.html and decisionfuzz: built ONCE, re-fed per case,
+// because createBoard registers document-level handlers and forty-eight
+// constructions would stack forty-eight sets of them.
+const boardEl = document.getElementById("board");
+let lastAnswer = null;
+const capture = { onAnswer: (id, value) => { lastAnswer = { id: String(id), value: String(value) }; } };
+const store = createStore(VIEWER);
+const board = createBoard(boardEl, store, capture);
+const picker = createPicker(boardEl, capture);
+const path = createPathPanel(boardEl, store, { ...capture, selection: board.selection });
+path.open();
+store.subscribe((s) => {
+  path.paint(s);
+  const d = s.decision;
+  if (d && d.decisionType === "ARBITRARY_CARDS" && d.forPlayer === s.viewerId) picker.show(d);
+  else picker.hide();
+});
+
+const baseEvents = decodeEvents(baseBoard());
+const uniq = (a) => [...new Set(a)];
+const sameSet = (a, b) => {
+  const x = uniq(a.map(String)).sort(), y = uniq(b.map(String)).sort();
+  return x.length === y.length && x.every((v, i) => v === y[i]);
+};
+const buttons = () => [...boardEl.querySelectorAll(".prompt .pbtn")];
+const byLabel = (t) => buttons().find((b) => b.textContent === t || b.textContent.startsWith(t));
+
+/** Feed one case; return the list of violated invariants (empty = clean). */
+function runCase(c) {
+  const bad = [];
+  let d;
+  try {
+    store.dispatchAll(baseEvents);
+    store.dispatchAll(decodeEvents(decisionXml({ type: c.type, params: c.params })));
+    d = store.getState().decision;
+  } catch (e) {
+    // The one invariant that outranks all the others. A throw mid-paint can
+    // leave the previous decision's DOM standing, which LOOKS rendered.
+    return [`THREW: ${e.message}`];
+  }
+  if (!d) return ["no decision held after feeding one"];
+
+  let phantom = null;
+  if (sabotage === "nolight") {
+    const lit = boardEl.querySelector(".card.is-eligible[data-card-id], .site.is-eligible[data-card-id]");
+    if (lit) lit.classList.remove("is-eligible");
+  }
+  if (sabotage === "phantomlight") {
+    phantom = document.createElement("div");
+    phantom.className = "card is-eligible";
+    phantom.dataset.cardId = "777";
+    boardEl.appendChild(phantom);
+  }
+
+  try {
+    const contract = contractOffers(d);
+    const reach = reachableOffers(boardEl, d);
+    const p = d.parameters ?? {};
+
+    if (c.type === "CARD_SELECTION") {
+      // Exactly the named cards that exist are lit: no phantom, no absentee,
+      // and none of the placement classes (attached, site, hand) missing.
+      const expected = uniq((p.cardId ?? []).map(String)).filter((id) => PRESENT.has(id));
+      if (!sameSet(reach.ids, expected)) {
+        bad.push(`lit=[${uniq(reach.ids)}] expected=[${expected}]`);
+      }
+      // The strip enforces what the engine enforces, from a standing start:
+      // nothing picked, so Confirm is legal exactly when 0 is inside the range.
+      const lo = parseInt(p.min?.[0] ?? "0", 10);
+      const hi = p.max?.[0] != null ? parseInt(p.max[0], 10) : Infinity;
+      const confirm = byLabel("Confirm");
+      if (!confirm) bad.push("no Confirm on the strip");
+      else if (confirm.disabled !== !(0 >= lo && 0 <= hi)) {
+        bad.push(`Confirm ${confirm.disabled ? "disabled" : "enabled"} at min=${lo} max=${hi} with nothing picked`);
+      }
+      if ((byLabel("Pass") != null) !== (lo === 0)) {
+        bad.push(`Pass ${byLabel("Pass") ? "offered" : "missing"} at min=${lo}`);
+      }
+    } else if (c.type === "CARD_ACTION_CHOICE") {
+      const onBoard = contract.detail.filter((a) => !a.virtual).map((a) => a.cardId)
+        .filter((id) => PRESENT.has(String(id)));
+      if (!sameSet(reach.ids, onBoard)) {
+        bad.push(`lit=[${uniq(reach.ids)}] expected=[${uniq(onBoard)}]`);
+      }
+      const virtual = contract.detail.filter((a) => a.virtual).map((a) => a.text);
+      if (!sameSet(reach.virtual ?? [], virtual)) {
+        bad.push(`virtual buttons=[${reach.virtual}] expected=[${virtual}]`);
+      }
+      if (!byLabel("Pass")) bad.push("no Pass on the strip");
+    } else if (c.type === "ASSIGN_MINIONS") {
+      const a = assignable(d);
+      const expected = uniq([...a.freeCharacters, ...a.minions].map(String))
+        .filter((id) => PRESENT.has(id));
+      if (!sameSet(reach.ids, expected)) {
+        bad.push(`lit=[${uniq(reach.ids)}] expected=[${expected}]`);
+      }
+      if (!byLabel("Confirm")) bad.push("no Confirm on the strip");
+      if (!byLabel("Assign none")) bad.push("no Assign none on the strip");
+    } else if (c.type === "ARBITRARY_CARDS") {
+      if (!sameSet(reach.ids, contract.answers)) {
+        bad.push(`pickable=[${reach.ids}] expected=[${contract.answers}]`);
+      }
+    } else if (c.type === "INTEGER") {
+      const input = boardEl.querySelector(".prompt input.pnum");
+      if (!input) bad.push("no number input on the strip");
+      else {
+        const lo = parseInt(p.min?.[0] ?? "0", 10);
+        const hi = p.max?.[0] != null ? parseInt(p.max[0], 10) : Infinity;
+        const v = parseInt(input.value, 10);
+        if (hi >= lo && (v < lo || v > hi)) bad.push(`input starts at ${v}, outside ${lo}..${hi}`);
+      }
+    } else {
+      // MULTIPLE_CHOICE / ACTION_CHOICE: one button per option, and an empty
+      // option list means a note, never a button that can only be refused.
+      if (reach.ids.length !== contract.answers.length) {
+        bad.push(`${reach.ids.length} buttons for ${contract.answers.length} options`);
+      }
+      if (contract.answers.length === 0 &&
+          !boardEl.querySelector(".prompt").textContent.includes("No options offered")) {
+        bad.push("empty option list without the no-options note");
+      }
+    }
+  } catch (e) {
+    bad.push(`measuring threw: ${e.message}`);
+  } finally {
+    if (phantom) phantom.remove();
+  }
+  return bad;
+}
+
+let ran = 0;
+for (const c of CASES) {
+  if (only && !c.name.includes(only)) continue;
+  ran++;
+  const bad = runCase(c);
+  ok(`${c.type}: ${c.name}`, bad.length === 0, bad.join(" | "));
+}
+report.note(`${ran} catalogue cases driven through a real paint`);
+
+// A decision addressed to somebody else: nothing lights, nothing is offered.
+// The wire form is exact -- forPlayer is the event's participantId
+// (state/reduce.js:278), so the attribute goes on the <ge> itself.
+// DEFENSIVE ON PURPOSE: if the catalogue loop above left the client throwing,
+// the board may hold no .prompt at all -- and an uncaught TypeError here would
+// kill the page before report.result(), turning "13 THREW" into a silent
+// NO RESULT. Measured: reintroducing the a79b6a0 ReferenceError did exactly
+// that until this block stopped assuming the paint succeeded.
+{
+  let threw = null;
+  try {
+    store.dispatchAll(baseEvents);
+    store.dispatchAll(decodeEvents(
+      `<events><ge type="D" id="9" decisionType="CARD_SELECTION" text="foreign" participantId="dave">` +
+      `<parameter name="min" value="1"/><parameter name="max" value="1"/>` +
+      `<parameter name="cardId" value="${WHERE.MINION}"/></ge></events>`));
+  } catch (e) { threw = e; }
+  const prompt = boardEl.querySelector(".prompt");
+  ok("a foreign decision still paints", threw == null && prompt != null,
+     threw ? `THREW: ${threw.message}` : "no .prompt rendered");
+  ok("somebody else's decision lights nothing",
+     boardEl.querySelectorAll(".card.is-eligible, .site.is-eligible").length === 0);
+  ok("and offers no controls",
+     boardEl.querySelector(".prompt .pactions") == null);
+  ok("and reads as waiting", (prompt?.textContent ?? "").includes("Waiting"));
+}
+
+if (sabotage !== "mute") report.result(sabotage ? `  [sabotage=${sabotage}]` : "");
+</script></body></html>

@@ -75,8 +75,19 @@ originals plus seven surface differentials added since:
 Plus `harness/autopassmeasure.py`, which proves the auto-pass cookie changes
 what the ENGINE asks rather than merely what it parses.
 
-**SEVENTEEN assertion suites that print a RESULT line** (counted by running
-them, not from memory): `selectioncheck` (28) is back
+**The standalone suite: `bash harness/fastrun.sh`** — every assertion page
+plus `shapecheck`, with no Docker and no reference client, in about a minute.
+`shapecheck` (52) drives all 48 catalogue decision shapes through a real
+paint and asserts the client's own two levels against each other (contract
+vs reachable, via `dev/probe.js`), plus the engine's bounds on the strip and
+that NO SHAPE THROWS — reintroducing the a79b6a0 ReferenceError turns it
+43-red. Three controls: `nolight`, `phantomlight`, and `mute` (which proves
+the runner reports a dead page instead of skipping it). It is the fast inner
+loop; it does not replace the differential for `view/`/`state/` changes.
+
+**EIGHTEEN assertion suites that print a RESULT line** (counted by running
+them, not from memory): `shapecheck` (52) is new with the standalone
+runner; `selectioncheck` (28) is back
 with the fixed extraction and `promptcheck` (39) is new with the renderPrompt
 extraction -- both cover code that used to be reachable only by painting a
 board. `wirecheck` needs `live_capture.xml` copied into the deployed dev/
@@ -116,7 +127,17 @@ everything without error every time, and only the oracle said what was missing.
 **`src/dev/oldharness.html` now has NINE consumers.** Anything added to it must
 be opt-in and default off; there are three such flags now
 (`setReadStaleDialogButtons`, `setRealChatBox`, `setReplayMode`) and every one
-of them exists because the default is right for the other pages. `decisionfuzz.html`
+of them exists because the default is right for the other pages.
+
+**The probe's dropdown read is gated on `calls.lastType` (0cbe40a).** The
+reference's `<select id='multipleChoiceDecision'>` persists in the closed
+dialog until the NEXT smallDialog decision replaces it, and a card decision
+never does — so a >2-option MULTIPLE_CHOICE followed by a pass-only
+CARD_ACTION_CHOICE made `offers()` hand back the dead dropdown as that
+decision's offer. It surfaced as a livediff "1 PROBLEM" that looked exactly
+like a client divergence; the measurement chain is in the commit. If a
+livediff or diffrun mismatch ever shows an offer of PLAYER NAMES on a card
+decision, it is this class of bug: suspect the probe before either client. `decisionfuzz.html`
 is the template and `pilefuzz.html` is the worked second example: enumerate the
 space from the source, drive both clients, prove the control fires.
 

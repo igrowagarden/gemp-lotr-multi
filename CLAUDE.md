@@ -49,6 +49,19 @@ origin because the reference client loads from `/gemp-lotr/js/`:
 bash harness/sync.sh
 ```
 
+The standalone suite — no Docker, no reference client, ~1 minute. This is the
+inner loop while working; it proves internal consistency, NOT equivalence:
+
+```bash
+bash harness/fastrun.sh            # 18 assertion suites + tests.html + shapecheck's
+                                   # 48-shape catalogue drive + 3 controls
+ONLY=shapecheck bash harness/fastrun.sh    # one page, for iterating
+```
+
+It serves `src/` directly via `harness/devserver.py`, so no `sync.sh` and no
+server. **It does not replace the differential**: anything touching `view/` or
+`state/` still runs `diffrun.sh` FIRST before being called verified.
+
 The differentials, all green and all proven capable of failing:
 
 ```bash
