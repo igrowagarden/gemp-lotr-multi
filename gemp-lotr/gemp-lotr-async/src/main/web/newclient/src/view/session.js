@@ -67,7 +67,9 @@ export const alertFor = (state) => (isMine(state) ? state.decision : null);
  */
 export function createSession({
   store, transport, boardEl, panels, settings,
-  buttons = {}, onNote = () => {}, cookies = () => document.cookie
+  buttons = {}, onNote = () => {}, cookies = () => document.cookie,
+  // Injectable for tests; the auto-opened path's self-dismissal rides these.
+  timers = { set: (fn, ms) => setTimeout(fn, ms), clear: (id) => clearTimeout(id) }
 }) {
   const { path, chat, piles, picker, alerts, pregame } = panels;
 
@@ -111,8 +113,34 @@ export function createSession({
     const hasSite = [...byCard.keys()].some((id) => s.cards[id]?.zone === "ADVENTURE_PATH");
     if (!hasSite) return false;
     siteOffer = s.decision;
+    // An ACTIONABLE open is never on the self-dismissal clock -- hiding a
+    // site the player must answer on re-creates the invisible-offer bug.
+    cancelPathDismiss();
     if (!path.isOpen) path.open();
     return true;
+  }
+
+  /**
+   * An AUTO-opened path earns its stay: untouched for three seconds, it
+   * leaves again (playtest ruling). Any pointer contact with the window
+   * cancels the dismissal; manual opens are never on this clock, because
+   * only the auto-open arms it.
+   */
+  let pathDismiss = null;
+  function cancelPathDismiss() {
+    if (pathDismiss != null) { timers.clear(pathDismiss); pathDismiss = null; }
+  }
+  function armPathDismiss() {
+    const root = path.root;
+    const touch = () => {
+      cancelPathDismiss();
+      root?.removeEventListener?.("pointerdown", touch);
+      root?.removeEventListener?.("pointerenter", touch);
+    };
+    root?.addEventListener?.("pointerdown", touch);
+    root?.addEventListener?.("pointerenter", touch);
+    cancelPathDismiss();
+    pathDismiss = timers.set(() => { touch(); if (path.isOpen) path.close(); }, 3000);
   }
 
   /**
@@ -137,7 +165,10 @@ export function createSession({
     lastMyPlace = myPlace;
     if (first || s.spectating) return false;
     const opened = (newSiteLaid || iMoved) && !path.isOpen;
-    if (opened) path.open();
+    if (opened) {
+      path.open();
+      armPathDismiss();
+    }
     return opened;
   }
 

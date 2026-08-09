@@ -48,6 +48,9 @@ function build({ armed = false, cookie = "" } = {}) {
     chat: spy(), piles: spy(), picker: spy(), alerts: spy(), pregame: spy()
   };
   const buttons = { concede: { hidden: false }, cancel: { hidden: false } };
+  // Captured timers, so a test can fire the auto-dismissal by hand.
+  const armedTimers = [];
+  const clearedTimers = [];
   const session = createSession({
     store,
     transport: { answer: (id, v) => answered.push({ id, v }) },
@@ -56,9 +59,13 @@ function build({ armed = false, cookie = "" } = {}) {
     settings: { clientArm: armed },
     buttons,
     onNote: (t) => notes.push(t),
-    cookies: () => cookie
+    cookies: () => cookie,
+    timers: {
+      set: (fn, ms) => { armedTimers.push({ fn, ms }); return armedTimers.length; },
+      clear: (id) => clearedTimers.push(id)
+    }
   });
-  return { store, session, panels, buttons, answered, notes };
+  return { store, session, panels, buttons, answered, notes, armedTimers, clearedTimers };
 }
 
 const called = (p, fn) => p.calls.filter((c) => c.fn === fn).length;
@@ -117,6 +124,37 @@ ok("an alert fires for our decision and no other",
     `<events><ge type="PCIP" cardId="990" blueprintId="1_349" zone="ADVENTURE_PATH" participantId="carol" index="5"/></events>`));
   ok("a new site laid down opens it",
      called(t.panels.path, "open") === base + 2);
+}
+
+// ----------------------------------- an auto-opened path leaves after 3s
+{
+  // Ruled in the playtest: an auto-popped site window that nobody touches
+  // closes itself after three seconds. Only the informational opens (my
+  // move, a new site) are on the clock; an ACTIONABLE open is exempt below.
+  const t = build();
+  t.store.dispatchAll(decodeEvents(fixture.setup()));
+  t.store.dispatchAll(decodeEvents(
+    `<events><ge type="PP" participantId="asdf" index="2"/></events>`));
+  ok("the auto-open arms a 3-second dismissal",
+     t.armedTimers.length === 1 && t.armedTimers[0].ms === 3000,
+     JSON.stringify(t.armedTimers.map((x) => x.ms)));
+  const closesBefore = called(t.panels.path, "close");
+  t.armedTimers[0].fn();
+  ok("firing it closes the window", called(t.panels.path, "close") === closesBefore + 1);
+}
+{
+  // The actionable open cancels any pending dismissal and never arms one.
+  const t = build();
+  t.store.dispatchAll(decodeEvents(fixture.setup()));
+  const siteId2 = Object.values(t.store.getState().cards)
+    .find((c) => c.zone === "ADVENTURE_PATH").cardId;
+  t.store.dispatchAll([{ type: "DECISION", participantId: "asdf",
+    decision: { id: 1, decisionType: "CARD_ACTION_CHOICE", parameters: {
+      cardId: [String(siteId2)], actionId: ["9"], blueprintId: ["inPlay"],
+      actionText: ["Play the site's fellowship text"]
+    } } }]);
+  ok("a site-ACTION open is never on the dismissal clock",
+     t.armedTimers.length === 0, JSON.stringify(t.armedTimers.map((x) => x.ms)));
 }
 
 // ------------------------------------------------- site actions open the path
