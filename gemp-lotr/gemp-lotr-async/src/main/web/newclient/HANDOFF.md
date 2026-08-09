@@ -33,10 +33,30 @@ livediffrun 4 70 — 4 clean games, 0 problems, with the NEW engine judging.
 Old recordings replay fine (client-vs-client comparison is engine-neutral);
 new livediff games run under the new rules and came back clean.
 
-**Still open after the move:** re-measure the auto-pass tables below against
-the new engine (one of the "three reference bugs" is now fixed upstream), and
-build dual-launch (a `gempClient` cookie so both halls can open a game in
-either client).
+**Auto-pass RE-MEASURED on the new engine (2026-08-09), and the cookie still
+works end to end.** Three fresh 3-player games, identical turn structure
+(FELLOWSHIP 22, SHADOW 44, REGROUP 22), no-action CARD_ACTION_CHOICE by phase:
+
+| run | cookie | no-action prompts |
+|---|---|---|
+| A (control) | `autoPass=false` | REGROUP 21 |
+| C | *none* (`_autoPassDefault`) | SHADOW 6 |
+| B | all seven phases | **none** |
+
+Same shape as the old-engine table: A proves the counter can see, C shows the
+default set still suppresses everything but Shadow, B silences Shadow too.
+NOTE the ENGINE SEMANTICS CHANGED at fork commit `77f6fa0ce`: an empty
+`autoPassPhases` cookie is now LEGAL and means "auto-pass nothing" (it used to
+500 every request), unknown phase names are skipped, and the reference
+client's seven checkboxes now actually work (cookie written at path "/").
+`model/autopass.js`'s cookieWrites remain correct — the `autoPass=false` path
+is unchanged. The 200/500 cookie-path tables below are measurements of the
+OLD engine, kept as history; the poisoned-cookie litmus no longer detects
+arrival because the new parse tolerates garbage.
+
+Dual-launch was CONSIDERED AND DROPPED by decision: both clients are already
+launchable against the same game by URL (see `LAUNCHING.md` at the repo
+root), and the live differential re-proves it every run.
 
 ### The selection-extraction regression is RESOLVED (a79b6a0)
 
@@ -223,7 +243,12 @@ is `false` at `gameUi.js:84` and assigned nowhere). Default-on would answer
 decisions the reference sits on, and the differential would correctly call that
 a divergence.
 
-### THREE reference bugs now, and the third is the auto-pass UI itself
+### THREE reference bugs found; the third is FIXED UPSTREAM as of `77f6fa0ce`
+
+*(The auto-pass sections below record measurements of the engine and
+reference client BEFORE fork commit `77f6fa0ce`, which fixed both cookie
+defects — credited to this project's report. They stay as the record of how
+it was found. The gemp2 runtime now serves the fixed engine and client.)*
 
 The reference's seven auto-pass checkboxes are **inert**. `$.cookie` is called
 with no `path`, so the browser defaults it to the setting page's directory
