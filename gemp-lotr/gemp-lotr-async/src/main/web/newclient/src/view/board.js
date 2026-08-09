@@ -46,6 +46,14 @@ export function createBoard(root, store, options = {}) {
   // decision, like `picked`: a collapse is an answer to THIS question's
   // presentation, not a setting.
   const popup = { hidden: false };
+  // What the player has typed into the number input, per decision. A repaint
+  // rebuilds the input, and repaints arrive constantly in a five-player game;
+  // without the draft the typed bid was wiped to the default mid-typing.
+  const draft = {};
+  // The rendered prompt, kept ACROSS paints while the same decision stands --
+  // rebuilding it per store event detaches live controls, and a click whose
+  // mousedown/mouseup straddles a repaint never fires ("Accept doesn't work").
+  let promptNode = null, promptFor = null, promptWarning = null;
   let lastDecision = null;
 
   /** Answer and clear, so a stale selection cannot leak into the next decision. */
@@ -479,6 +487,7 @@ export function createBoard(root, store, options = {}) {
       lastDecision = state.decision ?? null;
       picked.clear();
       popup.hidden = false;
+      delete draft.value;
     }
     const ctx = { ...bandContext(state, focusId), viewerId: state.viewerId, fpId: fpId(state) };
     const split = assignBands(allCards(state), ctx);
@@ -499,9 +508,25 @@ export function createBoard(root, store, options = {}) {
     const before = captureRects(stack);
 
     for (const old of root.querySelectorAll(":scope > .navarrow, :scope > .poschip")) old.remove();
-    stack.textContent = "";
-    stack.appendChild(renderReadout(state));
-    stack.appendChild(renderSeats(state));
+
+    // The prompt SURVIVES the wipe while the same decision stands (same
+    // decision object, same warning) and its shape is answered from the strip
+    // alone. Rebuilding it per store event -- and a five-player game emits
+    // events constantly -- detaches live controls: a click whose mousedown and
+    // mouseup straddle a repaint never fires, and the number input loses its
+    // caret. Selection shapes rebuild every paint because their Confirm label
+    // counts `picked`. The kept node is never moved, so focus is undisturbed;
+    // only its timer text is refreshed in place.
+    const keepPrompt = promptNode != null &&
+      promptFor === state.decision &&
+      promptWarning === state.warning &&
+      (state.decision?.shape === "button" || state.decision?.shape === "number");
+    for (const child of [...stack.children]) {
+      if (!(keepPrompt && child === promptNode)) child.remove();
+    }
+    const put = (node) => stack.insertBefore(node, keepPrompt ? promptNode : null);
+    put(renderReadout(state));
+    put(renderSeats(state));
 
     for (const spec of displayFor(ctx)) {
       const cards = split.byBand.get(spec.id) ?? [];
@@ -510,10 +535,19 @@ export function createBoard(root, store, options = {}) {
       // how a spectator ended up with three dead strips at the bottom of the
       // screen for zones they can never have.
       if (!cards.length && !spec.collapsed) continue;
-      stack.appendChild(renderBand(spec, cards, state, { ...ctx, registry: spec }, attachedBy));
+      put(renderBand(spec, cards, state, { ...ctx, registry: spec }, attachedBy));
     }
 
-    stack.appendChild(renderPrompt(doc, state, picked, onAnswer, { popup }));
+    if (keepPrompt) {
+      const t = promptNode.querySelector(".ptimer");
+      const secs = state.clocks[state.viewerId];
+      if (t && secs != null) t.textContent = formatClock(secs);
+    } else {
+      promptNode = renderPrompt(doc, state, picked, onAnswer, { popup, draft });
+      promptFor = state.decision ?? null;
+      promptWarning = state.warning ?? null;
+      stack.appendChild(promptNode);
+    }
 
     // Edge arrows. Suspended during a skirmish, which draws every seat -- they
     // go visibly dead rather than silently doing nothing.

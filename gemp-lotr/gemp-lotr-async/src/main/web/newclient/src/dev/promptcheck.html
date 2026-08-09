@@ -266,6 +266,33 @@ const byLabel = (el, t) => buttons(el).find((b) => b.textContent === t);
      sent.length === 1 && sent[0][1] === "4", JSON.stringify(sent));
 }
 
+// -------------------------------------------------------- the typed draft
+{
+  // Repaints arrive constantly in a five-player game, and each one rebuilds
+  // the input; without the caller-owned draft the typed bid was wiped back to
+  // the default mid-typing ("any number I put in just goes to zero").
+  const numD = dec("INTEGER", "number", { parameters: { min: ["0"], max: ["10"] } });
+  const draft = {};
+  let s = renderPrompt(document, state({ decision: numD }), createSelection(),
+                       onAnswer, { draft });
+  const input = s.querySelector("input");
+  input.value = "7";
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  ok("typing records the draft", draft.value === "7");
+  s = renderPrompt(document, state({ decision: numD }), createSelection(),
+                   onAnswer, { draft });
+  ok("a repaint of the same decision restores what was typed",
+     s.querySelector("input").value === "7");
+  sent = [];
+  buttons(s).find((b) => b.textContent === "Accept").click();
+  ok("and Accept sends the typed value, not the default",
+     sent.length === 1 && sent[0][1] === "7", JSON.stringify(sent));
+  s = renderPrompt(document, state({ decision: numD }), createSelection(),
+                   onAnswer, { draft: {} });
+  ok("a cleared draft (new decision) starts back on the engine's default",
+     s.querySelector("input").value === "0");
+}
+
 // -------------------------------------------------------- refused answers
 {
   // A refusal re-asks the same question; without the warning line the re-ask

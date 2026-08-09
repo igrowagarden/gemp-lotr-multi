@@ -90,6 +90,21 @@ def answer(decision):
     if kind == "ACTION_CHOICE":
         return "0"                                   # mandatory: take the first
     if kind == "INTEGER":
+        if PLAY:
+            # A random in-range number, so five seats do not all answer the
+            # minimum (a five-way 0 bid makes every game open identically).
+            # The burden bid carries NO max (IntegerAwaitingDecision has a
+            # min-only constructor), and burdens are real costs -- cap a
+            # missing max, and any wide range, a few above the minimum.
+            try:
+                lo = int(p.get("min", ["0"])[0] or 0)
+            except ValueError:
+                lo = 0
+            try:
+                hi = int(p.get("max", [str(lo + 3)])[0])
+            except ValueError:
+                hi = lo + 3
+            return str(random.randint(lo, max(lo, min(hi, lo + 5))))
         return p.get("min", ["0"])[0]
     if kind == "MULTIPLE_CHOICE":
         results = p.get("results", [])

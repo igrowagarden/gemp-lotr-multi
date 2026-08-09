@@ -119,7 +119,16 @@ export function renderPrompt(doc, state, picked, onAnswer, opts = {}) {
     input.className = "pnum";
     input.min = String(lo);
     input.max = String(hi);
-    input.value = String(start);
+    // WHAT THE PLAYER TYPED OUTLIVES THE PAINT. The strip is rebuilt on every
+    // store event -- and a five-player game emits them constantly (each bot
+    // message, every clock tick) -- so an input holding only its own value is
+    // wiped back to the default mid-typing. That shipped: a player's burden
+    // bids "just went to zero" as bots chattered. The draft lives in
+    // `opts.draft`, owned by the board and reset per decision like `picked`.
+    input.value = opts.draft?.value ?? String(start);
+    input.addEventListener("input", () => {
+      if (opts.draft) opts.draft.value = input.value;
+    });
     input.addEventListener("keydown", (e) => {
       if (e.key === "Enter") send(input.value);
     });
