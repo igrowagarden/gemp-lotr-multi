@@ -91,7 +91,12 @@ ok("the fixture supplies an attachment at all", !!rider && !!hostId,
 // A same-owner rider is the right instrument here anyway: this is about the
 // FLIP treating a rider and its host as one, which has nothing to do with who
 // owns either. The cross-side case is about filtering, and attachcheck has it.
-const mine = allCards(st).find((c) => c.zone === "FREE_CHARACTERS" && c.owner === "asdf");
+//
+// The host is the viewer's SUPPORT card, not a companion: the shadow viewer's
+// own fellowship row HIDES during a skirmish (playtest ruling, displayFor),
+// so a companion host would vanish at exactly the moment this measures -- the
+// support row stays, and it sits below the skirmish band just the same.
+const mine = allCards(st).find((c) => c.zone === "SUPPORT" && c.owner === "asdf");
 store.dispatchAll(decodeEvents(
   `<events><ge type="PCIP" cardId="7778" blueprintId="1_2" zone="ATTACHED" ` +
   `participantId="asdf" targetCardId="${mine.cardId}" targetType="attached"/></events>`));

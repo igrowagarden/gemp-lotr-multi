@@ -110,11 +110,23 @@ export function undrawn(byBand, ctx) {
   const missed = [];
   for (const [id, cards] of byBand) {
     if (id === "path" || shown.has(id) || cards.length === 0) continue;
+    // The shadow viewer's own fellowship is deliberately hidden during a
+    // skirmish (see displayFor) -- a ruling, not a drop.
+    if (id === "selfFree" && ctx.skirmishing && ctx.viewerId !== ctx.fpId) continue;
     missed.push({ band: id, count: cards.length });
   }
   return missed;
 }
 
-export function displayFor({ skirmishing }) {
-  return skirmishing ? SKIRMISH_DISPLAY : DISPLAY;
+export function displayFor(ctx) {
+  if (!ctx.skirmishing) return DISPLAY;
+  // While the viewer fights as SHADOW, their own fellowship row is hidden
+  // (playtest ruling) -- their companions are not in this fight, and the
+  // vertical fight display wants the height. The Free Peoples viewer keeps
+  // it: those are the cards fighting. `undrawn` knows this drop is
+  // deliberate.
+  if (ctx.viewerId != null && ctx.fpId != null && ctx.viewerId !== ctx.fpId) {
+    return SKIRMISH_DISPLAY.filter((b) => b.id !== "selfFree");
+  }
+  return SKIRMISH_DISPLAY;
 }

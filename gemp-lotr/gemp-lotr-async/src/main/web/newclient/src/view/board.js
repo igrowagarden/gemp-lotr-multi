@@ -390,6 +390,31 @@ export function createBoard(root, store, options = {}) {
       return node;
     };
 
+    if (spec.id === "skirmish") {
+      // THE FIGHT READS VERTICALLY (playtest ruling): the Free Peoples side
+      // centred on top, the minions fighting it centred directly beneath --
+      // the two rows of a duel, not one long line of mixed cards.
+      const fpRow = el(doc, "div", "row fightrow");
+      const shRow = el(doc, "div", "row fightrow");
+      for (const card of ordered(spec.id, cards)) {
+        const node = drawCard(card);
+        let mounted = node;
+        const riders = attachedBy?.get(card.cardId);
+        if (riders?.length) {
+          const group = el(doc, "div", "cardgroup");
+          for (const rider of riders) group.appendChild(drawCard(rider));
+          group.appendChild(node);
+          mounted = group;
+        }
+        (card.zone === "SHADOW_CHARACTERS" ? shRow : fpRow).appendChild(mounted);
+      }
+      const fight = el(doc, "div", "fight");
+      fight.appendChild(fpRow);
+      fight.appendChild(shRow);
+      band.appendChild(fight);
+      return band;
+    }
+
     for (const card of ordered(spec.id, cards)) {
       const node = drawCard(card);
       // Only where the reference allows it (model/reorder.js). Every card in

@@ -321,6 +321,14 @@ body {
 .card.is-chosen { box-shadow: 0 0 0 3px var(--brass); transform: translateY(-3px); }
 .card.is-eligible { cursor: pointer; }
 
+/* The skirmish reads vertically: Free Peoples row over the minions row,
+   both centred, so the fight is two facing lines rather than one long mix. */
+.fight {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 10px; flex: 1; min-height: 0;
+}
+.fight .fightrow { display: flex; justify-content: center; gap: 10px; flex: 1; min-height: 0; }
+
 /* ------------------------------------------------------------- flyouts */
 .board { position: relative; }
 .flyout {
