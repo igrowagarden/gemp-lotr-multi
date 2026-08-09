@@ -68,7 +68,18 @@ export const boundsOf = (decision) => {
 
 export function createPicker(host, { onAnswer } = {}) {
   let current = null;              // the decision being shown
-  const chosen = new Set();        // temp ids
+  const chosen = new Set();        // temp ids, in click order
+  // BATCH PICKS OVER A ONE-AT-A-TIME WIRE. The starting fellowship is asked
+  // one character per decision (each play reprices the rest against the
+  // twilight budget), but the playtest wants to check off several and
+  // Confirm once. So for the pick-one-or-pass shape the picker lets several
+  // be chosen; Confirm sends the FIRST and queues the rest by blueprintId,
+  // and each re-ask of the SAME question auto-answers the next queued pick
+  // that is still selectable. A queued pick the budget has since priced out
+  // is dropped, and the window reappears only when the queue is spent --
+  // reality always wins over the plan.
+  let queue = [];                  // blueprintIds still to play
+  let queueForText = null;         // the question the queue belongs to
 
   const panel = createFlyout(host, {
     id: "picker",
@@ -113,9 +124,11 @@ export function createPicker(host, { onAnswer } = {}) {
             // unconfirmed click could spend the player's whole budget before
             // they meant to have decided anything.
             if (chosen.has(card.id)) chosen.delete(card.id);
-            // Choosing past the maximum would be rejected by the engine, so the
-            // limit is enforced here rather than discovered as an error.
-            else if (chosen.size < max) chosen.add(card.id);
+            // The pick-one-or-pass shape may choose SEVERAL -- Confirm plays
+            // them one per re-ask (see the queue above). Everything else is
+            // capped here: choosing past the maximum would only be rejected
+            // by the engine, so the limit is enforced rather than discovered.
+            else if (chosen.size < max || (min === 0 && max === 1)) chosen.add(card.id);
             panel.paint();
           });
         }
@@ -136,14 +149,28 @@ export function createPicker(host, { onAnswer } = {}) {
         done.addEventListener("click", () => answer(""));
         bar.appendChild(done);
       } else {
+        const queueable = min === 0 && max === 1;
         bar.appendChild(el(doc, "span", "picknote",
-          min === max ? `choose ${min}`
-                      : `choose ${min}–${max}` + (count < cards.length ? ` of ${count}` : "")));
+          queueable ? "pick any number · they play in click order"
+                    : min === max ? `choose ${min}`
+                    : `choose ${min}–${max}` + (count < cards.length ? ` of ${count}` : "")));
         const confirm = el(doc, "button", "pbtn primary",
           chosen.size ? `Confirm ${chosen.size}` : "Confirm");
         confirm.type = "button";
         confirm.disabled = chosen.size < min;
-        confirm.addEventListener("click", () => answer([...chosen].join(",")));
+        confirm.addEventListener("click", () => {
+          const picks = [...chosen];
+          if (queueable && picks.length > 1) {
+            // Send the first now; the rest replay across the re-asks of this
+            // same question, by blueprintId -- temp ids are per-decision.
+            const byId = new Map(pickable(current).map((c) => [c.id, c.blueprintId]));
+            queue = picks.slice(1).map((id) => byId.get(id)).filter(Boolean);
+            queueForText = current.text ?? "";
+            answer(picks[0]);
+            return;
+          }
+          answer(picks.join(","));
+        });
         bar.appendChild(confirm);
 
         // Only offered when the engine would accept it. Below the minimum an
@@ -187,6 +214,31 @@ export function createPicker(host, { onAnswer } = {}) {
       if (current === decision) return;
       current = decision;
       chosen.clear();
+
+      // A re-ask of the question the queue belongs to: play the next queued
+      // pick that is STILL selectable, without reopening the window. One
+      // priced out since it was chosen is dropped -- the engine's greyed
+      // list is the truth, the queue is only a plan. A different question
+      // abandons the queue outright.
+      if (queue.length && (decision.text ?? "") === queueForText) {
+        const cards = pickable(decision);
+        while (queue.length) {
+          const bp = queue.shift();
+          const hit = cards.find((c) => c.selectable && c.blueprintId === bp);
+          if (!hit) continue;
+          const id = decision.id;
+          current = null;
+          panel.close();
+          onAnswer?.(id, hit.id);
+          return;
+        }
+        // Queue spent with nothing playable: fall through and show the board.
+        queueForText = null;
+      } else if (queue.length) {
+        queue = [];
+        queueForText = null;
+      }
+
       panel.open();
       panel.paint();
     },

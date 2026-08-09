@@ -148,6 +148,87 @@ ok("Confirm sends the selected card",
    sent.length === 1 && sent[0][1] === "temp0", JSON.stringify(sent));
 ok("and the window closes with the answer", !picker.isOpen);
 
+// ---- several picks, one Confirm: the queue drains across re-asks -----------
+// The engine asks the starting fellowship one character per decision; the
+// player checks off several and Confirms once. The first goes now, the rest
+// replay by blueprintId on each re-ask of the SAME question -- and a queued
+// pick the budget has priced out (no longer selectable) is dropped, because
+// the engine's greyed list outranks the plan.
+sent.length = 0;
+const SF = "Starting fellowship - Choose next character or press DONE";
+const round1 = decision("ARBITRARY_CARDS", SF, {
+  min: ["0"], max: ["1"],
+  cardId: ["temp0", "temp1", "temp2"],
+  blueprintId: ["1_311", "1_365", "1_51"],
+  selectable: ["true", "true", "true"]
+});
+picker.show(round1);
+const pickables = () => cards().filter((c) => c.classList.contains("is-pickable"));
+pickables()[0].click();
+pickables()[2].click();
+ok("the pick-one shape lets several be chosen",
+   picker.root.querySelectorAll(".is-chosen").length === 2);
+[...picker.root.querySelectorAll(".pickbar button")]
+  .find((b) => b.textContent.startsWith("Confirm"))?.click();
+ok("Confirm sends only the FIRST pick", sent.length === 1 && sent[0][1] === "temp0",
+   JSON.stringify(sent));
+
+const round2 = decision("ARBITRARY_CARDS", SF, {
+  min: ["0"], max: ["1"],
+  cardId: ["temp0", "temp1"],
+  blueprintId: ["1_365", "1_51"],
+  selectable: ["false", "true"]
+});
+picker.show(round2);
+ok("the re-ask auto-plays the queued pick that is still selectable",
+   sent.length === 2 && sent[1][1] === "temp1", JSON.stringify(sent));
+ok("without opening the window", !picker.isOpen);
+
+const round3 = decision("ARBITRARY_CARDS", SF, {
+  min: ["0"], max: ["1"],
+  cardId: ["temp0"], blueprintId: ["1_365"], selectable: ["true"]
+});
+picker.show(round3);
+ok("a spent queue shows the window again", picker.isOpen && sent.length === 2);
+picker.hide();
+
+sent.length = 0;
+picker.show(decision("ARBITRARY_CARDS", SF, {
+  min: ["0"], max: ["1"],
+  cardId: ["temp0", "temp1"],
+  blueprintId: ["1_311", "1_365"],
+  selectable: ["true", "true"]
+}));
+pickables()[0].click();
+pickables()[1].click();
+[...picker.root.querySelectorAll(".pickbar button")]
+  .find((b) => b.textContent.startsWith("Confirm"))?.click();
+picker.show(decision("ARBITRARY_CARDS", SF, {
+  min: ["0"], max: ["1"],
+  cardId: ["temp0"], blueprintId: ["1_365"], selectable: ["false"]
+}));
+ok("a queued pick the budget priced out is DROPPED and the window returns",
+   sent.length === 1 && picker.isOpen, JSON.stringify(sent));
+picker.hide();
+
+sent.length = 0;
+picker.show(decision("ARBITRARY_CARDS", SF, {
+  min: ["0"], max: ["1"],
+  cardId: ["temp0", "temp1"],
+  blueprintId: ["1_311", "1_51"], selectable: ["true", "true"]
+}));
+pickables()[0].click();
+pickables()[1].click();
+[...picker.root.querySelectorAll(".pickbar button")]
+  .find((b) => b.textContent.startsWith("Confirm"))?.click();
+picker.show(decision("ARBITRARY_CARDS", "A different question entirely", {
+  min: ["0"], max: ["1"],
+  cardId: ["temp0"], blueprintId: ["1_51"], selectable: ["true"]
+}));
+ok("a DIFFERENT question abandons the queue rather than answering it",
+   sent.length === 1 && picker.isOpen, JSON.stringify(sent));
+picker.hide();
+
 const b = boundsOf(decision("ARBITRARY_CARDS", "x", { min: ["1"], max: ["3"] }));
 ok("bounds are read off the decision", b.min === 1 && b.max === 3, JSON.stringify(b));
 
