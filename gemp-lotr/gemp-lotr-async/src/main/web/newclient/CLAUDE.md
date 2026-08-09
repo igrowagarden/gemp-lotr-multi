@@ -1,5 +1,13 @@
 # gemp_gui — a new board client for five-player GEMP
 
+> **THIS DIRECTORY IS RETIRED (2026-08-09).** The project was imported, with
+> full history, into the engine fork:
+> `gemp_multiplayer/vendor/gemp-lotr/gemp-lotr/gemp-lotr-async/src/main/web/newclient/`
+> (fork commit `d51f13367`, branch `multiplayer/five-players`). Work there, not
+> here. This tree stays as the tagged pre-merge snapshot
+> (`pre-merge-into-engine`) and receives no further commits after the final
+> engine-swap documentation.
+
 A rebuilt game board for GEMP LotR, replacing a client that shows one opponent at
 a time. Native ES modules, no build step. `src/` is the client; `src/dev/` is the
 test and differential harnesses; `harness/` drives the server.

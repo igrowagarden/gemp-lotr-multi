@@ -10,6 +10,34 @@ behaviour.
 
 ## Start here
 
+### THE PROJECT MOVED, and the server runs a NEW ENGINE (2026-08-09)
+
+**Moved:** this whole project now lives inside the engine fork at
+`gemp_multiplayer/vendor/gemp-lotr/gemp-lotr/gemp-lotr-async/src/main/web/newclient/`,
+imported by `git subtree` with full history (fork commit `d51f13367`). This
+directory is the retired pre-merge snapshot; the fork copy is canonical.
+fastrun was run from the fork copy after import: ALL PASS, controls fired.
+
+**New engine:** the gemp2 runtime was updated from the fork at `5e2a2a273`
+(auto-pass cookie fixes — reported by this project, credited in the commit —
+plus eliminated-player card removal, site replacement, and wound rulings).
+The jar was REBUILT from HEAD on the host (`mvn -B -q -DskipTests install`)
+because the fork's own target/web.jar was seven commits stale. Backup of the
+pre-swap source: `C:\Users\emers\gemp2_backup_pre_fork_20260809`. The
+database and the recording corpus were not touched.
+
+**Verified on the new engine, every final line read:** fastrun ALL PASS with
+controls; pinned game AGREE on all 30; diffrun 12 40 — 12 agreeing; fuzzrun
+CLEAN, every control fired; all seven surface runners CLEAN with controls;
+livediffrun 4 70 — 4 clean games, 0 problems, with the NEW engine judging.
+Old recordings replay fine (client-vs-client comparison is engine-neutral);
+new livediff games run under the new rules and came back clean.
+
+**Still open after the move:** re-measure the auto-pass tables below against
+the new engine (one of the "three reference bugs" is now fixed upstream), and
+build dual-launch (a `gempClient` cookie so both halls can open a game in
+either client).
+
 ### The selection-extraction regression is RESOLVED (a79b6a0)
 
 **It was one leftover line.** The extraction (43aa51e) deleted the `selected`
