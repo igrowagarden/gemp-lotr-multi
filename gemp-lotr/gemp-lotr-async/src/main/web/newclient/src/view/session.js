@@ -26,7 +26,8 @@
  * tab and to nothing else, which is exactly why they are not in the store.
  */
 
-import { spokenTo, currentSite } from "../state/reduce.js";
+import { spokenTo } from "../state/reduce.js";
+import { cardActions, isActionChoice } from "../model/actions.js";
 import { shouldClientAutoPass, effectivePhases, PASS } from "../model/autopass.js";
 import { canConcede, canCancel } from "../model/gameopts.js";
 import { allFlyouts } from "./flyout.js";
@@ -73,8 +74,8 @@ export function createSession({
   // Session state: this tab's, never the server's. See the note at the top.
   let autoPassed = null;   // the decision OBJECT the arm answered, not its id
   let lastChat = 0;
-  let lastSite = null;
-  let seenFirstSite = false;
+  let lastSiteCount = null;   // sites on the path; null until the first state
+  let lastMyPlace = null;     // the viewer's own site number
 
   /**
    * The arm, off unless armed. Guarded by the decision OBJECT rather than its
@@ -97,17 +98,46 @@ export function createSession({
   }
 
   /**
-   * The path opens itself when the fellowship reaches a NEW site -- but not for
-   * the first one, which arrives with the opening state and would pop a window
-   * over the board before the game has begun.
+   * A decision offering an action ON A SITE opens the path, because that is
+   * where sites are drawn -- an action inside a closed window is an offer the
+   * player cannot see, and the playtest never found the site-1 fellowship
+   * text because nothing pointed at it. Once per decision object, so closing
+   * the window is not overridden while the same question stands.
+   */
+  let siteOffer = null;
+  function maybeOpenSiteActions(s) {
+    if (!isMine(s) || !isActionChoice(s.decision) || s.decision === siteOffer) return false;
+    const { byCard } = cardActions(s.decision);
+    const hasSite = [...byCard.keys()].some((id) => s.cards[id]?.zone === "ADVENTURE_PATH");
+    if (!hasSite) return false;
+    siteOffer = s.decision;
+    if (!path.isOpen) path.open();
+    return true;
+  }
+
+  /**
+   * The path opens itself for exactly two things -- the VIEWER moving, or a
+   * new site being laid on the table -- and never for the opening state,
+   * which would pop a window before the game has begun. It used to open
+   * whenever the current fellowship reached a new site, which at five seats
+   * meant every other player's move too; the playtest ruled that out: "only
+   * when I move OR a new site is laid down."
    */
   function maybeOpenPath(s) {
-    const here = s.stats ? currentSite(s) : null;
-    if (!here || here.siteNumber === lastSite) return false;
-    lastSite = here.siteNumber;
-    const opened = lastSite != null && !path.isOpen && seenFirstSite;
+    // The subscription fires once on the EMPTY pre-handshake state; recording
+    // a baseline there made the opening snapshot read as "four new sites
+    // laid" and popped the window during setup. No seats yet, no game state.
+    if (!s.players?.length) return false;
+    const siteCount = Object.values(s.cards).filter((c) => c.zone === "ADVENTURE_PATH").length;
+    const myPlace = s.sitePositions?.[s.viewerId] ?? null;
+    const first = lastSiteCount === null;
+    const newSiteLaid = !first && siteCount > lastSiteCount;
+    const iMoved = !first && myPlace != null && lastMyPlace != null && myPlace !== lastMyPlace;
+    lastSiteCount = siteCount;
+    lastMyPlace = myPlace;
+    if (first || s.spectating) return false;
+    const opened = (newSiteLaid || iMoved) && !path.isOpen;
     if (opened) path.open();
-    seenFirstSite = true;
     return opened;
   }
 
@@ -155,6 +185,7 @@ export function createSession({
     alerts.update(alertFor(s));
     pregame.update(s);
     maybeOpenPath(s);
+    maybeOpenSiteActions(s);
     yieldFlyouts();
   }
 
@@ -164,6 +195,7 @@ export function createSession({
   // and the internals are exposed for the same reason -- each is a rule with
   // its own failure mode, and asserting them only through `react` would make a
   // failure say "something in the session is wrong".
-  return { react, unsubscribe, maybeAutoPass, maybeOpenPath, countUnread,
+  return { react, unsubscribe, maybeAutoPass, maybeOpenPath, maybeOpenSiteActions,
+           countUnread,
            get autoPassed() { return autoPassed; } };
 }

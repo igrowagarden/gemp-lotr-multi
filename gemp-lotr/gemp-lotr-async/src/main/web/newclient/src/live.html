@@ -113,6 +113,13 @@ const sendAnswer = createAnswerGate(
   () => store.getState().decision,
   (decisionId, value) => {
     transport.answer(decisionId, value);
+    // CLEAR THE ANSWERED DECISION NOW. Nothing on the wire does: the next
+    // decision event may be minutes away (other seats acting), and until it
+    // arrives the strip kept showing the already-answered question -- the
+    // playtest read the stale "Play Shadow action or Pass" as the game stuck.
+    // The reducer's DECISION case treats a null decision as a clear, so the
+    // strip drops to "Waiting for..." the moment the answer leaves.
+    store.dispatchAll([{ type: "DECISION", decision: null }]);
     detailEl.textContent = `answered ${decisionId} = "${value}"`;
   }
 );

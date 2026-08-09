@@ -96,6 +96,65 @@ ok("an alert fires for our decision and no other",
   ok("a different type closes it again", called(t.panels.picker, "show") === 1);
 }
 
+// ------------------------------- the path opens for MY move or a new site laid
+{
+  // At five seats, opening on every fellowship arrival meant every OTHER
+  // player's move popped the window too. Ruled: "only when I move OR a new
+  // site is laid down." The opening state (sites included) never opens it.
+  const t = build();
+  t.store.dispatchAll(decodeEvents(fixture.setup()));
+  const base = called(t.panels.path, "open");
+  t.store.dispatchAll(decodeEvents(
+    `<events><ge type="PP" participantId="carol" index="3"/></events>`));
+  ok("another player's move does NOT open the path",
+     called(t.panels.path, "open") === base);
+  t.store.dispatchAll(decodeEvents(
+    `<events><ge type="PP" participantId="asdf" index="2"/></events>`));
+  ok("the viewer's own move opens it",
+     called(t.panels.path, "open") === base + 1);
+  t.panels.path.isOpen = false;
+  t.store.dispatchAll(decodeEvents(
+    `<events><ge type="PCIP" cardId="990" blueprintId="1_349" zone="ADVENTURE_PATH" participantId="carol" index="5"/></events>`));
+  ok("a new site laid down opens it",
+     called(t.panels.path, "open") === base + 2);
+}
+
+// ------------------------------------------------- site actions open the path
+{
+  // Sites are drawn in the path window, so an action offered ON a site is
+  // invisible while that window is shut -- the playtest never found the
+  // site-1 fellowship text. A decision offering a site action opens the
+  // path; once per decision, so closing it is not overridden.
+  const t = build();
+  t.store.dispatchAll(decodeEvents(fixture.setup()));
+  const siteId = Object.values(t.store.getState().cards)
+    .find((c) => c.zone === "ADVENTURE_PATH").cardId;
+  const before = called(t.panels.path, "open");
+
+  t.store.dispatchAll([{ type: "DECISION", participantId: "asdf",
+    decision: { id: 1, decisionType: "CARD_ACTION_CHOICE", parameters: {
+      cardId: [String(siteId)], actionId: ["9"], blueprintId: ["inPlay"],
+      actionText: ["Play the site's fellowship text"]
+    } } }]);
+  ok("a decision offering a SITE action opens the path window",
+     called(t.panels.path, "open") === before + 1);
+
+  t.panels.path.isOpen = false;                    // the player closes it
+  t.store.dispatchAll([{ type: "TWILIGHT_POOL_UPDATE", count: 3 }]);
+  ok("the same decision does not force it back open",
+     called(t.panels.path, "open") === before + 1);
+
+  const boardCard = Object.values(t.store.getState().cards)
+    .find((c) => c.zone === "FREE_CHARACTERS").cardId;
+  t.store.dispatchAll([{ type: "DECISION", participantId: "asdf",
+    decision: { id: 1, decisionType: "CARD_ACTION_CHOICE", parameters: {
+      cardId: [String(boardCard)], actionId: ["4"], blueprintId: ["inPlay"],
+      actionText: ["Use ability"]
+    } } }]);
+  ok("a board-card action does NOT open the path",
+     called(t.panels.path, "open") === before + 1);
+}
+
 // --------------------------------------------------------- the auto-pass arm
 const noAction = { id: 5, decisionType: "CARD_ACTION_CHOICE", parameters: { cardId: [] } };
 {
