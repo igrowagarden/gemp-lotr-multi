@@ -117,15 +117,22 @@ eq("an unfocused opponent is not drawn", split.unclaimed.map((c) => c.cardId), [
 ok("...and that is not a defect", !shouldDraw({ zone: "FREE_CHARACTERS", owner: "Librarian" }, playing));
 ok("the board is complete", checkComplete(cards, playing).ok);
 
-group("the contested fellowship never moves house");
-// As a shadow player it is carol's; when you take the Free Peoples role it is
-// yours -- drawn by the same band, so nothing re-arranges as the turn passes.
+group("YOUR fellowship never moves house -- ruled in the five-player playtest");
+// "My side of the board is sacred." When you take the Free Peoples role your
+// fellowship stays in YOUR row (selfFree outranks contested), and the
+// contested band goes empty -- its display entry collapses to nothing rather
+// than shelling over cards drawn below.
 const asFp = { viewerId: "asdf", focusId: "dave", fpId: "asdf",
                spectating: false, skirmishing: false };
 const fpSplit = assignBands(cards, asFp);
-eq("your fellowship is now the contested one",
-   fpSplit.byBand.get("contested").map((c) => c.cardId), [3]);
-eq("and is not drawn twice", fpSplit.byBand.get("selfFree").map((c) => c.cardId), []);
+eq("your fellowship stays in your own row while under attack",
+   fpSplit.byBand.get("selfFree").map((c) => c.cardId), [3]);
+eq("and the contested band goes empty rather than drawing it twice",
+   fpSplit.byBand.get("contested").map((c) => c.cardId), []);
+eq("your support likewise stays yours",
+   fpSplit.byBand.get("selfSupport").map((c) => c.cardId), [7]);
+ok("the board is still complete with you as Free Peoples",
+   checkComplete(cards, asFp).ok);
 eq("the carousel is always one seat short of the table",
    focusableSeats(["carol", "asdf", "dave", "qwer"], playing), ["asdf", "dave", "qwer"]);
 ok("contestedId is just the Free Peoples player", contestedId(playing) === "carol");

@@ -86,10 +86,14 @@ export function focusableSeats(seatIds, ctx) {
  * `holds` is a predicate over (card, ctx) where ctx is
  *   { viewerId, focusId, fpId, spectating, skirmishing, filter }
  *
- * Ordering does real work. `focusFree` precedes `selfFree`, so when a spectator
- * follows the action and the focused seat IS the Free Peoples player, the
- * fellowship is drawn once in the focused band and the bottom band collapses --
- * rather than the same cards appearing twice, which is what the wireframe did.
+ * Ordering does real work, in two directions. `selfFree` precedes `contested`,
+ * so a seated player's fellowship NEVER leaves their own row -- when they hold
+ * the Free Peoples role the contested band goes empty rather than pulling
+ * their cards to the top of the board (ruled in the first five-player
+ * playtest: "my side of the board is sacred"). `contested` still precedes the
+ * focus bands, so focusing the Free Peoples player cannot draw the same
+ * fellowship twice. For a spectator nothing is `self`, so the contested band
+ * draws every Free Peoples fellowship exactly as before.
  */
 export const BANDS = Object.freeze([
   {
@@ -100,24 +104,6 @@ export const BANDS = Object.freeze([
     // A skirmish involves several seats at once, so it outranks every
     // owner-based band for as long as it is running.
     holds: (card, ctx) => ctx.skirmishing && (card.inSkirmish === true || card.assignedTo != null)
-  },
-  {
-    // Always drawn, for everyone. Precedes the focus bands so that focusing the
-    // Free Peoples player cannot draw the same fellowship twice.
-    id: "contested",
-    density: "board",
-    shared: true,
-    ownerTag: true,
-    filterable: false,
-    holds: (card, ctx) => card.zone === "FREE_CHARACTERS" && card.owner === contestedId(ctx)
-  },
-  {
-    id: "contestedSupport",
-    density: "board",
-    shared: true,
-    ownerTag: true,
-    filterable: false,
-    holds: (card, ctx) => card.zone === "SUPPORT" && card.owner === contestedId(ctx)
   },
   {
     id: "selfFree",
@@ -134,6 +120,25 @@ export const BANDS = Object.freeze([
     ownerTag: false,
     filterable: false,
     holds: (card, ctx) => card.zone === "SUPPORT" && card.owner === ctx.viewerId
+  },
+  {
+    // The fellowship the minions are attacking, when it is an OPPONENT's --
+    // the viewer's own is claimed by selfFree above. Always drawn for
+    // spectators, for whom nothing is self.
+    id: "contested",
+    density: "board",
+    shared: true,
+    ownerTag: true,
+    filterable: false,
+    holds: (card, ctx) => card.zone === "FREE_CHARACTERS" && card.owner === contestedId(ctx)
+  },
+  {
+    id: "contestedSupport",
+    density: "board",
+    shared: true,
+    ownerTag: true,
+    filterable: false,
+    holds: (card, ctx) => card.zone === "SUPPORT" && card.owner === contestedId(ctx)
   },
   {
     id: "focusFree",
