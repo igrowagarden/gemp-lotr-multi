@@ -122,6 +122,25 @@ ok("None is offered when min is 0",
 ok("absent `selectable` means everything is selectable",
    pickable(decision("ARBITRARY_CARDS", "x", { cardId: ["temp0"], blueprintId: ["1_290"] }))
      .every((c) => c.selectable));
+// ---- pick-one-or-pass: the click IS the answer -----------------------------
+// The starting fellowship's shape (min 0, max 1): the engine asks one
+// character at a time because each play changes the twilight budget, so the
+// sequence is pick, pick, DONE. Requiring select-then-Confirm made that two
+// clicks and a window reopen per character.
+sent.length = 0;
+const fellowship = decision("ARBITRARY_CARDS",
+  "Starting fellowship - Choose next character or press DONE", {
+  min: ["0"], max: ["1"],
+  cardId: ["temp0", "temp1"],
+  blueprintId: ["1_97", "1_311"],
+  selectable: ["true", "true"]
+});
+picker.show(fellowship);
+cards().find((c) => c.classList.contains("is-pickable"))?.click();
+ok("min 0 max 1: clicking a card answers with it immediately",
+   sent.length === 1 && sent[0][1] === "temp0", JSON.stringify(sent));
+ok("and the window closes with the answer", !picker.isOpen);
+
 const b = boundsOf(decision("ARBITRARY_CARDS", "x", { min: ["1"], max: ["3"] }));
 ok("bounds are read off the decision", b.min === 1 && b.max === 3, JSON.stringify(b));
 

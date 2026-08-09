@@ -105,6 +105,16 @@ export function createPicker(host, { onAnswer } = {}) {
           node.classList.add("is-pickable");
           if (chosen.has(card.id)) node.classList.add("is-chosen");
           node.addEventListener("click", () => {
+            // PICK-ONE-OR-PASS (min 0, max 1) commits on the click itself.
+            // This is the starting fellowship's shape -- the engine asks one
+            // character at a time because each play changes the twilight
+            // budget and the legal candidates, so the sequence is pick, pick,
+            // DONE. Click-select-then-Confirm made that two clicks and a
+            // window reopen per character; the alternative "None" button
+            // remains for declining. Everything else keeps choose-then-
+            // confirm: with min 1 or several cards wanted, a single misclick
+            // must not be an answer.
+            if (min === 0 && max === 1) { answer(card.id); return; }
             if (chosen.has(card.id)) chosen.delete(card.id);
             // Choosing past the maximum would be rejected by the engine, so the
             // limit is enforced here rather than discovered as an error.
