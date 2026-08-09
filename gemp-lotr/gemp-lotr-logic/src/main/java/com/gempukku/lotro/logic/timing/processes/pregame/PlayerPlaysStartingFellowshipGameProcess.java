@@ -35,7 +35,19 @@ public class PlayerPlaysStartingFellowshipGameProcess implements GameProcess {
             game.getActionsEnvironment().emitEffectResult(new FinishedPlayingFellowshipResult(_playerId));
             _nextProcess = _followingGameProcess;
         } else
-            game.getUserFeedback().sendAwaitingDecision(_playerId, createChooseNextCharacterDecision(game, _playerId, possibleCharacters));
+            game.getUserFeedback().sendAwaitingDecision(_playerId,
+                    createChooseNextCharacterDecision(game, _playerId, getAllCompanions(game, _playerId), possibleCharacters));
+    }
+
+    /**
+     * Every companion in the deck, playable or not. Shown so the player can see
+     * what the remaining twilight budget has priced out -- the decision greys
+     * them rather than removing them (selectable stays the affordable subset,
+     * and getSelectedCardsByResponse refuses anything outside it). Requested in
+     * the five-player playtest, but two-player behaviour changes identically.
+     */
+    private Collection<PhysicalCard> getAllCompanions(final LotroGame game, final String playerId) {
+        return Filters.filter(game, game.getGameState().getDeck(playerId), CardType.COMPANION);
     }
 
     private Collection<PhysicalCard> getPossibleCharacters(final LotroGame game, final String playerId) {
@@ -52,9 +64,9 @@ public class PlayerPlaysStartingFellowshipGameProcess implements GameProcess {
                 });
     }
 
-    private AwaitingDecision createChooseNextCharacterDecision(final LotroGame game, final String playerId, final Collection<PhysicalCard> possibleCharacters) {
+    private AwaitingDecision createChooseNextCharacterDecision(final LotroGame game, final String playerId, final Collection<PhysicalCard> allCompanions, final Collection<PhysicalCard> possibleCharacters) {
         return new ArbitraryCardsSelectionDecision(1, "Starting fellowship - Choose next character or press DONE",
-                new LinkedList<>(possibleCharacters), 0, 1) {
+                new LinkedList<>(allCompanions), new LinkedList<>(possibleCharacters), 0, 1) {
             @Override
             public void decisionMade(String result) throws DecisionResultInvalidException {
                 List<PhysicalCard> selectedCharacters = getSelectedCardsByResponse(result);

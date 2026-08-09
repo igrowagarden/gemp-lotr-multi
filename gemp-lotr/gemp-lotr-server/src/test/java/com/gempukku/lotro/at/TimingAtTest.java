@@ -65,14 +65,25 @@ public class TimingAtTest extends AbstractAtTest {
         extraCards.put(P1, Arrays.asList("1_50", "1_48"));
         initializeSimplestGame(extraCards);
 
-        // Play first character
+        // Play first character. The whole deck's companions are SHOWN -- the
+        // five-player playtest asked for priced-out characters to grey rather
+        // than vanish -- but only the playable one is selectable: 1_48 needs an
+        // Elf spotted, and there is none yet.
         AwaitingDecision firstCharacterDecision = _userFeedback.getAwaitingDecision(P1);
         assertEquals(AwaitingDecisionType.ARBITRARY_CARDS, firstCharacterDecision.getDecisionType());
-        validateContents(new String[]{"1_50"}, ((String[]) firstCharacterDecision.getDecisionParameters().get("blueprintId")));
+        validateContents(new String[]{"1_50", "1_48"}, ((String[]) firstCharacterDecision.getDecisionParameters().get("blueprintId")));
+        Map<String, String> selectableByBlueprint = new HashMap<>();
+        String[] shownBlueprints = (String[]) firstCharacterDecision.getDecisionParameters().get("blueprintId");
+        String[] shownSelectable = (String[]) firstCharacterDecision.getDecisionParameters().get("selectable");
+        for (int i = 0; i < shownBlueprints.length; i++)
+            selectableByBlueprint.put(shownBlueprints[i], shownSelectable[i]);
+        assertEquals("true", selectableByBlueprint.get("1_50"));
+        assertEquals("false", selectableByBlueprint.get("1_48"));
 
         playerDecided(P1, getArbitraryCardId(firstCharacterDecision, "1_50"));
 
-        // Play second character with spot requirement
+        // Play second character with spot requirement -- now legal, and the
+        // only companion left in the deck.
         AwaitingDecision secondCharacterDecision = _userFeedback.getAwaitingDecision(P1);
         assertEquals(AwaitingDecisionType.ARBITRARY_CARDS, secondCharacterDecision.getDecisionType());
         validateContents(new String[]{"1_48"}, ((String[]) secondCharacterDecision.getDecisionParameters().get("blueprintId")));

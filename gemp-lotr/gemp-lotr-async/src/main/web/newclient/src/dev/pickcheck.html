@@ -122,11 +122,12 @@ ok("None is offered when min is 0",
 ok("absent `selectable` means everything is selectable",
    pickable(decision("ARBITRARY_CARDS", "x", { cardId: ["temp0"], blueprintId: ["1_290"] }))
      .every((c) => c.selectable));
-// ---- pick-one-or-pass: the click IS the answer -----------------------------
-// The starting fellowship's shape (min 0, max 1): the engine asks one
-// character at a time because each play changes the twilight budget, so the
-// sequence is pick, pick, DONE. Requiring select-then-Confirm made that two
-// clicks and a window reopen per character.
+// ---- pick-one-or-pass STILL requires Confirm --------------------------------
+// A click-commits shortcut for min 0 / max 1 shipped once and was revoked by
+// the playtest within a game ("I didn't press confirm and it just went"): the
+// starting fellowship plays a character per answer, and the last affordable
+// pick auto-advances the phase, so an unconfirmed click can spend the whole
+// budget. The click selects; only Confirm answers.
 sent.length = 0;
 const fellowship = decision("ARBITRARY_CARDS",
   "Starting fellowship - Choose next character or press DONE", {
@@ -137,7 +138,13 @@ const fellowship = decision("ARBITRARY_CARDS",
 });
 picker.show(fellowship);
 cards().find((c) => c.classList.contains("is-pickable"))?.click();
-ok("min 0 max 1: clicking a card answers with it immediately",
+ok("min 0 max 1: a click only SELECTS -- nothing is sent",
+   sent.length === 0, JSON.stringify(sent));
+ok("the choice is visible while unconfirmed",
+   picker.root.querySelectorAll(".is-chosen").length === 1);
+[...picker.root.querySelectorAll(".pickbar button")]
+  .find((b) => b.textContent.startsWith("Confirm"))?.click();
+ok("Confirm sends the selected card",
    sent.length === 1 && sent[0][1] === "temp0", JSON.stringify(sent));
 ok("and the window closes with the answer", !picker.isOpen);
 
