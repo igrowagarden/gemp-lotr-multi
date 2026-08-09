@@ -519,7 +519,8 @@ window.OLD = (function () {
       selectable.each(function () {
         out.options.push({ cardId: idOf(this) });
       });
-    } else if ($("#multipleChoiceDecision option").length) {
+    } else if (calls.lastType === "MULTIPLE_CHOICE" &&
+               $("#multipleChoiceDecision option").length) {
       // MULTIPLE_CHOICE HAS TWO RENDERINGS, and only one of them is buttons.
       // `multipleChoiceDecision` (gameUi.js:2121) switches on
       // `results.length > 2 || settingsAlwaysDropDown`: above two options it
@@ -527,11 +528,18 @@ window.OLD = (function () {
       // button; at two or fewer it builds one button per option. Counting
       // buttons alone therefore reported "1 option" for a ten-way choice --
       // which reads as the new client inventing nine options.
-      out.shape = "button";
-      $("#multipleChoiceDecision option").each(function (i) {
-        out.options.push({ index: i, text: $(this).text() });
-      });
-    } else if ($("#multipleChoiceDecision option").length) {
+      //
+      // GATED ON THE DECISION THE CLIENT LAST PROCESSED, because the <select>
+      // is as stale-prone as the dialog buttons above and had no guard at all:
+      // the client only wipes it when the NEXT smallDialog decision calls
+      // `smallDialog.html(...)`, and a card decision never touches smallDialog.
+      // So a >2-option MULTIPLE_CHOICE followed by a pass-only
+      // CARD_ACTION_CHOICE handed the dead dropdown back as that decision's
+      // offer. Measured on `asdf$wgx5vxejvutrxuab` #67: both clients truly
+      // offered nothing, and this branch reported the previous decision's four
+      // player names as phantom options. `calls.lastType` is stamped inside
+      // the client's own processDecision, so it is right for every consumer
+      // and every feed path.
       out.shape = "button";
       $("#multipleChoiceDecision option").each(function (i) {
         out.options.push({ index: i, text: $(this).text() });
