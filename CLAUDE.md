@@ -14,6 +14,9 @@ read its HANDOFF box before touching engine code. Beware:
 
 ## The clients (web)
 
+**To launch a game in either client, see `LAUNCHING.md`** — server start,
+the URLs for both GUIs, and the same game open in both at once.
+
 Both are served from `gemp-lotr/gemp-lotr-async/src/main/web/`:
 
 - **The OLD client** — `game.html`, `hall.html`, `js/gemp-022/gameUi.js` at
