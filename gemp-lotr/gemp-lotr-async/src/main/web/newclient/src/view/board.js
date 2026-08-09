@@ -42,6 +42,10 @@ export function createBoard(root, store, options = {}) {
   // being built. A small state machine with real rules, so it lives in
   // model/selection.js where it can be tested without a board to click.
   const picked = createSelection();
+  // Whether the player collapsed the centered prompt popup. Reset per
+  // decision, like `picked`: a collapse is an answer to THIS question's
+  // presentation, not a setting.
+  const popup = { hidden: false };
   let lastDecision = null;
 
   /** Answer and clear, so a stale selection cannot leak into the next decision. */
@@ -471,6 +475,7 @@ export function createBoard(root, store, options = {}) {
     if (state.decision !== lastDecision) {
       lastDecision = state.decision ?? null;
       picked.clear();
+      popup.hidden = false;
     }
     const ctx = { ...bandContext(state, focusId), viewerId: state.viewerId, fpId: fpId(state) };
     const split = assignBands(allCards(state), ctx);
@@ -505,7 +510,7 @@ export function createBoard(root, store, options = {}) {
       stack.appendChild(renderBand(spec, cards, state, { ...ctx, registry: spec }, attachedBy));
     }
 
-    stack.appendChild(renderPrompt(doc, state, picked, onAnswer));
+    stack.appendChild(renderPrompt(doc, state, picked, onAnswer, { popup }));
 
     // Edge arrows. Suspended during a skirmish, which draws every seat -- they
     // go visibly dead rather than silently doing nothing.

@@ -34,7 +34,7 @@ createtable() {  # $1=user $2=cookie $3=seatCount
     --data-urlencode "participantId=$1" \
     --data-urlencode "format=${FORMAT:-fotr_block}" \
     --data-urlencode "deckName=${DECK_NAME:-starter}" \
-    --data-urlencode "timer=default" \
+    --data-urlencode "timer=${TIMER:-default}" \
     --data-urlencode "desc=" \
     --data-urlencode "isPrivate=false" \
     --data-urlencode "isInviteOnly=false" \

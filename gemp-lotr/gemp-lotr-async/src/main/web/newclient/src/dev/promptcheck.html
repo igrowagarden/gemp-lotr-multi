@@ -212,6 +212,60 @@ const byLabel = (el, t) => buttons(el).find((b) => b.textContent === t);
      picked.size === 0);
 }
 
+// ---------------------------------------------------------- centered popup
+{
+  // The strip IS the popup: one element, one set of controls. `opts.popup`
+  // is owned by the caller like `picked`, so a collapse survives repaints of
+  // the same decision and a new decision starts expanded again (the board
+  // resets it where it resets `picked`).
+  const d = dec("MULTIPLE_CHOICE", "button", { parameters: { results: ["Yes", "No"] } });
+  const popup = { hidden: false };
+  let s = renderPrompt(document, state({ decision: d }), createSelection(), onAnswer, { popup });
+  ok("a button decision renders front and center when the caller owns popup state",
+     s.classList.contains("pmodal"));
+  const toggle = s.querySelector(".pmin");
+  ok("the collapse control is not an option button",
+     toggle != null && !toggle.className.includes("pbtn") && buttons(s).length === 3);
+  toggle.click();
+  ok("collapsing drops the class in place and records the choice",
+     !s.classList.contains("pmodal") && popup.hidden === true);
+  s = renderPrompt(document, state({ decision: d }), createSelection(), onAnswer, { popup });
+  ok("a repaint of the same decision honours the recorded collapse",
+     !s.classList.contains("pmodal"));
+  s.querySelector(".pmin").click();
+  ok("and the same control restores it",
+     popup.hidden === false && s.classList.contains("pmodal"));
+
+  s = renderPrompt(document, state({ decision: dec("INTEGER", "number",
+        { parameters: { min: ["0"], max: ["10"] } }) }),
+      createSelection(), onAnswer, { popup: { hidden: false } });
+  ok("a number decision pops up too", s.classList.contains("pmodal"));
+
+  s = renderPrompt(document, state({ decision: dec("CARD_SELECTION", "cards") }),
+      createSelection(), onAnswer, { popup: { hidden: false } });
+  ok("card decisions stay on the board -- no popup, no toggle",
+     !s.classList.contains("pmodal") && s.querySelector(".pmin") == null);
+
+  s = renderPrompt(document, state({ decision: dec("MULTIPLE_CHOICE", "button") }),
+      createSelection(), onAnswer, { popup: { hidden: false } });
+  ok("no options means no popup -- there is nothing to answer front and center",
+     !s.classList.contains("pmodal") && s.querySelector(".pmin") == null);
+
+  s = strip(state({ decision: d }));
+  ok("without a popup owner the strip is exactly what it always was",
+     !s.classList.contains("pmodal") && s.querySelector(".pmin") == null);
+
+  sent = [];
+  const ns = renderPrompt(document, state({ decision: dec("INTEGER", "number",
+        { parameters: { min: ["0"], max: ["10"], defaultValue: ["7"] } }) }),
+      createSelection(), onAnswer, { popup: { hidden: false } });
+  const input = ns.querySelector("input");
+  input.value = "4";
+  input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  ok("Enter in the number input answers without reaching for Accept",
+     sent.length === 1 && sent[0][1] === "4", JSON.stringify(sent));
+}
+
 // ------------------------------------------------------------------- clock
 {
   let s = strip(state({ decision: dec("MULTIPLE_CHOICE", "button"),

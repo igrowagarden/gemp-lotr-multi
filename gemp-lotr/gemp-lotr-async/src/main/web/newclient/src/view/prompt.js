@@ -18,6 +18,15 @@
  * strip answers do not close an open action menu, and each branch clears
  * `picked` exactly where the original did. Changing that is changing
  * behaviour, not moving it.
+ *
+ * THE STRIP IS ALSO THE POPUP. The two shapes answered entirely from the
+ * strip -- "button" (mulligan? which response?) and "number" (bid how many
+ * burdens?) -- are easy to miss at 24px tall, so when the caller owns a
+ * popup state (`opts.popup`, reset per decision like `picked`) the SAME
+ * element takes a `pmodal` class and renders front and center. One element,
+ * one set of controls: a separate modal would be a second answer surface,
+ * which is exactly the ARBITRARY_CARDS mistake this file already refuses.
+ * Card-shaped decisions stay on the board, where their answers live.
  */
 
 import { cardActions, isActionChoice } from "../model/actions.js";
@@ -31,7 +40,7 @@ const el = (doc, tag, cls, text) => {
   return node;
 };
 
-export function renderPrompt(doc, state, picked, onAnswer) {
+export function renderPrompt(doc, state, picked, onAnswer, opts = {}) {
   const strip = el(doc, "div", "prompt");
   const d = state.decision;
   const yours = !!d && !state.spectating && d.forPlayer === state.viewerId;
@@ -49,9 +58,12 @@ export function renderPrompt(doc, state, picked, onAnswer) {
   const actions = el(doc, "div", "pactions");
   const send = (value) => onAnswer(d.id, value);
   const p = d.parameters ?? {};
+  // Set by the branches whose answer lives wholly in the strip; drives pmodal.
+  let center = false;
 
   if (d.shape === "button") {
     const options = p.results ?? p.actionText ?? p.actionId ?? [];
+    center = options.length > 0;
     options.forEach((label, i) => {
       const b = el(doc, "button", "pbtn" + (i === 0 ? " primary" : ""), String(label).slice(0, 28));
       b.type = "button";
@@ -70,6 +82,7 @@ export function renderPrompt(doc, state, picked, onAnswer) {
       actions.appendChild(el(doc, "span", "pnote", "No options offered"));
     }
   } else if (d.shape === "number") {
+    center = true;
     // `IntegerAwaitingDecision` has THREE constructors, so both `max` and
     // `defaultValue` are optional and each has to be handled as absent.
     const lo = parseInt(p.min?.[0] ?? "0", 10);
@@ -96,6 +109,9 @@ export function renderPrompt(doc, state, picked, onAnswer) {
     input.min = String(lo);
     input.max = String(hi);
     input.value = String(start);
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") send(input.value);
+    });
     actions.appendChild(input);
     const b = el(doc, "button", "pbtn primary", "Accept");
     b.type = "button";
@@ -184,6 +200,25 @@ export function renderPrompt(doc, state, picked, onAnswer) {
   }
 
   strip.appendChild(actions);
+
+  // The popup form. `opts.popup` is owned by the caller, like `picked`,
+  // because whether the player collapsed it must outlive any one paint --
+  // the toggle flips the class in place AND records the choice, so the next
+  // paint of the same decision agrees with what is on screen.
+  if (center && opts.popup) {
+    if (!opts.popup.hidden) strip.classList.add("pmodal");
+    const toggle = el(doc, "button", "pmin", opts.popup.hidden ? "expand" : "minimize");
+    toggle.type = "button";
+    toggle.title = opts.popup.hidden ? "Restore the centered prompt" : "Collapse to the strip";
+    toggle.addEventListener("click", () => {
+      opts.popup.hidden = !opts.popup.hidden;
+      strip.classList.toggle("pmodal", !opts.popup.hidden);
+      toggle.textContent = opts.popup.hidden ? "expand" : "minimize";
+      toggle.title = opts.popup.hidden ? "Restore the centered prompt" : "Collapse to the strip";
+    });
+    strip.appendChild(toggle);
+  }
+
   const seconds = state.clocks[state.viewerId];
   if (seconds != null) strip.appendChild(el(doc, "span", "ptimer", formatClock(seconds)));
   return strip;

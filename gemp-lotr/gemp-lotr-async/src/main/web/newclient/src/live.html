@@ -84,6 +84,22 @@ function show(status, detail) {
   if (detail) detailEl.textContent = detail;
 }
 
+// A paint that throws leaves a frozen board under a green "live" dot -- the
+// transport keeps polling while the screen stops changing. That is exactly
+// what the first human five-player playtest looked like: the board stopped
+// after an attach, nothing said why, and the decision timer eliminated the
+// player. Surface every uncaught error where the player is already looking.
+// `detailEl.className = "bad"` also stops the per-poll counter overwriting it.
+window.addEventListener("error", (e) => {
+  detailEl.className = "bad";
+  detailEl.textContent =
+    `client error: ${e.message} (${String(e.filename ?? "").split("/").pop()}:${e.lineno})`;
+});
+window.addEventListener("unhandledrejection", (e) => {
+  detailEl.className = "bad";
+  detailEl.textContent = `client error: ${e.reason?.message ?? e.reason}`;
+});
+
 let answeredId = null;
 const store = createStore(participantId);
 const board = createBoard(document.getElementById("board"), store, {
