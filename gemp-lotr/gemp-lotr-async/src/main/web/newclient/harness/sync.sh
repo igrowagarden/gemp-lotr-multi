@@ -33,7 +33,7 @@ if [ -n "$HOLDERS" ] && [ -z "${SYNC_FORCE:-}" ]; then
 fi
 
 SRC="$(cd "$(dirname "$0")/../src" && pwd)"
-DST="/c/Users/emers/gemp2/gemp-lotr/gemp-lotr-async/src/main/web/newclient"
+DST="$HOME/gemp2/gemp-lotr/gemp-lotr-async/src/main/web/newclient"
 STAMP="$(date +%s)"
 
 mkdir -p "$DST"

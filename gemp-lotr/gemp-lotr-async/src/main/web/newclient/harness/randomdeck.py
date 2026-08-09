@@ -51,7 +51,7 @@ import urllib.parse
 import urllib.request
 
 BASE = "http://localhost:17002/gemp-lotr-server"
-CARDS = r"C:\Users\emers\gemp2\gemp-lotr\gemp-lotr-cards\src\main\resources\cards\official"
+CARDS = os.path.join(os.path.expanduser("~"), r"gemp2\gemp-lotr\gemp-lotr-cards\src\main\resources\cards\official")
 FORMATS_FILE = os.path.join(os.path.dirname(CARDS), os.pardir, "lotrFormats.hjson")
 # `sites:` in a format maps to the `block:` printed on a site card.
 SITE_BLOCK = {"FELLOWSHIP": "Fellowship", "TWO_TOWERS": "Towers",

@@ -23,7 +23,7 @@ fastrun was run from the fork copy after import: ALL PASS, controls fired.
 plus eliminated-player card removal, site replacement, and wound rulings).
 The jar was REBUILT from HEAD on the host (`mvn -B -q -DskipTests install`)
 because the fork's own target/web.jar was seven commits stale. Backup of the
-pre-swap source: `C:\Users\emers\gemp2_backup_pre_fork_20260809`. The
+pre-swap source: `%USERPROFILE%\gemp2_backup_pre_fork_20260809`. The
 database and the recording corpus were not touched.
 
 **Verified on the new engine, every final line read:** fastrun ALL PASS with
@@ -382,7 +382,7 @@ you are here.** Anything you do in either of those trees lands in the middle of
 someone else's work. Sessions for *this* project are sometimes launched from the
 `gemp_multiplayer` directory, so check which project you are on before editing:
 if the task is the board client, everything you touch is under `gemp_gui/` and
-`C:\Users\emers\gemp2`.
+`%USERPROFILE%\gemp2`.
 
 This arrangement was chosen after trying and rejecting a git worktree on a
 `gui/board-client` branch. It worked, but it still put this project inside the
@@ -414,7 +414,7 @@ three pages and was edited five times in a single session below.
 | stack | app | db | tree | owner |
 |---|---|---|---|---|
 | `gemp_1` | 17001 | 35001 | `gemp_multiplayer/vendor/gemp-lotr` | the other agent |
-| `gemp_2` | **17002** | 35002 | `C:\Users\emers\gemp2` | **this project** |
+| `gemp_2` | **17002** | 35002 | `%USERPROFILE%\gemp2` | **this project** |
 
 The compose file is parameterised by `SERVID`, so most of the isolation existed
 already. Two things did not. The JRE debug port is hardcoded at 8052 — and note
@@ -422,14 +422,14 @@ already. Two things did not. The JRE debug port is hardcoded at 8052 — and not
 `database/`, `logs/`, `replay/` binds are fixed relative paths, so two stacks
 would have written a single MySQL data directory.
 
-`C:\Users\emers\gemp2` is a 143 MB copy of the module tree, deliberately outside
+`%USERPROFILE%\gemp2` is a 143 MB copy of the module tree, deliberately outside
 OneDrive so it does not sync to the cloud. Its database seeded itself from
 `database_script.sql` + `initial_user_setup.sql`, giving `asdf`/`asdf` plus
 `qwer` and `Librarian` on `qwer`; `carol` and `dave` were registered afterwards.
 
 ```bash
-cd /c/Users/emers/gemp2/gemp-lotr/docker
-DOCKER=/c/Users/emers/AppData/Local/Programs/DockerDesktop/resources/bin/docker.exe
+cd ~/gemp2/gemp-lotr/docker
+DOCKER="$HOME/AppData/Local/Programs/DockerDesktop/resources/bin/docker.exe"
 "$DOCKER" compose up -d          # `down` to stop
 ```
 
@@ -442,7 +442,7 @@ moving target.
 `harness/` holds copies of the main project's API scripts, repointed at 17002:
 
 ```bash
-cd /c/Users/emers/OneDrive/Documents/gemp_gui/harness
+cd ~/OneDrive/Documents/gemp_gui/harness
 bash ./seat_table.sh 5 asdf qwer Librarian carol dave     # -> gameId, cookies
 python play_bots.py --players asdf,qwer,Librarian,carol,dave --game 1 --seconds 70
 ```
@@ -980,7 +980,7 @@ Five things, none findable by reading the serialiser:
 The working loop is: seat a table, run bots, hand over a URL, fix what they see.
 
 ```bash
-cd /c/Users/emers/OneDrive/Documents/gemp_gui/harness
+cd ~/OneDrive/Documents/gemp_gui/harness
 bash ./seat_table.sh 5 asdf qwer Librarian carol dave    # -> table + gameId
 python play_bots.py --players asdf,qwer,Librarian,carol,dave \
        --game <id> --play --delay 1.5 --seconds 900
@@ -1031,7 +1031,7 @@ Events coming back means the server and transport are fine.
 ### Verifying against the live server
 
 ```bash
-cd /c/Users/emers/OneDrive/Documents/gemp_gui/harness
+cd ~/OneDrive/Documents/gemp_gui/harness
 bash ./seat_table.sh 5 asdf qwer Librarian carol dave
 python play_bots.py --players asdf,qwer,Librarian,carol,dave --game 2 --seconds 60
 bash ./sync.sh
@@ -1739,7 +1739,7 @@ seat, the game ended — it is not an auth or a client problem.
 ### Seeing the board
 
 ```bash
-cd /c/Users/emers/OneDrive/Documents/gemp_gui/src
+cd ~/OneDrive/Documents/gemp_gui/src
 (python -m http.server 8761 >/dev/null 2>&1 &)
 # then open http://localhost:8761/board.html
 ```
@@ -1750,7 +1750,7 @@ gets checked headlessly:
 
 ```bash
 "/c/Program Files/Google/Chrome/Application/chrome.exe" --headless --disable-gpu \
-  --user-data-dir="C:\\Users\\emers\\AppData\\Local\\Temp\\cr" --dump-dom \
+  --user-data-dir="$LOCALAPPDATA/Temp\\cr" --dump-dom \
   --virtual-time-budget=5000 "http://localhost:8761/board.html?feed=shadowPhase,skirmish"
 ```
 
@@ -1777,10 +1777,10 @@ project, hit again here: PowerShell mangles a native process's output, and
 bash works.
 
 ```bash
-cd /c/Users/emers/OneDrive/Documents/gemp_gui/src
+cd ~/OneDrive/Documents/gemp_gui/src
 (python -m http.server 8751 >/dev/null 2>&1 &) ; sleep 2
 "/c/Program Files/Google/Chrome/Application/chrome.exe" --headless --disable-gpu \
-  --user-data-dir="C:\\Users\\emers\\AppData\\Local\\Temp\\cr_test" \
+  --user-data-dir="$LOCALAPPDATA/Temp\\cr_test" \
   --dump-dom --virtual-time-budget=6000 "http://localhost:8751/tests.html" \
   2>/dev/null | grep -o 'RESULT:[^<]*'
 ```
@@ -2984,7 +2984,7 @@ the claim being made is only that none of the commits are ours.
 `vendor/gemp-lotr` was never touched at all. Every claim in `DESIGN.md` about
 GEMP's behaviour was arrived at by **reading** a GEMP tree, never by editing
 one — and the reference-client reading (`gameUi.js`, `CardGroup.js`,
-`game.css`) is done against **our own** copy at `C:\Users\emers\gemp2`, which
+`game.css`) is done against **our own** copy at `%USERPROFILE%\gemp2`, which
 needs no coordination at all. Prefer that copy.
 
 Nothing here is pushed anywhere. There *is* a repository here now (see "Version

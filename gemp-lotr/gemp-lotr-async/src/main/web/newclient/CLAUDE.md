@@ -40,7 +40,7 @@ board, and no further split is planned.
 vendor/gemp-lotr/                    <- THIS repo: the engine fork
   gemp-lotr/.../src/main/web/        <- the OLD client (game.html, js/)
   gemp-lotr/.../web/newclient/       <- THIS project
-C:\Users\emers\gemp2                 <- the RUNTIME: server jar + MySQL data +
+%USERPROFILE%\gemp2                 <- the RUNTIME: server jar + MySQL data +
                                         the recording corpus. Deliberately
                                         OUTSIDE OneDrive; harness/sync.sh
                                         deploys there and docker runs there.
@@ -119,8 +119,8 @@ different games. Only `IDS=` pins a game.
 The server:
 
 ```bash
-cd /c/Users/emers/gemp2/gemp-lotr/docker
-DOCKER=/c/Users/emers/AppData/Local/Programs/DockerDesktop/resources/bin/docker.exe
+cd ~/gemp2/gemp-lotr/docker
+DOCKER="$HOME/AppData/Local/Programs/DockerDesktop/resources/bin/docker.exe"
 "$DOCKER" compose up -d
 ```
 

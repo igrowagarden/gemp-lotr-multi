@@ -43,7 +43,7 @@ FORMATS=(${FORMATS:-fotr_block pc_fotr_block ttt_block towers_standard
          ts_reflections king_block rotk_sta})
 
 CHROME="/c/Program Files/Google/Chrome/Application/chrome.exe"
-DOCKER=/c/Users/emers/AppData/Local/Programs/DockerDesktop/resources/bin/docker.exe
+DOCKER="$HOME/AppData/Local/Programs/DockerDesktop/resources/bin/docker.exe"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 BASE="http://localhost:17002/gemp-lotr/newclient/dev/livediff.html"
 
@@ -102,7 +102,7 @@ for round in $(seq 1 "$GAMES"); do
   # round can be replayed exactly.
   seed=$((n * 7 + 3))
   res=$(timeout 220 "$CHROME" --headless --disable-gpu \
-        --user-data-dir="C:\\Users\\emers\\AppData\\Local\\Temp\\cr_live$round" \
+        --user-data-dir="$LOCALAPPDATA/Temp/cr_live$round" \
         --window-size=1500,950 --dump-dom --virtual-time-budget=170000 \
         "$BASE?gameId=$gid&participantId=asdf&login=asdf&password=asdf&mode=$MODE&seed=$seed&max=$MAX&for=100${SABOTAGE:+&sabotage=$SABOTAGE}${SABTYPE:+&sabtype=$SABTYPE}${FPCLASH:+&fpclash=1}" \
         2>/dev/null | python -c "

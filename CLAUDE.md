@@ -41,7 +41,7 @@ Both are served from `gemp-lotr/gemp-lotr-async/src/main/web/`:
 
 ## The runtime
 
-The server actually runs from **`C:\Users\emers\gemp2`** — a copy OUTSIDE
+The server actually runs from **`%USERPROFILE%\gemp2`** — a copy OUTSIDE
 OneDrive holding the built jar, the MySQL data dir and the recording corpus
 (4,600+ games). `newclient/harness/sync.sh` deploys the client there;
 `gemp2/gemp-lotr/docker` runs it (port 17002). Do not run a server off THIS

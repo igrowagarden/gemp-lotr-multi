@@ -36,7 +36,7 @@ SEATS=5
 BATCH=25                       # games per batch, then housekeeping
 OFFSET="${OFFSET:-0}"          # resume: seed base to start from
 API="http://localhost:17002/gemp-lotr-server/hall"
-DOCKER=/c/Users/emers/AppData/Local/Programs/DockerDesktop/resources/bin/docker.exe
+DOCKER="$HOME/AppData/Local/Programs/DockerDesktop/resources/bin/docker.exe"
 
 # WAIT FOR THE SERVER RATHER THAN BURNING THE BUDGET AGAINST A DEAD ONE.
 #
@@ -60,7 +60,7 @@ wait_for_server() {  # $1 = minutes to wait before giving up
   if ! "$DOCKER" ps >/dev/null 2>&1; then
     say "    docker daemon is down; starting Docker Desktop"
     powershell.exe -NoProfile -Command \
-      'Start-Process "C:\Users\emers\AppData\Local\Programs\DockerDesktop\Docker Desktop.exe"' \
+      'Start-Process "$env:LOCALAPPDATA\Programs\DockerDesktop\Docker Desktop.exe"' \
       >/dev/null 2>&1 || true
   fi
 
@@ -126,7 +126,7 @@ for b in $(seq 1 "$BATCHES"); do
   # shrinks on a container restart, which is NOT done here -- restarting under a
   # running soak would drop the games in flight.
   bash "$HERE/cleanhall.sh" >/dev/null 2>&1 || true
-  rm -rf /c/Users/emers/AppData/Local/Temp/cr_live* 2>/dev/null || true
+  rm -rf "$LOCALAPPDATA"/Temp/cr_live* 2>/dev/null || true
 
   say "    running total: clean $clean   problems $problems   no result $failed" \
       "  (${done_games}/${GAMES} games, $((done_games * SEATS)) decks)"

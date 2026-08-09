@@ -6,8 +6,8 @@ can be opened in either. The only difference is the URL.
 ## 0. Start the server (once)
 
 ```bash
-cd /c/Users/emers/gemp2/gemp-lotr/docker
-DOCKER=/c/Users/emers/AppData/Local/Programs/DockerDesktop/resources/bin/docker.exe
+cd ~/gemp2/gemp-lotr/docker
+DOCKER="$HOME/AppData/Local/Programs/DockerDesktop/resources/bin/docker.exe"
 "$DOCKER" compose up -d          # serves on http://localhost:17002
 ```
 

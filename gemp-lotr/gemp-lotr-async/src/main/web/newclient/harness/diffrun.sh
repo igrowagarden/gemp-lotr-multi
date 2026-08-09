@@ -23,7 +23,7 @@ MAX="${2:-30}"
 SABOTAGE="${3:-}"
 
 CHROME="/c/Program Files/Google/Chrome/Application/chrome.exe"
-DOCKER=/c/Users/emers/AppData/Local/Programs/DockerDesktop/resources/bin/docker.exe
+DOCKER="$HOME/AppData/Local/Programs/DockerDesktop/resources/bin/docker.exe"
 BASE="http://localhost:17002/gemp-lotr/newclient/dev/diff.html"
 LIST=/tmp/replays.txt
 
@@ -60,7 +60,7 @@ for id in $SAMPLE; do
   [ -n "$SABOTAGE" ] && url="$url&sabotage=$SABOTAGE"
 
   res=$(timeout 200 "$CHROME" --headless --disable-gpu \
-        --user-data-dir="C:\\Users\\emers\\AppData\\Local\\Temp\\cr_diff" \
+        --user-data-dir="$LOCALAPPDATA/Temp/cr_diff" \
         --window-size=1500,950 --dump-dom --virtual-time-budget=45000 "$url" 2>/dev/null \
         | python -c "
 import sys,re,html
