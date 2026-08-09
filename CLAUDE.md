@@ -19,8 +19,9 @@ test and differential harnesses; `harness/` drives the server.
   anything about script handling in the log, in either client.
 
 `src/` layers one way — `view -> model -> nothing`, `state -> model`, `net`
-self-contained. Keep it that way. `view/board.js` (494 code lines) is the one
-file that does too much; the entry points no longer do.
+self-contained. Keep it that way. `view/board.js` is down to ~366 code lines
+after the selection and prompt extractions; what remains is cohesively the
+board, and no further split is planned.
 
 ## Do not touch these trees
 

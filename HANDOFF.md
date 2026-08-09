@@ -75,10 +75,14 @@ originals plus seven surface differentials added since:
 Plus `harness/autopassmeasure.py`, which proves the auto-pass cookie changes
 what the ENGINE asks rather than merely what it parses.
 
-**SIXTEEN assertion suites**, up from twelve: `sessioncheck` (21) and
-`replaycheck` (27) are new this session and cover code that was previously
-unreachable by anything; `attachcheck` (19) is the first thing ever to exercise
-a cross-side attachment.
+**SEVENTEEN assertion suites that print a RESULT line** (counted by running
+them, not from memory): `selectioncheck` (28) is back
+with the fixed extraction and `promptcheck` (39) is new with the renderPrompt
+extraction -- both cover code that used to be reachable only by painting a
+board. `wirecheck` needs `live_capture.xml` copied into the deployed dev/
+directory for the run (sync.sh excludes it deliberately; remove it after).
+`statcheck` prints no RESULT on purpose -- it is a measuring ruler for badge
+placement, not a suite; do not count its silence as a failure.
 
 The original three, for reference:
 
@@ -1858,12 +1862,25 @@ imports, which put it outside every suite:
     point. Timers are INJECTED, so `replaycheck` (27) drives playback with a
     fake clock instead of sleeping.
 
-**`view/board.js` is still 494 code lines** and is the file most like the
-`gameUi.js` this project replaced: focus, filter, selection, assignment
-pairing, drag order, band rendering and the decision strip. Splitting it is the
-remaining architectural work -- but see the open regression at the top of this
-file before touching the selection state. `renderPrompt` (~157 lines) is the
-cleaner cut: it is rendering, not shared mutable state.
+**`view/board.js` is DOWN TO ~366 code lines** (from 494) and its two planned
+cuts are done, each with the suite the code never had:
+
+  * `model/selection.js` (a79b6a0) -- what is picked but not yet sent, the
+    small state machine with the take-back rule. `selectioncheck` (28). The
+    first attempt shipped a regression that was ONE LEFTOVER LINE reading the
+    deleted `selected` Set; the resolution note at the top of this file is the
+    extraction recipe now.
+  * `view/prompt.js` (9a1d13d) -- the decision strip, a pure function of
+    (doc, state, picked, onAnswer). `promptcheck` (39) asserts the rules that
+    were previously unreachable: min AND max on Confirm, Pass only at min 0,
+    the engine's suggested default, the inverted-range case, virtual actions.
+    Note `onAnswer` is deliberately the RAW callback, not board.js's answer()
+    wrapper -- the module header says why.
+
+What remains in board.js is the board: bands, focus and filter, drag order,
+assignment alignment, and wiring cards to decisions. That is cohesive; there
+is no third cut waiting. Further splitting would be trading one import for
+one indirection.
 
 **Comment density is NOT a useful signal here.** A measurement of comment lines
 over total lines named `protocol.js`, `transport.js`, `hall.js` and `detach.js`
