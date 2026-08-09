@@ -15,7 +15,8 @@ import { allCards, fpId, seats, handSize, threats, minionsOf, bandContext,
          clockOf, isWaitingOn, formatClock }
   from "../state/reduce.js";
 import { cardActions, isActionChoice } from "../model/actions.js";
-import { assignable, isAssignment, encodeAssignments } from "../model/assign.js";
+import { assignable, isAssignment } from "../model/assign.js";
+import { createSelection } from "../model/selection.js";
 import { openActionMenu, closeActionMenu, wireActions } from "./actionmenu.js";
 import { renderCard } from "./card.js";
 import { captureRects, playFlip } from "./animate.js";
@@ -36,48 +37,21 @@ export function createBoard(root, store, options = {}) {
   const onAnswer = options.onAnswer ?? null;
   const onPiles = options.onPiles ?? null;
   const onDetach = options.onDetach ?? null;
-  // Cards picked for a card-shaped decision, held here rather than in the
-  // store: an unconfirmed selection is not game state.
-  const selected = new Set();
-  // Assignment in progress: companion cardId -> Set(minion cardId), plus the
-  // minion waiting for a companion. Also not game state until confirmed -- the
-  // server sends ADD_ASSIGNMENT only once the answer is accepted.
-  const pairs = new Map();
-  let heldMinion = null;
+  // What the player has picked but not yet sent -- cards and the assignment
+  // being built. A small state machine with real rules, so it lives in
+  // model/selection.js where it can be tested without a board to click.
+  const picked = createSelection();
   let lastDecision = null;
 
   /** Answer and clear, so a stale selection cannot leak into the next decision. */
   function answer(decisionId, value) {
-    selected.clear();
-    pairs.clear();
-    heldMinion = null;
+    picked.clear();
     closeActionMenu(root);
     onAnswer?.(decisionId, value);
   }
 
-  /** Which companion, if any, this minion is currently promised to. */
-  function pairedTo(minionId) {
-    for (const [fp, minions] of pairs) if (minions.has(minionId)) return fp;
-    return null;
-  }
-
   function assignClick(cardId, kind) {
-    if (kind === "minion") {
-      const already = pairedTo(cardId);
-      if (already != null) {
-        // Clicking an assigned minion takes it back, which is the only way to
-        // correct a mistake before confirming.
-        pairs.get(already).delete(cardId);
-        if (!pairs.get(already).size) pairs.delete(already);
-        heldMinion = null;
-      } else {
-        heldMinion = heldMinion === cardId ? null : cardId;
-      }
-    } else if (heldMinion != null) {
-      if (!pairs.has(cardId)) pairs.set(cardId, new Set());
-      pairs.get(cardId).add(heldMinion);
-      heldMinion = null;
-    }
+    kind === "minion" ? picked.clickMinion(cardId) : picked.clickCompanion(cardId);
     paint(store.getState());
   }
 
@@ -346,9 +320,9 @@ export function createBoard(root, store, options = {}) {
       // A pairing made but not yet confirmed reuses the same tag and the same
       // alignment as a committed one, so the board looks the way it will look.
       if (assign) {
-        const to = pairedTo(card.cardId);
+        const to = picked.pairedTo(card.cardId);
         if (to != null) { node.dataset.assignedTo = String(to); node.classList.add("is-assigned"); }
-        if (heldMinion === card.cardId) node.classList.add("is-chosen");
+        if (picked.held === card.cardId) node.classList.add("is-chosen");
       }
 
       if (eligible.has(card.cardId)) {
@@ -362,7 +336,7 @@ export function createBoard(root, store, options = {}) {
           wireActions(node, actions.byCard.get(card.cardId) ?? [], root,
                       (actionId) => answer(d.id, actionId));
         } else {
-          if (selected.has(card.cardId)) node.classList.add("is-chosen");
+          if (picked.has(card.cardId)) node.classList.add("is-chosen");
           // Selecting is deliberately UNBOUNDED here; `min`/`max` are enforced
           // where the answer is actually SENT, on the Confirm button below.
           // Bounding the send is what keeps an illegal answer off the wire, and
@@ -370,8 +344,7 @@ export function createBoard(root, store, options = {}) {
           // card silently refuse to highlight, with drag-to-reorder riding the
           // same handler. The engine judges the answer, not the highlight.
           node.addEventListener("click", () => {
-            selected.has(card.cardId) ? selected.delete(card.cardId)
-                                      : selected.add(card.cardId);
+            picked.toggle(card.cardId);
             paint(store.getState());
           });
         }
@@ -456,7 +429,7 @@ export function createBoard(root, store, options = {}) {
     for (const node of row.children) node.style.left = "";
     // Local pairings count too: while the decision is open the server has sent
     // no ADD_ASSIGNMENT yet, and the whole point is to see the pairing form.
-    if (!Object.keys(state.assignments ?? {}).length && !pairs.size) return;
+    if (!Object.keys(state.assignments ?? {}).length && !picked.pairs.size) return;
 
     // Companion centres, from every band except the one we are aligning.
     const centres = new Map();
@@ -556,20 +529,20 @@ export function createBoard(root, store, options = {}) {
       b.addEventListener("click", () => send(input.value));
       actions.appendChild(b);
     } else if (isAssignment(d)) {
-      const assigned = [...pairs.values()].reduce((n, s) => n + s.size, 0);
+      const assigned = picked.assignedCount;
       actions.appendChild(el(doc, "span", "pnote",
-        heldMinion != null ? "Now choose who it fights"
+        picked.held != null ? "Now choose who it fights"
                            : assigned ? `${assigned} assigned — choose a minion, then a companion`
                                       : "Choose a minion, then the companion it fights"));
       const confirm = el(doc, "button", "pbtn primary",
         assigned ? `Confirm ${assigned}` : "Confirm");
       confirm.type = "button";
-      confirm.addEventListener("click", () => send(encodeAssignments(pairs)));
+      confirm.addEventListener("click", () => send(picked.encode()));
       actions.appendChild(confirm);
 
       const none = el(doc, "button", "pbtn", "Assign none");
       none.type = "button";
-      none.addEventListener("click", () => { pairs.clear(); heldMinion = null; send(""); });
+      none.addEventListener("click", () => { picked.clear(); send(""); });
       actions.appendChild(none);
     } else if (isActionChoice(d)) {
       // The answer is an action, not a selection, so there is nothing to
@@ -589,7 +562,7 @@ export function createBoard(root, store, options = {}) {
       }
       const pass = el(doc, "button", "pbtn", "Pass");
       pass.type = "button";
-      pass.addEventListener("click", () => { selected.clear(); send(""); });
+      pass.addEventListener("click", () => { picked.clear(); send(""); });
       actions.appendChild(pass);
     } else if (d.decisionType === "ARBITRARY_CARDS") {
       // Answered in the picker window, which owns its own buttons -- these
@@ -610,7 +583,7 @@ export function createBoard(root, store, options = {}) {
       // cause of, because a refused answer comes back as the same decision asked
       // again. The reference gets this right by construction: `processButtons`
       // only draws Done at `length >= min` (gameUi.js:2823).
-      const chosen = [...selected];
+      const chosen = picked.cards;
       const lo = parseInt(p.min?.[0] ?? "0", 10);
       const hi = p.max?.[0] != null ? parseInt(p.max[0], 10) : Infinity;
       const legal = chosen.length >= lo && chosen.length <= hi;
@@ -623,7 +596,7 @@ export function createBoard(root, store, options = {}) {
       confirm.addEventListener("click", () => {
         if (!legal) return;
         send(chosen.join(","));
-        selected.clear();
+        picked.clear();
       });
       actions.appendChild(confirm);
 
@@ -632,7 +605,7 @@ export function createBoard(root, store, options = {}) {
       if (lo === 0) {
         const pass = el(doc, "button", "pbtn", "Pass");
         pass.type = "button";
-        pass.addEventListener("click", () => { selected.clear(); send(""); });
+        pass.addEventListener("click", () => { picked.clear(); send(""); });
         actions.appendChild(pass);
       }
     }
@@ -654,9 +627,7 @@ export function createBoard(root, store, options = {}) {
     // object per DECISION event, so identity changes exactly when it should.
     if (state.decision !== lastDecision) {
       lastDecision = state.decision ?? null;
-      pairs.clear();
-      heldMinion = null;
-      selected.clear();
+      picked.clear();
     }
     const ctx = { ...bandContext(state, focusId), viewerId: state.viewerId, fpId: fpId(state) };
     const split = assignBands(allCards(state), ctx);
@@ -762,9 +733,9 @@ export function createBoard(root, store, options = {}) {
      * third copy of it.
      */
     selection: {
-      has: (cardId) => selected.has(cardId),
+      has: (cardId) => picked.has(cardId),
       toggle: (cardId) => {
-        selected.has(cardId) ? selected.delete(cardId) : selected.add(cardId);
+        picked.toggle(cardId);
         paint(store.getState());
       }
     },
