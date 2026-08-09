@@ -47,7 +47,9 @@ body {
 
 /* The board's own content. Panels live on .board beside this, so a repaint
    cannot delete them. */
-.board-stack { display: flex; flex-direction: column; gap: 5px; height: 100%; }
+/* The retract rail owns a GUTTER on the left; the stack starts after it, so
+   the tabs never overlap a band, a label, or a card. */
+.board-stack { display: flex; flex-direction: column; gap: 5px; height: 100%; margin-left: 40px; }
 
 /* ---------------------------------------------------------------- readout */
 .readout {
@@ -324,8 +326,9 @@ body {
 /* The retract rail: one vertical tab per band on the left edge. A dimmed
    tab is a hidden row waiting to come back with one click. */
 .bandrail {
-  position: absolute; left: 0; top: 60px; bottom: 40px; z-index: 12;
-  display: flex; flex-direction: column; gap: 3px; justify-content: center;
+  position: absolute; left: 0; top: 60px; bottom: 40px; width: 40px; z-index: 12;
+  display: flex; flex-direction: column; align-items: flex-start;
+  gap: 3px; justify-content: center;
   pointer-events: none;
 }
 .railtab {
@@ -690,7 +693,7 @@ body {
 }
 .navarrow:hover:not([disabled]) { background: var(--surface); color: var(--brass); border-color: var(--brass); }
 .navarrow[disabled] { opacity: .3; cursor: default; }
-.navarrow.prev { left: 6px; }
+.navarrow.prev { left: 44px; }   /* inside the content, clear of the rail gutter */
 .navarrow.next { right: 6px; }
 .poschip {
   position: absolute; top: 6px; left: 50%; transform: translateX(-50%); z-index: 7;
