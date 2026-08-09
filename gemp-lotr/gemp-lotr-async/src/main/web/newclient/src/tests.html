@@ -31,6 +31,7 @@ import { capacity, ranks, cardHeight } from "./layout/rank.js";
 import { createTransport } from "./net/transport.js";
 import { validate } from "./layout/bands.js";
 import { imageUrl, CARD_BACK, setImageTable } from "./model/images.js";
+import { createAnswerGate } from "./model/answers.js";
 
 const out = document.getElementById("out");
 let pass = 0, fail = 0;
@@ -354,6 +355,45 @@ eq("chat and the game log share one list", misc.log.length, 2);
 eq("but stay distinguishable", chatLog(misc).length, 1);
 // Order is arrival order, so the two interleave rather than stacking.
 eq("interleaved in arrival order", misc.log.map((e) => e.kind).join(","), "game,chat");
+
+group("reducer: a refused answer's warning lives exactly as long as its re-ask");
+// The engine refuses a bad answer as a W,D pair: the warning, then the same
+// question asked again. The warning must SURVIVE that D (it explains the
+// re-ask) and clear on the next one (the game moved on). Measured in game 1
+// of the five-player playtest, where three refusals rendered nothing at all.
+let warned = reduceAll(initialState("asdf"), decodeEvents(`<events>
+  <ge type="W" message="Something went wrong"/>
+  <ge type="D" id="1" decisionType="INTEGER" text="Asked again"/>
+</events>`));
+eq("the warning survives the re-ask that follows it", warned.warning?.text,
+   "Something went wrong");
+warned = reduceAll(warned, decodeEvents(
+  `<events><ge type="D" id="1" decisionType="INTEGER" text="Next question"/></events>`));
+ok("and clears on the decision after that", warned.warning === null);
+ok("the warning still reaches the log as before",
+   gameLog(reduceAll(initialState("asdf"), decodeEvents(
+     `<events><ge type="W" message="Something went wrong"/></events>`)))
+   .some((e) => e.warning === true));
+
+group("answers: one send per decision object, because ids repeat");
+// Nearly every engine decision arrives as id=1, so a duplicate send is not
+// rejected as stale -- it lands on the NEXT decision (game 1: three refusals;
+// game 2: a duplicate bid answered the never-seen position prompt). The gate
+// keys on the decision OBJECT: fresh object per DECISION event, including the
+// re-ask after a refusal, so a refused answer can be retried.
+{
+  let decision = { id: 1, decisionType: "INTEGER" };
+  const sent = [];
+  const gate = createAnswerGate(() => decision, (id, v) => sent.push([id, v]));
+  ok("the first answer goes through", gate(1, "2") === true && sent.length === 1);
+  ok("a duplicate for the same decision object is dropped",
+     gate(1, "2") === false && sent.length === 1);
+  decision = { id: 1, decisionType: "MULTIPLE_CHOICE" };
+  ok("a new decision object reopens the gate -- same id or not",
+     gate(1, "0") === true && sent.length === 2);
+  decision = null;
+  ok("no decision, no send", gate(1, "") === false && sent.length === 2);
+}
 
 group("reducer: presentation-only events change nothing");
 const before = reduceAll(initialState("asdf"), decodeEvents(

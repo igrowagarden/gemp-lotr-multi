@@ -55,6 +55,17 @@ export function renderPrompt(doc, state, picked, onAnswer, opts = {}) {
 
   if (!yours || !onAnswer) return strip;
 
+  // The engine REFUSED the previous answer and is asking again. Without this
+  // line the re-asked decision renders identically to the first ask, and a
+  // player who already clicked reads the unchanged board as a frozen game --
+  // which is how the first five-player playtest ended in a timeout
+  // elimination. The reducer keeps the warning exactly as long as the re-ask
+  // it belongs to (see the DECISION case).
+  if (state.warning) {
+    strip.appendChild(el(doc, "span", "pwarn",
+      `⚠ ${state.warning.text} — the answer was refused, please answer again`));
+  }
+
   const actions = el(doc, "div", "pactions");
   const send = (value) => onAnswer(d.id, value);
   const p = d.parameters ?? {};

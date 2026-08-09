@@ -266,6 +266,26 @@ const byLabel = (el, t) => buttons(el).find((b) => b.textContent === t);
      sent.length === 1 && sent[0][1] === "4", JSON.stringify(sent));
 }
 
+// -------------------------------------------------------- refused answers
+{
+  // A refusal re-asks the same question; without the warning line the re-ask
+  // is pixel-identical to the first ask and reads as a frozen game (game 1 of
+  // the five-player playtest ended in a timeout exactly this way).
+  const d = dec("CARD_ACTION_CHOICE", "cards");
+  let s = strip(state({ decision: d, warning: { text: "Something went wrong", fresh: false } }));
+  ok("a refused answer renders its warning on the strip",
+     s.querySelector(".pwarn") != null &&
+     s.textContent.includes("Something went wrong") &&
+     s.textContent.includes("answer again"));
+  s = strip(state({ decision: d }));
+  ok("no warning, no line", s.querySelector(".pwarn") == null);
+  s = strip(state({ decision: dec("CARD_SELECTION", "cards", { forPlayer: "bob" }),
+                    warning: { text: "Something went wrong", fresh: false },
+                    waitingOn: ["bob"] }));
+  ok("a warning is never shown on somebody else's decision",
+     s.querySelector(".pwarn") == null);
+}
+
 // ------------------------------------------------------------------- clock
 {
   let s = strip(state({ decision: dec("MULTIPLE_CHOICE", "button"),

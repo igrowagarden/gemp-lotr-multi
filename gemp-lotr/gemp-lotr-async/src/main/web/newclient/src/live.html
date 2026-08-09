@@ -68,6 +68,7 @@ import { createDetacher } from "./view/detach.js";
 import { createSession } from "./view/session.js";
 import { createSettingsPanel } from "./view/settings.js";
 import { loadImageTable } from "./model/images.js";
+import { createAnswerGate } from "./model/answers.js";
 import { closeTopmost } from "./view/flyout.js";
 
 const q = new URLSearchParams(location.search);
@@ -102,13 +103,24 @@ window.addEventListener("unhandledrejection", (e) => {
 
 let answeredId = null;
 const store = createStore(participantId);
+
+// EVERY answer leaves through this gate: the board's controls, the picker
+// window, the site path. One send per decision object -- GEMP's decision ids
+// repeat (nearly everything is id=1), so a duplicate send is not rejected as
+// stale but lands on the NEXT decision. See model/answers.js for the game-1
+// measurement that forced this.
+const sendAnswer = createAnswerGate(
+  () => store.getState().decision,
+  (decisionId, value) => {
+    transport.answer(decisionId, value);
+    detailEl.textContent = `answered ${decisionId} = "${value}"`;
+  }
+);
+
 const board = createBoard(document.getElementById("board"), store, {
   // The prompt renders controls for the decision's shape; answering rides on
   // the next poll, interrupting the one in flight.
-  onAnswer: (decisionId, value) => {
-    transport.answer(decisionId, value);
-    detailEl.textContent = `answered ${decisionId} = "${value}"`;
-  },
+  onAnswer: sendAnswer,
   onPiles: (playerId) => piles.show(playerId),
   onDetach: (playerId) => detacher.detach(playerId),
   onDefect: (missing, dropped) => {
@@ -180,7 +192,7 @@ const boardEl = document.getElementById("board");
 // Sites carry card actions too (sanctuaries, "Use Rivendell Terrace"), and they
 // are drawn here rather than in a band -- so the path needs a way to answer.
 const path = createPathPanel(boardEl, store, {
-  onAnswer: (id, value) => transport.answer(id, value),
+  onAnswer: sendAnswer,
   // Sites are drawn here, not in a band, so a CARD_SELECTION naming one has to
   // join the board's selection rather than keep its own -- the board owns the
   // count and the Confirm button.
@@ -194,7 +206,7 @@ const piles = createPileViewer(boardEl, store);
 // Decisions about cards that are not on the board -- an opponent's hand, a
 // deck, a discard pile. The engine describes them in the decision itself.
 const picker = createPicker(boardEl, {
-  onAnswer: (id, value) => transport.answer(id, value)
+  onAnswer: sendAnswer
 });
 const detacher = createDetacher(store, { onNote: (t) => { detailEl.textContent = t; } });
 const effects = createEffects(boardEl);
@@ -262,7 +274,12 @@ cancelBtn.addEventListener("click", async () => {
 // and therefore nothing tests. See sessioncheck.html.
 createSession({
   store,
-  transport,
+  // The session's own answers (the auto-pass arm) leave through the same gate
+  // as every clicked one -- its per-decision guard and the gate's must be ONE
+  // latch, or an auto-pass and a hand click can both answer the same decision.
+  // Object.create rather than spread: transport carries live getters (status,
+  // channelNumber) that a spread would freeze to their current values.
+  transport: Object.create(transport, { answer: { value: sendAnswer } }),
   boardEl,
   panels: { path, chat, piles, picker, alerts, pregame },
   settings,

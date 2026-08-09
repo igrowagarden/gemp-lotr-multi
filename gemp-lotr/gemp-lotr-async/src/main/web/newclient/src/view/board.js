@@ -150,7 +150,10 @@ export function createBoard(root, store, options = {}) {
     const options_ = focusable(state);
     if (!options_.length) { focusId = null; return; }
     // Following the action keeps the selection on the seat about to act; without
-    // it a spectator has to chase the turn by hand.
+    // it a spectator has to chase the turn by hand. The first five-player
+    // playtest ruled on this for seated players too: the opponent view MAY
+    // auto-rotate; what must never move is the viewer's own side, which the
+    // `mine` bands guarantee structurally.
     if (focusId == null || !options_.includes(focusId)) focusId = options_[0];
   }
 

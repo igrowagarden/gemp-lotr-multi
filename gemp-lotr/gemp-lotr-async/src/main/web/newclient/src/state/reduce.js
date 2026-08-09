@@ -29,6 +29,11 @@ export function initialState(viewerId, { spectating = false } = {}) {
     inactive: [],         // card ids the engine has marked inactive this turn
     stats: null,          // the last GAME_STATS payload
     decision: null,
+    // The engine's refusal of an answer: { text, fresh }. Set by SEND_WARNING,
+    // it must SURVIVE the decision event that re-asks the refused question --
+    // the warning and the re-ask arrive as one W,D pair -- and clear on the
+    // decision after that, which means the game moved on.
+    warning: null,
     // ONE log, in arrival order, holding both the game's commentary and what
     // people say. They were two lists rendered one after the other, which put
     // every chat line after every game line no matter when it was said.
@@ -276,7 +281,10 @@ export function reduce(state, event) {
         ...state,
         decision: event.decision
           ? { ...event.decision, forPlayer: event.participantId ?? state.viewerId }
-          : null
+          : null,
+        // A fresh warning belongs to THIS decision (the W,D re-ask pair), so it
+        // ages rather than clears; a stale one is done -- the game moved on.
+        warning: state.warning?.fresh ? { ...state.warning, fresh: false } : null
       };
 
     /**
@@ -306,7 +314,13 @@ export function reduce(state, event) {
         ...state,
         log: appendLog(state.log, {
           kind: "game", text: event.message, warning: event.type === "SEND_WARNING"
-        })
+        }),
+        // A warning is the engine refusing an answer; the log alone is not
+        // enough -- the prompt must show it beside the re-asked question.
+        // `fresh` lets it survive exactly the one DECISION event that re-asks.
+        warning: event.type === "SEND_WARNING"
+          ? { text: event.message, fresh: true }
+          : state.warning
       };
 
     // Fed by net/chat.js, not by the game channel -- the server never emits the

@@ -10,6 +10,36 @@ behaviour.
 
 ## Start here
 
+### THE FIRST HUMAN PLAYTEST (2026-08-09, five seats) — what it found
+
+The project-level "next thing" happened: a human played at five seats, and
+one game produced three defects, all measured from the game's own recording
+(`replay/2026/08/asdf/n15p7v7lx5wem2ob`, zlib-compressed, not gzip):
+
+- **Duplicate answers land on the WRONG decision.** GEMP hardcodes decision
+  ids (nearly everything is id=1), so a double-click or held Enter is not
+  rejected as stale -- it answers the NEXT decision. Three `W "Something
+  went wrong"` refusals in one short game; in game 2 a duplicate bid "2"
+  silently answered the never-seen choose-position prompt as "go third".
+  Fixed: `model/answers.js`, one gate every answer leaves through (board,
+  picker, path, auto-pass), keyed on the decision OBJECT. Live control:
+  triple-click sent exactly one answer.
+- **A refused answer rendered NOTHING.** The warning went only to the log
+  flyout; the re-asked decision is pixel-identical to the first ask, so the
+  player read it as a frozen game and was timeout-eliminated. Fixed:
+  `state.warning` survives exactly the one re-ask D event (reduce.js), and
+  the prompt renders it red (`.pwarn`). Live control: a garbage answer sent
+  straight through the transport painted the warning on the re-ask.
+- **Uncaught page errors froze the board under a green "live" dot.**
+  live.html now surfaces window errors and rejections in the statusbar.
+
+Also from the playtest: strip-answered decisions (button/number) render as
+a centered popup (`pmodal`, same element as the strip -- ONE answer
+surface), with minimize; the opponent view MAY auto-rotate (ruled by the
+player), and the viewer's own side is guaranteed by the `mine` bands.
+Verified: fastrun ALL PASS (tests 204, promptcheck 52), diffrun 12/12
+agreeing twice, plus the two live controls above.
+
 ### CURRENT STATE (2026-08-09, end of the migration session) — PUSHED
 
 Everything below this box is done, verified, and public. The branch is

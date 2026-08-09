@@ -296,6 +296,9 @@ body {
 .prompt.pmodal .pactions { margin-left: 0; flex-wrap: wrap; justify-content: center; gap: 10px; }
 .prompt.pmodal .pbtn { font-size: 13px; padding: 9px 22px; border-radius: 4px; }
 .prompt.pmodal .pnum { font-size: 16px; width: 84px; padding: 5px 8px; text-align: center; }
+/* The engine refused the previous answer -- must read as an event, not decor */
+.pwarn { color: var(--alert); font-weight: 600; flex: none; }
+.prompt.pmodal .pwarn { font-size: 13px; text-align: center; white-space: normal; }
 .pmin {
   font-family: var(--mono); font-size: 8px; letter-spacing: .08em; text-transform: uppercase;
   background: none; border: none; color: var(--ink-3); cursor: pointer;
