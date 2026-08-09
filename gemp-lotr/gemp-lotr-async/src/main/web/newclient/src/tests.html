@@ -579,6 +579,34 @@ ok("the answer was sent", answering.length >= 1);
 ok("and re-sent after the failure rather than dropped", answering.length >= 2);
 t4.stop();
 
+group("transport: a decision HOLDS the loop -- the answer must not race a parked poll");
+// The server writes a channel's events to whichever request waits on it. A
+// poll parked while the player decides receives the events the ANSWER
+// produces -- and this client used to abort that poll, so they were written
+// to a response nobody read and lost forever (the five-player playtest's
+// frozen bid). The reference stops polling on a decision (gameUi.js:1515);
+// so do we.
+const ffh = fakeFetch([
+  okXml(`<ge type="D" id="1" decisionType="INTEGER" text="Bid" participantId="asdf"/>`, 2),
+  okXml(`<ge type="M" message="asdf bid 3"/><ge type="D" id="1" decisionType="MULTIPLE_CHOICE" text="Choose one" participantId="asdf"/>`, 2),
+  blocks()
+]);
+const th = createTransport({
+  gameId: "g", participantId: "asdf", onEvents: () => {}, fetchImpl: ffh.fetch
+});
+th.start();
+await new Promise((r) => setTimeout(r, 30));
+eq("with a decision pending, the handshake is the ONLY request -- nothing parked",
+   ffh.calls.length, 1);
+th.answer(1, "3");
+await new Promise((r) => setTimeout(r, 30));
+ok("the answer resumed the loop and rode the next POST",
+   ffh.calls.length === 2 && ffh.calls[1].body.includes("decisionValue=3"),
+   JSON.stringify(ffh.calls.map((c) => c.body ?? c.url)));
+eq("and the re-asked decision holds again -- still nothing parked",
+   ffh.calls.length, 2);
+th.stop();
+
 group("transport: decoded events reach the store");
 const wired = createStore("asdf");
 const ff5 = fakeFetch([

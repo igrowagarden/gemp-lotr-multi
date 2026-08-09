@@ -9,7 +9,22 @@
  *                                            -> blocks until there are events
  *
  * Answering a decision is not a separate call: it rides on the same POST that
- * polls. So an answer must interrupt the poll in flight rather than wait for it.
+ * polls.
+ *
+ * NO POLL IS PARKED WHILE A DECISION AWAITS THIS PLAYER. The reference client
+ * stops polling the moment a response carries a decision (gameUi.js:1515) and
+ * answers with the NEXT request -- and that is a wire-protocol requirement,
+ * not a style: the server delivers a channel's events to whichever request is
+ * waiting, so with a poll parked server-side the events produced BY the
+ * answer are written to that parked request. This client used to abort it --
+ * but an abort is invisible to the server, which wrote the events to a
+ * response nobody read. They were consumed and lost, and every later poll
+ * returned clocks only while the engine showed the next decision pending.
+ * Measured on the wire in the five-player playtest (an answered burden bid
+ * froze the game for its winner). So: a response that carries a decision
+ * HOLDS the loop; answer() resumes it, and the answering POST is the only
+ * request in flight. The abort path survives only as a fallback for an
+ * answer sent while no decision was pending.
  *
  * Status codes carry meaning and must not be treated alike:
  *   409  another client claimed this player's channel (SubscriptionConflict).
@@ -55,6 +70,11 @@ export function createTransport({
   let controller = null;
   let failures = 0;
   let status = TransportStatus.IDLE;
+  // The last response carried a decision, so the loop is (or is about to be)
+  // held rather than parking a poll the answer would race. `release` resolves
+  // the hold; only answer() and stop() may call it.
+  let holding = false;
+  let release = null;
 
   const url = `${baseUrl}/game/${encodeURIComponent(gameId)}`;
 
@@ -99,6 +119,10 @@ export function createTransport({
   function deliver(xml) {
     onRaw?.(xml);
     const { events, clocks, decisionClock } = decodeResponse(xml);
+    // A decision can ride on ANY event type (see net/protocol.js), and the
+    // channel only ever carries THIS player's decisions -- so any event with
+    // one means the engine is now waiting on us, and the loop must hold.
+    holding = events.some((e) => e.decision != null);
     const batch = Object.keys(clocks).length
       ? events.concat({ type: "CLOCK_UPDATE", clocks, decisionClock })
       : events;
@@ -161,6 +185,16 @@ export function createTransport({
 
     while (running) {
       try {
+        // Held, not parked: while the engine waits on this player, no request
+        // is in flight, so the answering POST cannot race a server-side poll
+        // for the events it produces. An answer given during onEvents (the
+        // auto-pass arm) lands in pendingAnswer before this check runs, and
+        // the loop carries straight on.
+        if (holding && !pendingAnswer) {
+          await new Promise((r) => { release = r; });
+          release = null;
+          if (!running) break;
+        }
         await poll();
         failures = 0;
         setStatus(TransportStatus.LIVE);
@@ -212,17 +246,21 @@ export function createTransport({
 
     stop() {
       running = false;
+      if (release) release();
       if (controller) controller.abort();
       setStatus(TransportStatus.STOPPED);
     },
 
     /**
-     * Answer the pending decision. Interrupts the poll in flight so the answer
-     * goes now rather than after the server's next timeout.
+     * Answer the pending decision. Normally the loop is HELD (the decision
+     * arrived, so no poll is parked) and this resumes it with the answer
+     * aboard. The abort is a fallback for an answer with no decision pending,
+     * where a poll legitimately sits in flight.
      */
     answer(decisionId, value) {
       pendingAnswer = { decisionId, value: String(value) };
-      if (controller) controller.abort();
+      if (release) release();
+      else if (controller) controller.abort();
     },
 
     concede() {
