@@ -97,8 +97,6 @@ const cards = [
 const split = assignBands(cards, playing);
 const ids = (b) => split.byBand.get(b).map((c) => c.cardId);
 
-eq("the contested fellowship is always drawn", ids("contested"), [1]);
-eq("and its support with it", ids("contestedSupport"), [11]);
 eq("focused opponent's fellowship", ids("focusFree"), [2]);
 eq("focused opponent's support", ids("focusSupport"), [6]);
 eq("minion band takes every seat's minions, including yours", ids("minions"), [4, 5]);
@@ -111,30 +109,39 @@ eq("attachments ride their host", split.onParent.map((c) => c.cardId), [10]);
 ok("your own minions have a home -- the bug the old client still has",
    ids("minions").includes(5));
 
-// An unfocused, uncontested opponent is deliberately not drawn. That is the
-// point of showing one opponent at a time -- but it must not be a defect.
-eq("an unfocused opponent is not drawn", split.unclaimed.map((c) => c.cardId), [12]);
+// An unfocused opponent is deliberately not drawn -- INCLUDING the Free
+// Peoples player, since the playtest removed the "fellowship under attack"
+// row. The default focus follows them, so they are absent only when the
+// viewer deliberately looks elsewhere; either way it must not be a defect.
+eq("unfocused opponents are not drawn, the Free Peoples player included",
+   split.unclaimed.map((c) => c.cardId), [1, 11, 12]);
 ok("...and that is not a defect", !shouldDraw({ zone: "FREE_CHARACTERS", owner: "Librarian" }, playing));
+ok("nor is the unfocused Free Peoples fellowship",
+   !shouldDraw({ zone: "FREE_CHARACTERS", owner: "carol" }, playing));
+eq("focusing the Free Peoples player draws their whole board",
+   assignBands(cards, { ...playing, focusId: "carol" }).byBand.get("focusFree").map((c) => c.cardId),
+   [1]);
 ok("the board is complete", checkComplete(cards, playing).ok);
 
 group("YOUR fellowship never moves house -- ruled in the five-player playtest");
-// "My side of the board is sacred." When you take the Free Peoples role your
-// fellowship stays in YOUR row (selfFree outranks contested), and the
-// contested band goes empty -- its display entry collapses to nothing rather
-// than shelling over cards drawn below.
+// "My side of the board is sacred." Whatever role you hold, your cards render
+// in YOUR rows: selfFree outranks the focus bands, so even focusing yourself
+// cannot pull them to the top of the screen.
 const asFp = { viewerId: "asdf", focusId: "dave", fpId: "asdf",
                spectating: false, skirmishing: false };
 const fpSplit = assignBands(cards, asFp);
 eq("your fellowship stays in your own row while under attack",
    fpSplit.byBand.get("selfFree").map((c) => c.cardId), [3]);
-eq("and the contested band goes empty rather than drawing it twice",
-   fpSplit.byBand.get("contested").map((c) => c.cardId), []);
 eq("your support likewise stays yours",
    fpSplit.byBand.get("selfSupport").map((c) => c.cardId), [7]);
+eq("even focused on yourself, nothing is drawn twice",
+   assignBands(cards, { ...asFp, focusId: "asdf" }).byBand.get("focusFree").map((c) => c.cardId),
+   []);
 ok("the board is still complete with you as Free Peoples",
    checkComplete(cards, asFp).ok);
-eq("the carousel is always one seat short of the table",
-   focusableSeats(["carol", "asdf", "dave", "qwer"], playing), ["asdf", "dave", "qwer"]);
+eq("with no contested row, every seat is focusable",
+   focusableSeats(["carol", "asdf", "dave", "qwer"], playing),
+   ["carol", "asdf", "dave", "qwer"]);
 ok("contestedId is just the Free Peoples player", contestedId(playing) === "carol");
 
 group("skirmish outranks ownership");
@@ -154,9 +161,11 @@ const spec = { viewerId: "watcher", focusId: "dave", fpId: "carol",
                spectating: true, skirmishing: false };
 const specSplit = assignBands(cards, spec);
 const sIds = (b) => specSplit.byBand.get(b).map((c) => c.cardId);
-eq("the contested fellowship, same band as for a player", sIds("contested"), [1]);
-eq("drawn once only", sIds("selfFree"), []);
+eq("nothing is self for a spectator", sIds("selfFree"), []);
 eq("the focused seat still works", sIds("focusFree"), [2]);
+eq("the Free Peoples fellowship draws for a spectator when focused, like any seat",
+   assignBands(cards, { ...spec, focusId: "carol" }).byBand.get("focusFree").map((c) => c.cardId),
+   [1]);
 eq("minions are shared, so unchanged", sIds("minions"), [4, 5]);
 eq("a spectator has no hand band", sIds("hand"), []);
 ok("the hand card is reported unclaimed, not silently dropped",
@@ -177,8 +186,8 @@ const broken = checkComplete(
 ok("a shared card that lands nowhere would be a defect",
    broken.ok || broken.missing.length >= 0);
 const orphan = { cardId: 41, zone: "FREE_CHARACTERS", owner: "carol" };
-ok("the contested fellowship is always claimed",
-   assignBands([orphan], playing).unclaimed.length === 0);
+ok("the Free Peoples fellowship is claimed when focused",
+   assignBands([orphan], { ...playing, focusId: "carol" }).unclaimed.length === 0);
 
 /* ------------------------------------------------------------- protocol -- */
 group("protocol: all 27 event codes");
@@ -451,10 +460,11 @@ live.dispatchAll(decodeEvents(`<events>
   <ge type="PCIP" cardId="5" zone="HAND" participantId="asdf"/>
 </events>`));
 const liveState = live.getState();
-const ctx = bandContext(liveState, "dave");
+const ctx = bandContext(liveState, "carol");
 const liveSplit = assignBands(allCards(liveState), ctx);
 const lIds = (b) => liveSplit.byBand.get(b).map((c) => c.cardId).sort();
-eq("decoded events land in the right bands: contested", lIds("contested"), [1]);
+eq("decoded events land in the right bands: the focused Free Peoples seat",
+   lIds("focusFree"), [1]);
 eq("...your own fellowship", lIds("selfFree"), [2]);
 eq("...every seat's minions", lIds("minions"), [3, 4]);
 eq("...your hand", lIds("hand"), [5]);

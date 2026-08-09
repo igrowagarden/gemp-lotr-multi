@@ -67,7 +67,25 @@ export function renderPrompt(doc, state, picked, onAnswer, opts = {}) {
   }
 
   const actions = el(doc, "div", "pactions");
-  const send = (value) => onAnswer(d.id, value);
+  /**
+   * Send, then say so. `onAnswer` returning exactly `true` means the answer
+   * actually left (live.html's gate returns false for a duplicate; test
+   * stubs return undefined and are unaffected). The strip is then marked
+   * ANSWERED in place -- the node is kept until the next decision arrives,
+   * and without this the popup sat fully interactive through the server
+   * round-trip: the playtest read that as "not responding", clicked more
+   * options (all silently gated), and could not tell which click had won.
+   * The chosen control keeps its identity via `pchosen`.
+   */
+  const send = (value, source) => {
+    if (onAnswer(d.id, value) !== true) return;
+    strip.classList.add("answered");
+    for (const c of strip.querySelectorAll("button, input")) {
+      if (!c.classList.contains("pmin")) c.disabled = true;
+    }
+    source?.classList.add("pchosen");
+    actions.appendChild(el(doc, "span", "pnote", "answered — waiting…"));
+  };
   const p = d.parameters ?? {};
   // Set by the branches whose answer lives wholly in the strip; drives pmodal.
   let center = false;
@@ -78,7 +96,7 @@ export function renderPrompt(doc, state, picked, onAnswer, opts = {}) {
     options.forEach((label, i) => {
       const b = el(doc, "button", "pbtn" + (i === 0 ? " primary" : ""), String(label).slice(0, 28));
       b.type = "button";
-      b.addEventListener("click", () => send(String(i)));
+      b.addEventListener("click", () => send(String(i), b));
       actions.appendChild(b);
     });
     if (!options.length) {
@@ -129,13 +147,14 @@ export function renderPrompt(doc, state, picked, onAnswer, opts = {}) {
     input.addEventListener("input", () => {
       if (opts.draft) opts.draft.value = input.value;
     });
+    // `b` is declared below; the listener only runs after render completes.
     input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") send(input.value);
+      if (e.key === "Enter") send(input.value, b);
     });
     actions.appendChild(input);
     const b = el(doc, "button", "pbtn primary", "Accept");
     b.type = "button";
-    b.addEventListener("click", () => send(input.value));
+    b.addEventListener("click", () => send(input.value, b));
     actions.appendChild(b);
   } else if (isAssignment(d)) {
     const assigned = picked.assignedCount;
@@ -146,12 +165,12 @@ export function renderPrompt(doc, state, picked, onAnswer, opts = {}) {
     const confirm = el(doc, "button", "pbtn primary",
       assigned ? `Confirm ${assigned}` : "Confirm");
     confirm.type = "button";
-    confirm.addEventListener("click", () => send(picked.encode()));
+    confirm.addEventListener("click", () => send(picked.encode(), confirm));
     actions.appendChild(confirm);
 
     const none = el(doc, "button", "pbtn", "Assign none");
     none.type = "button";
-    none.addEventListener("click", () => { picked.clear(); send(""); });
+    none.addEventListener("click", () => { picked.clear(); send("", none); });
     actions.appendChild(none);
   } else if (isActionChoice(d)) {
     // The answer is an action, not a selection, so there is nothing to
@@ -162,7 +181,7 @@ export function renderPrompt(doc, state, picked, onAnswer, opts = {}) {
       const b = el(doc, "button", "pbtn", action.text);
       b.type = "button";
       b.title = "From your discard pile or draw deck";
-      b.addEventListener("click", () => send(action.actionId));
+      b.addEventListener("click", () => send(action.actionId, b));
       actions.appendChild(b);
     }
     if (acts.byCard.size) {
@@ -171,7 +190,7 @@ export function renderPrompt(doc, state, picked, onAnswer, opts = {}) {
     }
     const pass = el(doc, "button", "pbtn", "Pass");
     pass.type = "button";
-    pass.addEventListener("click", () => { picked.clear(); send(""); });
+    pass.addEventListener("click", () => { picked.clear(); send("", pass); });
     actions.appendChild(pass);
   } else if (d.decisionType === "ARBITRARY_CARDS") {
     // Answered in the picker window, which owns its own buttons -- these
@@ -204,7 +223,7 @@ export function renderPrompt(doc, state, picked, onAnswer, opts = {}) {
     if (!legal) confirm.title = `Choose ${lo === hi ? lo : `${lo} to ${hi}`}`;
     confirm.addEventListener("click", () => {
       if (!legal) return;
-      send(chosen.join(","));
+      send(chosen.join(","), confirm);
       picked.clear();
     });
     actions.appendChild(confirm);
@@ -214,7 +233,7 @@ export function renderPrompt(doc, state, picked, onAnswer, opts = {}) {
     if (lo === 0) {
       const pass = el(doc, "button", "pbtn", "Pass");
       pass.type = "button";
-      pass.addEventListener("click", () => { picked.clear(); send(""); });
+      pass.addEventListener("click", () => { picked.clear(); send("", pass); });
       actions.appendChild(pass);
     }
   }

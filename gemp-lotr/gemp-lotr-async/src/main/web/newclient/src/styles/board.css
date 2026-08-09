@@ -296,6 +296,15 @@ body {
 .prompt.pmodal .pactions { margin-left: 0; flex-wrap: wrap; justify-content: center; gap: 10px; }
 .prompt.pmodal .pbtn { font-size: 13px; padding: 9px 22px; border-radius: 4px; }
 .prompt.pmodal .pnum { font-size: 16px; width: 84px; padding: 5px 8px; text-align: center; }
+/* The answer left; the strip says so until the next decision replaces it.
+   The chosen control keeps full strength so "which one did it take?" is
+   always answerable at a glance. */
+.prompt.answered button:disabled, .prompt.answered input:disabled { opacity: .4; }
+.prompt.answered .pbtn.pchosen {
+  opacity: 1;
+  background: color-mix(in srgb, var(--brass) 30%, var(--surface));
+  color: var(--brass); border-color: var(--brass);
+}
 /* The engine refused the previous answer -- must read as an event, not decor */
 .pwarn { color: var(--alert); font-weight: 600; flex: none; }
 .prompt.pmodal .pwarn { font-size: 13px; text-align: center; white-space: normal; }

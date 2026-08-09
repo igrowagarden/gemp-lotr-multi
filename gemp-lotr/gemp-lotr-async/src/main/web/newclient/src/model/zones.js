@@ -65,19 +65,22 @@ export function visibleTo(card, viewerId, { discardPublic = false } = {}) {
 }
 
 /**
- * The fellowship every minion on the table is attacking. There is exactly one
- * per turn, it is the shared object of the whole game, and it is always drawn --
- * for players and spectators alike. When you hold the Free Peoples role it is
- * your own, which is why nothing moves house as the turn passes.
+ * The fellowship every minion on the table is attacking: the Free Peoples
+ * player's. It no longer has a band of its own -- the playtest ruled the
+ * "fellowship under attack" row out of the layout -- but the id still marks
+ * the seat chips and drives the default focus, which FOLLOWS the Free
+ * Peoples seat so the active fellowship is the opponent view unless the
+ * player deliberately looks elsewhere.
  */
 export function contestedId(ctx) {
   return ctx.fpId;
 }
 
-/** Seats the carousel can focus: everyone except the contested one, which is
- *  permanently on screen. Always one fewer than the table. */
+/** Seats the carousel can focus: every seat at the table. The contested seat
+ *  used to be excluded because its own band drew it permanently; with that
+ *  band gone it is focusable like any other. */
 export function focusableSeats(seatIds, ctx) {
-  return seatIds.filter((id) => id !== contestedId(ctx));
+  return seatIds;
 }
 
 /**
@@ -86,14 +89,13 @@ export function focusableSeats(seatIds, ctx) {
  * `holds` is a predicate over (card, ctx) where ctx is
  *   { viewerId, focusId, fpId, spectating, skirmishing, filter }
  *
- * Ordering does real work, in two directions. `selfFree` precedes `contested`,
- * so a seated player's fellowship NEVER leaves their own row -- when they hold
- * the Free Peoples role the contested band goes empty rather than pulling
- * their cards to the top of the board (ruled in the first five-player
- * playtest: "my side of the board is sacred"). `contested` still precedes the
- * focus bands, so focusing the Free Peoples player cannot draw the same
- * fellowship twice. For a spectator nothing is `self`, so the contested band
- * draws every Free Peoples fellowship exactly as before.
+ * Ordering does real work. `selfFree` precedes `focusFree`, so the viewer's
+ * fellowship NEVER leaves their own row ("my side of the board is sacred" --
+ * the playtest's ruling), even when they focus themselves. There is no
+ * contested band: the playtest removed the "fellowship under attack" row, so
+ * the Free Peoples player's cards render in the focus rows when focused (the
+ * default focus follows them) and are deliberately absent otherwise, like any
+ * other unfocused opponent.
  */
 export const BANDS = Object.freeze([
   {
@@ -120,25 +122,6 @@ export const BANDS = Object.freeze([
     ownerTag: false,
     filterable: false,
     holds: (card, ctx) => card.zone === "SUPPORT" && card.owner === ctx.viewerId
-  },
-  {
-    // The fellowship the minions are attacking, when it is an OPPONENT's --
-    // the viewer's own is claimed by selfFree above. Always drawn for
-    // spectators, for whom nothing is self.
-    id: "contested",
-    density: "board",
-    shared: true,
-    ownerTag: true,
-    filterable: false,
-    holds: (card, ctx) => card.zone === "FREE_CHARACTERS" && card.owner === contestedId(ctx)
-  },
-  {
-    id: "contestedSupport",
-    density: "board",
-    shared: true,
-    ownerTag: true,
-    filterable: false,
-    holds: (card, ctx) => card.zone === "SUPPORT" && card.owner === contestedId(ctx)
   },
   {
     id: "focusFree",
@@ -244,8 +227,10 @@ export function shouldDraw(card, ctx) {
   // Shared state: everyone sees it whatever the focus says.
   if (card.zone === "SHADOW_CHARACTERS" || card.zone === "ADVENTURE_PATH") return true;
   if (card.zone === "HAND") return !ctx.spectating && card.owner === ctx.viewerId;
-  return card.owner === contestedId(ctx)
-      || card.owner === ctx.viewerId
+  // The Free Peoples player's cards are NOT special here any more: with the
+  // contested band removed, an unfocused Free Peoples fellowship is
+  // deliberately absent like any other unfocused opponent's.
+  return card.owner === ctx.viewerId
       || card.owner === ctx.focusId;
 }
 

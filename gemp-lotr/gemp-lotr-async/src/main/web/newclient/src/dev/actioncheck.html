@@ -45,7 +45,7 @@ const settle = () => cardNodes().forEach((n) =>
 // Two real minions to work with, and a companion.
 const minionIds = [...boardEl.querySelectorAll('[data-band="minions"] .card')]
   .map((n) => Number(n.dataset.cardId));
-const compIds = [...boardEl.querySelectorAll('[data-band="contested"] .card')]
+const compIds = [...boardEl.querySelectorAll('[data-band="focusFree"] .card')]
   .map((n) => Number(n.dataset.cardId));
 ok("the fixture has minions and companions", minionIds.length >= 2 && compIds.length >= 2,
    `${minionIds.length} minions, ${compIds.length} companions`);

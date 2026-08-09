@@ -16,37 +16,28 @@ import { BANDS } from "../model/zones.js";
 
 /**
  * Top to bottom, as ruled in the first five-player playtest: hand at the
- * bottom, then your support, then your fellowship, then the minions, then the
- * opposing fellowship views, then their support at the top. The viewer's own
- * rows are sacred -- their fellowship renders in THEIR row even while it is
- * the one under attack (`selfFree` outranks `contested` in the registry), so
- * `contested` is empty exactly when the viewer holds the Free Peoples role,
- * and `collapsed: 0` makes it vanish rather than sit as an empty shell over
- * a fellowship that is drawn below.
+ * bottom, then your support, then your fellowship, then the minions, then ONE
+ * opposing view -- the focused seat's fellowship with its support above it.
+ * There is no separate "fellowship under attack" row (removed by ruling); the
+ * default focus follows the Free Peoples seat, so the active fellowship is
+ * what the opponent rows show unless the player deliberately looks elsewhere.
+ * The viewer's own rows are sacred and never move.
  */
 export const DISPLAY = Object.freeze([
   {
-    id: "focusSupport", weight: 5, collapsed: 18,
+    id: "focusSupport", weight: 6, collapsed: 18,
     label: (ctx) => `${ctx.focusId} · support area${ctx.filtered ? " · unfiltered" : ""}`,
     tone: "shadow"
   },
   {
-    id: "focusFree", weight: 10, collapsed: 18,
-    label: (ctx) => `${ctx.focusId} · fellowship`,
+    id: "focusFree", weight: 15, collapsed: 18,
+    label: (ctx) => ctx.focusId === ctx.fpId
+      ? `${ctx.focusId} · fellowship · Free Peoples`
+      : `${ctx.focusId} · fellowship`,
     tone: "free",
     // Auto shows a seat's fellowship only while they hold the Free Peoples role.
     dimWhen: (ctx) => ctx.filter === "auto" ? ctx.focusId !== ctx.fpId
                     : ctx.filter === "shadow"
-  },
-  {
-    id: "contestedSupport", weight: 5, collapsed: 0,
-    label: (ctx) => `${ctx.fpId} · support area`,
-    tone: "free"
-  },
-  {
-    id: "contested", weight: 12, collapsed: 0,
-    label: (ctx) => `${ctx.fpId} · fellowship under attack`,
-    tone: "free"
   },
   {
     id: "minions", weight: 14, collapsed: 20, ownerTag: true,

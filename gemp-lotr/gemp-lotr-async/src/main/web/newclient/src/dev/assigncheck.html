@@ -45,7 +45,7 @@ const settle = () => {
 const centre = (n) => { settle(); const r = n.getBoundingClientRect(); return r.left + r.width / 2; };
 const minionRow = () => boardEl.querySelector('[data-band="minions"] .row');
 const companions = () =>
-  [...boardEl.querySelectorAll('[data-band="contested"] .card[data-card-id]')];
+  [...boardEl.querySelectorAll('[data-band="focusFree"] .card[data-card-id]')];
 
 const minionsBefore = [...minionRow().children];
 const comps = companions();
@@ -62,7 +62,7 @@ store.dispatchAll(decodeEvents(
   `<events><ge type="AA" cardId="${compId}" otherCardIds="${minionId}"/></events>`));
 
 const minionNode = boardEl.querySelector(`[data-band="minions"] .card[data-card-id="${minionId}"]`);
-const compNode = boardEl.querySelector(`[data-band="contested"] .card[data-card-id="${compId}"]`);
+const compNode = boardEl.querySelector(`[data-band="focusFree"] .card[data-card-id="${compId}"]`);
 ok("the assigned minion is still drawn", !!minionNode && !!compNode);
 
 const drift = Math.abs(centre(minionNode) - centre(compNode));

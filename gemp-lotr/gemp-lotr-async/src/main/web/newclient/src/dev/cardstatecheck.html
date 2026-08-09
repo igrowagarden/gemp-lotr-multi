@@ -118,7 +118,7 @@ ok("a small movement is still a click, not a reorder", clicked === 1, `${clicked
 // zone="ATTACHED" with a targetCardId. assignBands separated these from the
 // start as `onParent`, and paint ignored them -- so the One Ring, and every
 // possession, was simply never drawn.
-const hostId = Number(boardEl.querySelector('[data-band="contested"] .card').dataset.cardId);
+const hostId = Number(boardEl.querySelector('[data-band="focusFree"] .card').dataset.cardId);
 store.dispatchAll(decodeEvents(
   `<events><ge type="PCIP" cardId="777" blueprintId="1_2" zone="ATTACHED"` +
   ` participantId="asdf" targetCardId="${hostId}" targetType="attached"/></events>`));

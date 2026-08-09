@@ -157,11 +157,20 @@ export function createBoard(root, store, options = {}) {
   function ensureFocus(state) {
     const options_ = focusable(state);
     if (!options_.length) { focusId = null; return; }
-    // Following the action keeps the selection on the seat about to act; without
-    // it a spectator has to chase the turn by hand. The first five-player
-    // playtest ruled on this for seated players too: the opponent view MAY
-    // auto-rotate; what must never move is the viewer's own side, which the
-    // `mine` bands guarantee structurally.
+    // The default focus FOLLOWS the seat under attack -- the Free Peoples
+    // player -- so the opponent rows show the active fellowship (the
+    // playtest's ruling: "focus the player under attack; that makes more
+    // sense"). A deliberate click or arrow clears `following` and the view
+    // then stays where the player put it. When the VIEWER holds the Free
+    // Peoples role their fellowship is in their own sacred rows, so the
+    // focus simply stays wherever it last was.
+    if (following) {
+      const fp = fpId(state);
+      if (fp && fp !== state.viewerId && options_.includes(fp)) {
+        focusId = fp;
+        return;
+      }
+    }
     if (focusId == null || !options_.includes(focusId)) focusId = options_[0];
   }
 
@@ -241,7 +250,9 @@ export function createBoard(root, store, options = {}) {
         chip.appendChild(btns);
       }
       chip.addEventListener("click", () => {
-        if (isFp) return;             // the contested seat is always on screen
+        // Your own board is the sacred bottom rows; focusing it would empty
+        // the opponent view for nothing.
+        if (id === state.viewerId && !state.spectating) return;
         focusId = id; following = false; paint(store.getState());
       });
       strip.appendChild(chip);

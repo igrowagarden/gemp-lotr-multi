@@ -293,6 +293,40 @@ const byLabel = (el, t) => buttons(el).find((b) => b.textContent === t);
      s.querySelector("input").value === "0");
 }
 
+// ------------------------------------------------------ answered feedback
+{
+  // The strip marks itself the moment an answer actually leaves (onAnswer
+  // returns exactly true -- live.html's gate does; stubs returning undefined
+  // change nothing). Without this the popup sat fully interactive through
+  // the server round-trip: the playtest read it as "not responding", clicked
+  // more options, and could not tell which click had won.
+  const d = dec("MULTIPLE_CHOICE", "button",
+                { parameters: { results: ["Go first", "Go second"] } });
+  sent = [];
+  const accepting = (id, v) => { sent.push([id, v]); return true; };
+  let s = renderPrompt(document, state({ decision: d }), createSelection(), accepting);
+  let bs = buttons(s);
+  bs[1].click();
+  ok("a sent answer marks the strip answered", s.classList.contains("answered"));
+  ok("the chosen option stays identifiable", bs[1].classList.contains("pchosen"));
+  ok("every control is disabled -- no second answer to wonder about",
+     bs.every((b) => b.disabled));
+  ok("and it says so", s.textContent.includes("answered — waiting"));
+  bs[0].click();
+  ok("a later click sends nothing", sent.length === 1, JSON.stringify(sent));
+
+  const blocked = renderPrompt(document, state({ decision: d }), createSelection(),
+                               () => false);
+  buttons(blocked)[0].click();
+  ok("an answer the gate refuses does NOT mark the strip",
+     !blocked.classList.contains("answered"));
+
+  s = renderPrompt(document, state({ decision: d }), createSelection(), onAnswer);
+  buttons(s)[0].click();
+  ok("a stub returning undefined leaves the strip unmarked -- old tests unchanged",
+     !s.classList.contains("answered"));
+}
+
 // -------------------------------------------------------- refused answers
 {
   // A refusal re-asks the same question; without the warning line the re-ask
