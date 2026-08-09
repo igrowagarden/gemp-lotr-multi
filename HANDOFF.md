@@ -10,42 +10,34 @@ behaviour.
 
 ## Start here
 
-### OPEN REGRESSION, and it is the first thing to read
+### The selection-extraction regression is RESOLVED (a79b6a0)
 
-**Extracting `model/selection.js` out of `view/board.js` breaks the replay
-differential. Reverted; do not re-attempt it without reading this.**
+**It was one leftover line.** The extraction (43aa51e) deleted the `selected`
+Set but the decision strip's CARD_SELECTION branch still read
+`const chosen = [...selected];` — so every render of that branch threw a
+ReferenceError. The line was never *substituted*, which is why reading the
+diff found only equivalent substitutions: the broken line was not in the diff.
 
-    43aa51e  the extraction          -> 3 MISMATCH of 30
-    d8d70c5  the revert              -> AGREE on all 30   (HEAD is good)
+Cause isolated by measurement in both directions on the pinned game
+(`IDS='dave$oizsis9e43f2gbfx'`): extraction + one-line fix
+(`const chosen = picked.cards;`) → AGREE on all 30 (x3); bad line deliberately
+put back → the original 3 MISMATCH of 30, decisions #19–#21, all
+`CARD_ACTION_CHOICE`; fix restored → AGREE again.
 
-Confirmed by pinning the exact game and running each tree twice:
+**Why the mismatches were displaced.** `renderPrompt` runs at the END of
+`paint`, after the bands are lit — the decision that threw still looked
+rendered, and the damage surfaced on LATER decisions as offer mismatches.
+Chasing the decision type named in the mismatch led away from the cause.
 
-    IDS='dave$oizsis9e43f2gbfx' bash harness/diffrun.sh
+**The lesson, now part of the extraction recipe: after extracting code out of
+a file, grep that file for EVERY identifier the extraction deleted** before
+running anything. One second of grep against a day of differential bisection.
+Green suites cannot see an untested branch — this sat in exactly the
+`renderPrompt` gap this file already documents.
 
-    before the change   AGREE on all 30    (x2)
-    after  the change   3 MISMATCH of 30   (x2)
-
-All three are `CARD_ACTION_CHOICE` **offers** -- which cards each client lights
-as playable, not which answer it sends. That matters for where to look: the
-`is-actionable` path, not the selection state the change was about.
-
-**What was already ruled out.** Every substitution in the diff reads as
-semantically equivalent. The one genuine difference -- `picked.clear()` clearing
-everything where the originals cleared only the cards *or* only the assignment
--- was restored to the original partial semantics and the mismatches PERSISTED.
-So the cause is elsewhere and is not yet known.
-
-To pick it up:
-
-    git revert --no-commit d8d70c5     # put the change back
-    bash harness/sync.sh
-    # then read the three mismatches, in a browser or by grepping the EMITTED
-    # lines (a naive grep also matches the say(...) calls that produce them):
-    #   dev/diff.html?replayId=dave$oizsis9e43f2gbfx&max=30
-
-`model/selection.js` and `dev/selectioncheck.html` went with the revert. The
-suite was sound -- 28 assertions, two proven able to fail -- and should come
-back with the extraction once the cause is understood.
+`model/selection.js` and `dev/selectioncheck.html` are back in with the fix
+(a79b6a0), verified: pinned game x3, diffrun 12/12, fuzzrun CLEAN with all
+controls firing, tests.html 197, all sixteen reporting suites green.
 
 ### Two process failures this cost, both worth more than the bug
 

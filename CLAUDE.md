@@ -64,7 +64,14 @@ bash harness/livediffrun.sh 4 70   # live, with the ENGINE judging
 `view/` or `state/`. Sixteen green assertion suites did not catch a real
 `CARD_ACTION_CHOICE` regression that `diffrun` caught immediately — and a commit
 went in claiming the differential was clean when its final line already said
-otherwise. See the open regression at the top of `HANDOFF.md`.
+otherwise. See the resolved selection-extraction regression at the top of
+`HANDOFF.md` — the cause was a single leftover reference to a deleted variable.
+
+**After extracting code out of a file, grep that file for every identifier the
+extraction deleted** before running anything. A deleted declaration whose
+identifier is still in use does not appear in the diff, throws only on the
+branch that reads it, and cost a day twice (zoomfuzz's `frame`, board.js's
+`selected`).
 
 **`SEED=` does NOT pin a before/after comparison.** It pins the shuffle, not the
 corpus, and live runs add recordings — so two runs at the same seed can compare
