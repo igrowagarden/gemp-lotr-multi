@@ -1,0 +1,190 @@
+/**
+ * The decision strip: what the current decision asks, and the controls that
+ * answer it from the strip rather than from a card on the board.
+ *
+ * Extracted from view/board.js, where it was ~157 lines reachable only by
+ * painting a whole board -- which is how a ReferenceError in the
+ * CARD_SELECTION branch survived sixteen green suites and had to be found by
+ * the replay differential (see a79b6a0). The branches encode real rules --
+ * which bounds the engine enforces, when Pass is a legal offer, where the
+ * answer lives for each shape -- and rules deserve assertions of their own.
+ *
+ * A pure function: given a document, the state, the in-progress selection and
+ * the answer callback, it returns the strip element. It holds nothing between
+ * calls; `picked` is owned by the board, because a selection outlives any one
+ * paint.
+ *
+ * `onAnswer` here is the RAW callback, not the board's `answer()` wrapper:
+ * strip answers do not close an open action menu, and each branch clears
+ * `picked` exactly where the original did. Changing that is changing
+ * behaviour, not moving it.
+ */
+
+import { cardActions, isActionChoice } from "../model/actions.js";
+import { isAssignment } from "../model/assign.js";
+import { formatClock } from "../state/reduce.js";
+
+const el = (doc, tag, cls, text) => {
+  const node = doc.createElement(tag);
+  if (cls) node.className = cls;
+  if (text != null) node.textContent = text;
+  return node;
+};
+
+export function renderPrompt(doc, state, picked, onAnswer) {
+  const strip = el(doc, "div", "prompt");
+  const d = state.decision;
+  const yours = !!d && !state.spectating && d.forPlayer === state.viewerId;
+  if (yours) strip.classList.add("yours");
+  strip.appendChild(el(doc, "span", "pdot"));
+
+  const waiting = state.waitingOn.filter((p) => p !== state.viewerId);
+  strip.appendChild(el(doc, "span", "ptext",
+    yours ? `You: ${d.text ?? d.decisionType}`
+          : waiting.length ? `Waiting for ${waiting.join(", ")}`
+          : "Waiting…"));
+
+  if (!yours || !onAnswer) return strip;
+
+  const actions = el(doc, "div", "pactions");
+  const send = (value) => onAnswer(d.id, value);
+  const p = d.parameters ?? {};
+
+  if (d.shape === "button") {
+    const options = p.results ?? p.actionText ?? p.actionId ?? [];
+    options.forEach((label, i) => {
+      const b = el(doc, "button", "pbtn" + (i === 0 ? " primary" : ""), String(label).slice(0, 28));
+      b.type = "button";
+      b.addEventListener("click", () => send(String(i)));
+      actions.appendChild(b);
+    });
+    if (!options.length) {
+      // NO OPTIONS MEANS NO LEGAL ANSWER, so offer no button.
+      //
+      // This used to render an "OK" that sent "0" -- an index into an empty
+      // list, which the engine refuses. A control whose only outcome is a
+      // rejection is worse than no control: the player presses it, the answer
+      // bounces, and the decision is asked again looking identical. The
+      // reference renders nothing here (its loop over `results` simply does
+      // not run), so a note is the honest thing to show.
+      actions.appendChild(el(doc, "span", "pnote", "No options offered"));
+    }
+  } else if (d.shape === "number") {
+    // `IntegerAwaitingDecision` has THREE constructors, so both `max` and
+    // `defaultValue` are optional and each has to be handled as absent.
+    const lo = parseInt(p.min?.[0] ?? "0", 10);
+    const hasMax = p.max?.[0] != null;
+    const hi = hasMax ? parseInt(p.max[0], 10) : lo + 10;
+    // START ON THE ENGINE'S SUGGESTION when it gives one. The reference does
+    // this (gameUi.js:2079-2081) and we did not, so every decision carrying a
+    // default opened on the minimum instead -- "discard how many?" answering 0
+    // where the engine proposed 7. The live differential could not see it:
+    // its INTEGER answers are computed once and assigned to both sides, so it
+    // was comparing a value with itself. `dev/decisionfuzz.html` found it by
+    // asking the shape directly.
+    const suggested = parseInt(p.defaultValue?.[0] ?? "", 10);
+    let start = Number.isNaN(suggested) ? lo : Math.max(suggested, lo);
+    // Clamp DOWN to max only when the range is the right way round. On an
+    // inverted `min>max` the reference shows `min` and so must we -- clamping
+    // regardless turned a 5 into a 2 and invented a disagreement where the
+    // first version of this fix had none. The engine should never emit an
+    // inverted range; behaving like the oracle when it does is free.
+    if (hasMax && hi >= lo) start = Math.min(start, hi);
+    const input = doc.createElement("input");
+    input.type = "number";
+    input.className = "pnum";
+    input.min = String(lo);
+    input.max = String(hi);
+    input.value = String(start);
+    actions.appendChild(input);
+    const b = el(doc, "button", "pbtn primary", "Accept");
+    b.type = "button";
+    b.addEventListener("click", () => send(input.value));
+    actions.appendChild(b);
+  } else if (isAssignment(d)) {
+    const assigned = picked.assignedCount;
+    actions.appendChild(el(doc, "span", "pnote",
+      picked.held != null ? "Now choose who it fights"
+                         : assigned ? `${assigned} assigned — choose a minion, then a companion`
+                                    : "Choose a minion, then the companion it fights"));
+    const confirm = el(doc, "button", "pbtn primary",
+      assigned ? `Confirm ${assigned}` : "Confirm");
+    confirm.type = "button";
+    confirm.addEventListener("click", () => send(picked.encode()));
+    actions.appendChild(confirm);
+
+    const none = el(doc, "button", "pbtn", "Assign none");
+    none.type = "button";
+    none.addEventListener("click", () => { picked.clear(); send(""); });
+    actions.appendChild(none);
+  } else if (isActionChoice(d)) {
+    // The answer is an action, not a selection, so there is nothing to
+    // confirm: a click on the board resolves it. What the strip must carry is
+    // Pass, and the actions that have no card on the board to click.
+    const acts = cardActions(d);
+    for (const action of acts.virtual) {
+      const b = el(doc, "button", "pbtn", action.text);
+      b.type = "button";
+      b.title = "From your discard pile or draw deck";
+      b.addEventListener("click", () => send(action.actionId));
+      actions.appendChild(b);
+    }
+    if (acts.byCard.size) {
+      actions.appendChild(el(doc, "span", "pnote",
+        `${acts.byCard.size} card${acts.byCard.size === 1 ? "" : "s"} to choose from`));
+    }
+    const pass = el(doc, "button", "pbtn", "Pass");
+    pass.type = "button";
+    pass.addEventListener("click", () => { picked.clear(); send(""); });
+    actions.appendChild(pass);
+  } else if (d.decisionType === "ARBITRARY_CARDS") {
+    // Answered in the picker window, which owns its own buttons -- these
+    // cards are not on the board to click. Two sets of controls for one
+    // decision is how a player ends up sending the wrong answer.
+    actions.appendChild(el(doc, "span", "pnote", "Choose in the card window"));
+  } else {
+    // Cards are chosen on the board; the strip carries confirm and pass.
+    //
+    // `min` AND `max` ARE BOTH ENFORCED BY THE ENGINE, so both are enforced
+    // here. `CardsSelectionDecision.getSelectedCardsByResponse:40-49` throws
+    // `DecisionResultInvalidException` when the count falls outside either
+    // bound, and answers the empty string ONLY when `min` is 0. This strip
+    // used to ignore both: Confirm sent whatever was selected and Pass sent ""
+    // unconditionally, so a `max=0` decision -- zero cards wanted, cards still
+    // listed -- could be answered with a card id, and a `min=1` decision could
+    // be answered with nothing. Both are rejections the player cannot see the
+    // cause of, because a refused answer comes back as the same decision asked
+    // again. The reference gets this right by construction: `processButtons`
+    // only draws Done at `length >= min` (gameUi.js:2823).
+    const chosen = picked.cards;
+    const lo = parseInt(p.min?.[0] ?? "0", 10);
+    const hi = p.max?.[0] != null ? parseInt(p.max[0], 10) : Infinity;
+    const legal = chosen.length >= lo && chosen.length <= hi;
+
+    const confirm = el(doc, "button", "pbtn primary",
+      chosen.length ? `Confirm ${chosen.length}` : "Confirm");
+    confirm.type = "button";
+    confirm.disabled = !legal;
+    if (!legal) confirm.title = `Choose ${lo === hi ? lo : `${lo} to ${hi}`}`;
+    confirm.addEventListener("click", () => {
+      if (!legal) return;
+      send(chosen.join(","));
+      picked.clear();
+    });
+    actions.appendChild(confirm);
+
+    // Passing is answering with "", which is legal only at `min` 0. Offering
+    // it above that is offering a button whose only outcome is a rejection.
+    if (lo === 0) {
+      const pass = el(doc, "button", "pbtn", "Pass");
+      pass.type = "button";
+      pass.addEventListener("click", () => { picked.clear(); send(""); });
+      actions.appendChild(pass);
+    }
+  }
+
+  strip.appendChild(actions);
+  const seconds = state.clocks[state.viewerId];
+  if (seconds != null) strip.appendChild(el(doc, "span", "ptimer", formatClock(seconds)));
+  return strip;
+}
