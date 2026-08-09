@@ -331,14 +331,19 @@ body {
 .railtab {
   pointer-events: auto;
   writing-mode: vertical-rl; transform: rotate(180deg);
-  font-family: var(--mono); font-size: 8px; letter-spacing: .08em;
-  text-transform: uppercase; padding: 6px 1px; border-radius: 0 2px 2px 0;
-  background: color-mix(in srgb, var(--surface) 88%, transparent);
-  color: var(--ink-3); border: 1px solid var(--rule-2); border-left: none;
+  font-family: var(--mono); font-size: 11px; font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase; padding: 10px 4px; border-radius: 0 4px 4px 0;
+  background: var(--surface);
+  color: var(--ink); border: 1px solid var(--ink-3); border-left: none;
   cursor: pointer; max-height: 16%; overflow: hidden;
+  box-shadow: 2px 0 6px rgba(0, 0, 0, .4);
 }
-.railtab:hover { color: var(--ink); border-color: var(--brass); }
-.railtab.off { opacity: .45; border-style: dashed; color: var(--brass); }
+.railtab:hover { color: var(--brass); border-color: var(--brass); }
+.railtab.off {
+  border-style: dashed; border-color: var(--brass); color: var(--brass);
+  background: color-mix(in srgb, var(--brass) 12%, var(--surface));
+}
 
 /* The skirmish reads vertically: Free Peoples row over the minions row,
    both centred, so the fight is two facing lines rather than one long mix. */
