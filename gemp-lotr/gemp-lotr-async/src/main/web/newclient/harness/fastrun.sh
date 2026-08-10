@@ -87,7 +87,6 @@ flipcheck|dev/flipcheck.html|
 navcheck|dev/navcheck.html|
 pathcheck|dev/pathcheck.html|
 pickcheck|dev/pickcheck.html|
-pregamecheck|dev/pregamecheck.html|
 promptcheck|dev/promptcheck.html|
 replaycheck|dev/replaycheck.html|
 selectioncheck|dev/selectioncheck.html|

@@ -58,7 +58,7 @@ export const alertFor = (state) => (isMine(state) ? state.decision : null);
  * @param transport   only for the auto-pass arm's answer. Nothing else here
  *                    talks to the server.
  * @param boardEl     read for the rectangles flyouts must yield to.
- * @param panels      { path, chat, piles, picker, alerts, pregame }
+ * @param panels      { path, chat, piles, picker, alerts }
  * @param settings    the auto-pass panel, read for `clientArm`.
  * @param buttons     { concede, cancel } — hidden unless seated.
  * @param onNote      a line for the status bar. Optional.
@@ -70,7 +70,7 @@ export function createSession({
   // Injectable for tests; the auto-opened path's self-dismissal rides these.
   timers = { set: (fn, ms) => setTimeout(fn, ms), clear: (id) => clearTimeout(id) }
 }) {
-  const { path, chat, piles, picker, alerts, pregame } = panels;
+  const { path, chat, piles, picker, alerts } = panels;
 
   // Session state: this tab's, never the server's. See the note at the top.
   let autoPassed = null;   // the decision OBJECT the arm answered, not its id
@@ -197,7 +197,6 @@ export function createSession({
 
     countUnread(s);
     alerts.update(alertFor(s));
-    pregame.update(s);
     maybeOpenPath(s);
     yieldFlyouts();
   }

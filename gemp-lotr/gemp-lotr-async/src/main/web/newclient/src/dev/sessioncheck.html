@@ -45,7 +45,7 @@ function build({ armed = false, cookie = "" } = {}) {
   const notes = [];
   const panels = {
     path: spy({ isOpen: false, open() { this.isOpen = true; this.calls.push({ fn: "open" }); } }),
-    chat: spy(), piles: spy(), picker: spy(), alerts: spy(), pregame: spy()
+    chat: spy(), piles: spy(), picker: spy(), alerts: spy()
   };
   const buttons = { concede: { hidden: false }, cancel: { hidden: false } };
   // Captured timers, so a test can fire the auto-dismissal by hand.

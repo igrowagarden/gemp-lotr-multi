@@ -64,7 +64,6 @@ import { createPicker } from "./view/picker.js";
 import { createEffects } from "./view/effects.js";
 import { createAlerts } from "./view/alerts.js";
 import { createCardInfo } from "./view/cardinfo.js";
-import { createPreGame } from "./view/pregame.js";
 import { createPileViewer, createZoom } from "./view/piles.js";
 import { createDetacher } from "./view/detach.js";
 import { createSession } from "./view/session.js";
@@ -219,7 +218,6 @@ const picker = createPicker(boardEl, {
 });
 const detacher = createDetacher(store, { onNote: (t) => { detailEl.textContent = t; } });
 const effects = createEffects(boardEl);
-const pregame = createPreGame(boardEl, store);
 const alerts = createAlerts({ title: `GEMP — game ${gameId}` });
 // The preview yields while the card-info window is open: the reference
 // silences it then (autoZoomHandler.js:292), and a full-size card landing on
@@ -290,7 +288,7 @@ createSession({
   // channelNumber) that a spread would freeze to their current values.
   transport: Object.create(transport, { answer: { value: sendAnswer } }),
   boardEl,
-  panels: { path, chat, piles, picker, alerts, pregame },
+  panels: { path, chat, piles, picker, alerts },
   settings,
   buttons: { concede: concedeBtn, cancel: cancelBtn },
   onNote: (t) => { detailEl.textContent = t; }
