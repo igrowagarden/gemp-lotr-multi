@@ -157,12 +157,13 @@ ok("an alert fires for our decision and no other",
      t.armedTimers.length === 0, JSON.stringify(t.armedTimers.map((x) => x.ms)));
 }
 
-// ------------------------------------------------- site actions open the path
+// ------------------------------------ site actions do NOT open the path
 {
-  // Sites are drawn in the path window, so an action offered ON a site is
-  // invisible while that window is shut -- the playtest never found the
-  // site-1 fellowship text. A decision offering a site action opens the
-  // path; once per decision, so closing it is not overridden.
+  // Ruled twice, in order: first the site-1 fellowship text had to be
+  // findable, then the window popping when another player's move lit a
+  // site's Shadow text was ruled out ("that is a no no"). The offer now
+  // rides the prompt strip as a BUTTON (promptcheck pins it); the session
+  // opens no window for it.
   const t = build();
   t.store.dispatchAll(decodeEvents(fixture.setup()));
   const siteId = Object.values(t.store.getState().cards)
@@ -174,23 +175,8 @@ ok("an alert fires for our decision and no other",
       cardId: [String(siteId)], actionId: ["9"], blueprintId: ["inPlay"],
       actionText: ["Play the site's fellowship text"]
     } } }]);
-  ok("a decision offering a SITE action opens the path window",
-     called(t.panels.path, "open") === before + 1);
-
-  t.panels.path.isOpen = false;                    // the player closes it
-  t.store.dispatchAll([{ type: "TWILIGHT_POOL_UPDATE", count: 3 }]);
-  ok("the same decision does not force it back open",
-     called(t.panels.path, "open") === before + 1);
-
-  const boardCard = Object.values(t.store.getState().cards)
-    .find((c) => c.zone === "FREE_CHARACTERS").cardId;
-  t.store.dispatchAll([{ type: "DECISION", participantId: "asdf",
-    decision: { id: 1, decisionType: "CARD_ACTION_CHOICE", parameters: {
-      cardId: [String(boardCard)], actionId: ["4"], blueprintId: ["inPlay"],
-      actionText: ["Use ability"]
-    } } }]);
-  ok("a board-card action does NOT open the path",
-     called(t.panels.path, "open") === before + 1);
+  ok("a decision offering a SITE action does NOT open the path window",
+     called(t.panels.path, "open") === before);
 }
 
 // --------------------------------------------------------- the auto-pass arm

@@ -184,9 +184,28 @@ export function renderPrompt(doc, state, picked, onAnswer, opts = {}) {
       b.addEventListener("click", () => send(action.actionId, b));
       actions.appendChild(b);
     }
-    if (acts.byCard.size) {
+    // SITE actions get strip buttons too. Sites are drawn in the path window,
+    // and auto-opening it whenever a site text lit up was ruled OUT ("the
+    // site path popped up when someone else moved... that is a no no") right
+    // after the offer's visibility was ruled IN -- a button carries the offer
+    // without commandeering a window. Clicking the site in the path works too.
+    let boardCount = 0;
+    for (const [cid, cardActs] of acts.byCard) {
+      if (state.cards?.[cid]?.zone === "ADVENTURE_PATH") {
+        for (const action of cardActs) {
+          const b = el(doc, "button", "pbtn", action.text);
+          b.type = "button";
+          b.title = "A site's text";
+          b.addEventListener("click", () => send(action.actionId, b));
+          actions.appendChild(b);
+        }
+      } else {
+        boardCount++;
+      }
+    }
+    if (boardCount) {
       actions.appendChild(el(doc, "span", "pnote",
-        `${acts.byCard.size} card${acts.byCard.size === 1 ? "" : "s"} to choose from`));
+        `${boardCount} card${boardCount === 1 ? "" : "s"} to choose from`));
     }
     const pass = el(doc, "button", "pbtn", "Pass");
     pass.type = "button";

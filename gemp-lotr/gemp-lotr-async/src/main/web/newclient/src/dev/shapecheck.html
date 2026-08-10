@@ -137,9 +137,15 @@ function runCase(c) {
       if (!sameSet(reach.ids, onBoard)) {
         bad.push(`lit=[${uniq(reach.ids)}] expected=[${uniq(onBoard)}]`);
       }
-      const virtual = contract.detail.filter((a) => a.virtual).map((a) => a.text);
-      if (!sameSet(reach.virtual ?? [], virtual)) {
-        bad.push(`virtual buttons=[${reach.virtual}] expected=[${virtual}]`);
+      // Strip buttons: virtual actions AND actions on SITES -- the path
+      // window no longer auto-opens for a lit site text ("that is a no no"),
+      // so the strip carries the offer instead. "150" is the catalogue's
+      // site placement (decisionshapes WHERE.SITE).
+      const stripActs = contract.detail
+        .filter((a) => a.virtual || String(a.cardId) === "150")
+        .map((a) => a.text);
+      if (!sameSet(reach.virtual ?? [], stripActs)) {
+        bad.push(`strip buttons=[${reach.virtual}] expected=[${stripActs}]`);
       }
       if (!byLabel("Pass")) bad.push("no Pass on the strip");
     } else if (c.type === "ASSIGN_MINIONS") {

@@ -167,6 +167,31 @@ const byLabel = (el, t) => buttons(el).find((b) => b.textContent === t);
   byLabel(s, "Pass").click();
   ok("Pass answers empty and drops any stray picks",
      sent.length === 1 && sent[0][1] === "" && picked.size === 0);
+
+  // A SITE's action rides the strip as a button: sites live in the path
+  // window, and auto-opening that window for them was ruled out ("the site
+  // path popped up when someone else moved... that is a no no") right after
+  // the offer's visibility was ruled in.
+  sent = [];
+  const siteD = dec("CARD_ACTION_CHOICE", "cards", { parameters: {
+    actionId: ["21", "22"],
+    cardId: ["300", "70"],
+    blueprintId: ["inPlay", "inPlay"],
+    actionText: ["Play the site's gametext", "Use ability"]
+  }});
+  const withSite = renderPrompt(document,
+    state({ decision: siteD, cards: { 300: { cardId: 300, zone: "ADVENTURE_PATH" },
+                                      70: { cardId: 70, zone: "FREE_CHARACTERS" } } }),
+    createSelection(), onAnswer);
+  ok("an action on a SITE gets a strip button",
+     byLabel(withSite, "Play the site's gametext") != null);
+  ok("a board card's action still does not -- its card is the control",
+     byLabel(withSite, "Use ability") == null);
+  ok("and the board count excludes the site",
+     withSite.textContent.includes("1 card to choose from"));
+  byLabel(withSite, "Play the site's gametext").click();
+  ok("the site button answers with its actionId",
+     sent.length === 1 && sent[0][1] === "21", JSON.stringify(sent));
 }
 
 // ---------------------------------------------------------- arbitrary cards

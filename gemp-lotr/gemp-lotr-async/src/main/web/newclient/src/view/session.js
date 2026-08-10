@@ -27,7 +27,6 @@
  */
 
 import { spokenTo } from "../state/reduce.js";
-import { cardActions, isActionChoice } from "../model/actions.js";
 import { shouldClientAutoPass, effectivePhases, PASS } from "../model/autopass.js";
 import { canConcede, canCancel } from "../model/gameopts.js";
 import { allFlyouts } from "./flyout.js";
@@ -99,26 +98,10 @@ export function createSession({
     return true;
   }
 
-  /**
-   * A decision offering an action ON A SITE opens the path, because that is
-   * where sites are drawn -- an action inside a closed window is an offer the
-   * player cannot see, and the playtest never found the site-1 fellowship
-   * text because nothing pointed at it. Once per decision object, so closing
-   * the window is not overridden while the same question stands.
-   */
-  let siteOffer = null;
-  function maybeOpenSiteActions(s) {
-    if (!isMine(s) || !isActionChoice(s.decision) || s.decision === siteOffer) return false;
-    const { byCard } = cardActions(s.decision);
-    const hasSite = [...byCard.keys()].some((id) => s.cards[id]?.zone === "ADVENTURE_PATH");
-    if (!hasSite) return false;
-    siteOffer = s.decision;
-    // An ACTIONABLE open is never on the self-dismissal clock -- hiding a
-    // site the player must answer on re-creates the invisible-offer bug.
-    cancelPathDismiss();
-    if (!path.isOpen) path.open();
-    return true;
-  }
+  // Site actions no longer open the path: the window popping whenever a
+  // site's Shadow text lit up was ruled out ("the site path popped up when
+  // someone else moved... that is a no no"). The offer stays visible as a
+  // BUTTON on the prompt strip instead (view/prompt.js).
 
   /**
    * An AUTO-opened path earns its stay: untouched for three seconds, it
@@ -216,7 +199,6 @@ export function createSession({
     alerts.update(alertFor(s));
     pregame.update(s);
     maybeOpenPath(s);
-    maybeOpenSiteActions(s);
     yieldFlyouts();
   }
 
@@ -226,7 +208,6 @@ export function createSession({
   // and the internals are exposed for the same reason -- each is a rule with
   // its own failure mode, and asserting them only through `react` would make a
   // failure say "something in the session is wrong".
-  return { react, unsubscribe, maybeAutoPass, maybeOpenPath, maybeOpenSiteActions,
-           countUnread,
+  return { react, unsubscribe, maybeAutoPass, maybeOpenPath, countUnread,
            get autoPassed() { return autoPassed; } };
 }
