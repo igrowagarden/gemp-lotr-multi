@@ -534,9 +534,12 @@ body {
    size, and `.cardgroup` is auto-width -- sized by the very children the margin
    is meant to pull together -- so a percentage there is circular and lands the
    group half off the band. Cards are `height: 100%` with an aspect ratio, so
-   the row's height is the one definite dimension in play: 48cqh is ~67% of a
-   card's width at 5:7, and stays correct at any band height. */
-.cardgroup > .card + .card { margin-left: -48cqh; }
+   the row's height is the one definite dimension in play. At 5:7 a card is
+   ~71cqh wide; -59cqh leaves each rider a ~12cqh sliver -- the bottom-left
+   symbol column and nothing more, per the playtest ("you just want to see
+   the symbols in the bottom left"; the old -48cqh showed a third of the
+   card and ate the row). */
+.cardgroup > .card + .card { margin-left: -59cqh; }
 .cardgroup > .card:not(:last-child) { filter: brightness(.82); }
 
 /* Being dragged to a new place in its row. */
