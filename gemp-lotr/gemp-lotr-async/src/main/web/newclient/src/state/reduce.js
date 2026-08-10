@@ -34,6 +34,9 @@ export function initialState(viewerId, { spectating = false } = {}) {
     // the warning and the re-ask arrive as one W,D pair -- and clear on the
     // decision after that, which means the game moved on.
     warning: null,
+    // Seated, then dropped from the participant list. Sticky once true.
+    eliminated: false,
+    eliminatedReason: null,
     // ONE log, in arrival order, holding both the game's commentary and what
     // people say. They were two lists rendered one after the other, which put
     // every chat line after every game line no matter when it was said.
@@ -143,7 +146,13 @@ export function reduce(state, event) {
         // A viewer whose id is not among the players is a spectator. The server
         // has already decided this by never sending them a hand; we only need to
         // agree with it.
-        spectating: state.spectating || (players.length > 0 && !players.includes(state.viewerId))
+        spectating: state.spectating || (players.length > 0 && !players.includes(state.viewerId)),
+        // SEATED then gone from the list = ELIMINATED. Sticky: the banner
+        // must outlive the event that carried the news -- the first playtest
+        // elimination emptied the board silently and the player asked "why
+        // didn't I lose?" when in fact they had.
+        eliminated: state.eliminated ||
+          (state.players.includes(state.viewerId) && players.length > 0 && !players.includes(state.viewerId))
       };
     }
 
@@ -320,7 +329,14 @@ export function reduce(state, event) {
         // `fresh` lets it survive exactly the one DECISION event that re-asks.
         warning: event.type === "SEND_WARNING"
           ? { text: event.message, fresh: true }
-          : state.warning
+          : state.warning,
+        // "<viewer> lost due to: X" is the only carrier of WHY a player was
+        // eliminated; the banner quotes it.
+        eliminatedReason: state.eliminatedReason ??
+          (typeof event.message === "string" &&
+           event.message.startsWith(state.viewerId + " lost due to:")
+            ? event.message.slice((state.viewerId + " lost due to:").length).trim()
+            : null)
       };
 
     // Fed by net/chat.js, not by the game channel -- the server never emits the

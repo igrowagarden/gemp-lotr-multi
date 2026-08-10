@@ -64,6 +64,15 @@ store.dispatchAll(decodeEvents(fixture.endSkirmish()));
 key("ArrowRight");
 ok("and they work again once it ends", board.focusId !== during);
 
+// Elimination is ANNOUNCED: dropped from the participant list, the banner
+// renders and stays. The first playtest elimination was silent.
+store.dispatchAll(decodeEvents(
+  `<events><ge type="M" message="asdf lost due to: Corrupted before game started"/>` +
+  `<ge type="P" allParticipantIds="carol,dave,qwer,Librarian"/></events>`));
+const banner = document.querySelector(".elimbanner");
+ok("being eliminated raises the banner", !!banner);
+ok("with the reason on it", banner?.textContent.includes("Corrupted before game started"));
+
 const r = document.createElement("div");
 r.id = "result"; r.className = fail === 0 ? "pass" : "fail";
 r.textContent = fail === 0 ? `RESULT: ALL PASS (${pass})` : `RESULT: ${fail} FAILED of ${pass + fail}`;

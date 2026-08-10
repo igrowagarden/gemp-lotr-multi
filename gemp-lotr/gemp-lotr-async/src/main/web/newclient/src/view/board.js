@@ -646,7 +646,17 @@ export function createBoard(root, store, options = {}) {
     // stays a pure function of state and knows nothing about this.
     const before = captureRects(stack);
 
-    for (const old of root.querySelectorAll(":scope > .navarrow, :scope > .poschip, :scope > .bandrail")) old.remove();
+    for (const old of root.querySelectorAll(":scope > .navarrow, :scope > .poschip, :scope > .bandrail, :scope > .elimbanner")) old.remove();
+
+    // ELIMINATION IS ANNOUNCED, loudly and permanently. The first playtest
+    // elimination emptied the board in silence and the player asked "why
+    // didn't I lose?" -- they had, and nothing said so.
+    if (state.eliminated) {
+      root.appendChild(el(doc, "div", "elimbanner",
+        `YOU ARE OUT OF THIS GAME` +
+        (state.eliminatedReason ? ` — ${state.eliminatedReason}` : "") +
+        ` · you are spectating now`));
+    }
 
     // The prompt SURVIVES the wipe while the same decision stands (same
     // decision object, same warning) and its shape is answered from the strip

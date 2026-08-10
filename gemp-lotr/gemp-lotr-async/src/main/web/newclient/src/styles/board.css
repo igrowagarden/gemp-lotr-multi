@@ -370,6 +370,18 @@ body {
   background: color-mix(in srgb, var(--brass) 12%, var(--surface));
 }
 
+/* Elimination is announced, loudly and permanently. */
+.elimbanner {
+  position: fixed; left: 50%; top: 10%; transform: translateX(-50%);
+  z-index: 50; max-width: 80vw; text-align: center;
+  padding: 14px 26px; border-radius: 8px;
+  font-family: var(--mono); font-size: 15px; font-weight: 700;
+  letter-spacing: .06em; color: var(--alert);
+  background: color-mix(in srgb, var(--alert) 14%, var(--surface));
+  border: 2px solid var(--alert);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, .6);
+}
+
 /* A confirmed assignment: companion and its minions boxed as ONE fight.
    Clicking anywhere in the box picks the fight (it forwards to the
    companion), so resolving a skirmish does not demand pixel precision. */

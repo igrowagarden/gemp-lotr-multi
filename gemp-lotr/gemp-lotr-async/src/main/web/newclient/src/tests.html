@@ -458,6 +458,27 @@ group("answers: one send per decision object, because ids repeat");
   ok("no decision, no send", gate(1, "") === false && sent.length === 2);
 }
 
+group("reducer: elimination is detected and explained");
+// Seated, then gone from the participant list = eliminated -- sticky, with
+// the reason lifted from the only place the wire carries it. The first
+// playtest elimination was silent and the player asked "why didn't I lose?"
+let el1 = reduceAll(initialState("asdf"), decodeEvents(`<events>
+  <ge type="P" allParticipantIds="carol,asdf,dave"/>
+  <ge type="M" message="asdf lost due to: Corrupted before game started"/>
+  <ge type="P" allParticipantIds="carol,dave"/>
+</events>`));
+ok("dropping from the list marks elimination", el1.eliminated === true);
+ok("and turns the viewer into a spectator", el1.spectating === true);
+eq("the reason is captured from the message",
+   el1.eliminatedReason, "Corrupted before game started");
+ok("a spectator from the start is NOT eliminated",
+   reduceAll(initialState("watcher"), decodeEvents(
+     `<events><ge type="P" allParticipantIds="carol,asdf"/></events>`)).eliminated === false);
+ok("another player's loss message is not the viewer's reason",
+   reduceAll(initialState("asdf"), decodeEvents(
+     `<events><ge type="P" allParticipantIds="carol,asdf"/>` +
+     `<ge type="M" message="carol lost due to: Concession"/></events>`)).eliminatedReason === null);
+
 group("reducer: presentation-only events change nothing");
 const before = reduceAll(initialState("asdf"), decodeEvents(
   `<events><ge type="PCIP" cardId="1" zone="SUPPORT" participantId="dave"/></events>`));
