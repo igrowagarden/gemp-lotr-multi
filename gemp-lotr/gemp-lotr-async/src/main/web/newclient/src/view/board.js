@@ -66,6 +66,10 @@ export function createBoard(root, store, options = {}) {
   // band into the left rail for screen room; "show" overrides an autoHide
   // ruling (anything auto-hidden must be easy to unhide). Session-scoped.
   const bandOverride = new Map();
+  // The player's own row heights, id -> flex weight, written by dragging the
+  // boundary between two rows. Session-scoped like the retractions; a band
+  // never dragged keeps its table weight.
+  const bandWeight = new Map();
 
   /** Answer and clear, so a stale selection cannot leak into the next decision. */
   function answer(decisionId, value) {
@@ -284,7 +288,7 @@ export function createBoard(root, store, options = {}) {
     const band = el(doc, "div", `band band--${spec.tone ?? "plain"}`);
     band.dataset.band = spec.id;
     const empty = cards.length === 0;
-    band.style.flexGrow = empty ? "0" : String(spec.weight);
+    band.style.flexGrow = empty ? "0" : String(bandWeight.get(spec.id) ?? spec.weight);
     band.style.flexBasis = empty ? `${spec.collapsed}px` : "0";
     if (empty) band.classList.add("is-empty");
 
@@ -585,6 +589,56 @@ export function createBoard(root, store, options = {}) {
     }
   }
 
+  /**
+   * The boundary between two rows is draggable at all times (playtest
+   * request): pulling it redistributes the PAIR's flex weights, so one row
+   * grows exactly as much as its neighbour shrinks and every other row keeps
+   * its height. The adjusted weights live in `bandWeight` and are re-applied
+   * on every repaint. The move/up listeners are on the DOCUMENT and look the
+   * band nodes up fresh each move: a five-player game repaints constantly,
+   * and a repaint mid-drag replaces both the divider and the bands -- a drag
+   * wired to the nodes themselves would go dead in the hand.
+   */
+  function makeDivider(aboveId, belowId) {
+    const divider = el(doc, "div", "banddivider");
+    divider.title = "Drag to resize the rows above and below";
+    divider.addEventListener("pointerdown", (down) => {
+      if (down.button !== 0) return;
+      down.preventDefault();
+      const find = (id) => stack.querySelector(`.band[data-band="${id}"]`);
+      const a = find(aboveId), b = find(belowId);
+      if (!a || !b) return;
+      const hA = a.getBoundingClientRect().height;
+      const hB = b.getBoundingClientRect().height;
+      const pair = parseFloat(getComputedStyle(a).flexGrow) +
+                   parseFloat(getComputedStyle(b).flexGrow);
+      if (!(pair > 0) || !(hA + hB > 0)) return;
+      // Kill the band height transition for the drag, or the rows chase the
+      // pointer on a 240ms delay and the divider feels detached.
+      stack.classList.add("is-resizing");
+      const move = (e) => {
+        // Clamped: neither row can be dragged away entirely -- hiding is the
+        // rail's job, and a sliver of row is what the divider comes back by.
+        const frac = Math.min(0.9, Math.max(0.1,
+          (hA + e.clientY - down.clientY) / (hA + hB)));
+        const wA = pair * frac;
+        bandWeight.set(aboveId, wA);
+        bandWeight.set(belowId, pair - wA);
+        const na = find(aboveId), nb = find(belowId);
+        if (na) na.style.flexGrow = String(wA);
+        if (nb) nb.style.flexGrow = String(pair - wA);
+      };
+      const up = () => {
+        stack.classList.remove("is-resizing");
+        doc.removeEventListener("pointermove", move);
+        doc.removeEventListener("pointerup", up);
+      };
+      doc.addEventListener("pointermove", move);
+      doc.addEventListener("pointerup", up);
+    });
+    return divider;
+  }
+
   function paint(state) {
     ensureFocus(state);
     // A new decision must not inherit the previous one's half-made pairing.
@@ -677,6 +731,7 @@ export function createBoard(root, store, options = {}) {
     put(renderReadout(state));
     put(renderSeats(state));
 
+    let prevFull = null;
     for (const spec of specs) {
       if (ctx.hidden.has(spec.id)) continue;         // retracted into the rail
       const cards = split.byBand.get(spec.id) ?? [];
@@ -685,7 +740,11 @@ export function createBoard(root, store, options = {}) {
       // how a spectator ended up with three dead strips at the bottom of the
       // screen for zones they can never have.
       if (!cards.length && !spec.collapsed) continue;
+      // The boundary between two rows that BOTH hold cards is draggable; an
+      // empty collapsed strip has no height to trade, so it breaks the chain.
+      if (cards.length && prevFull) put(makeDivider(prevFull, spec.id));
       put(renderBand(spec, cards, state, { ...ctx, registry: spec }, attachedBy));
+      prevFull = cards.length ? spec.id : null;
     }
 
     if (keepPrompt) {

@@ -64,6 +64,40 @@ store.dispatchAll(decodeEvents(fixture.endSkirmish()));
 key("ArrowRight");
 ok("and they work again once it ends", board.focusId !== during);
 
+// The boundary between two rows DRAGS to resize them (playtest request:
+// "make the horizontal boundary lines adjustable between them"). The drag
+// trades flex weight between exactly the two neighbours, and the adjusted
+// weights survive a repaint -- listeners live on the document because a
+// five-player game repaints mid-drag.
+{
+  const divider = document.querySelector(".banddivider");
+  ok("a divider renders between two card-bearing rows", !!divider);
+  const above = divider?.previousElementSibling, below = divider?.nextElementSibling;
+  ok("its neighbours are bands",
+     above?.classList.contains("band") && below?.classList.contains("band"),
+     `${above?.className} / ${below?.className}`);
+  const wA0 = parseFloat(getComputedStyle(above).flexGrow);
+  const wB0 = parseFloat(getComputedStyle(below).flexGrow);
+  divider.dispatchEvent(new PointerEvent("pointerdown",
+    { button: 0, clientY: 300, bubbles: true }));
+  document.dispatchEvent(new PointerEvent("pointermove",
+    { clientY: 360, bubbles: true }));
+  const wA1 = parseFloat(above.style.flexGrow), wB1 = parseFloat(below.style.flexGrow);
+  ok("dragging down grows the row above and shrinks the one below",
+     wA1 > wA0 && wB1 < wB0, `${wA0}->${wA1} / ${wB0}->${wB1}`);
+  ok("the pair trades weight, the rest of the board keeps its share",
+     Math.abs((wA1 + wB1) - (wA0 + wB0)) < 0.001,
+     `pair ${wA0 + wB0} -> ${wA1 + wB1}`);
+  document.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+
+  // A repaint rebuilds every band; the dragged heights must come back.
+  store.dispatchAll(decodeEvents(`<events><ge type="TP" count="7"/></events>`));
+  const again = document.querySelector(`.band[data-band="${above.dataset.band}"]`);
+  ok("the adjusted height survives a repaint",
+     Math.abs(parseFloat(getComputedStyle(again).flexGrow) - wA1) < 0.001,
+     `${getComputedStyle(again).flexGrow} vs ${wA1}`);
+}
+
 // Elimination is ANNOUNCED: dropped from the participant list, the banner
 // renders and stays. The first playtest elimination was silent.
 store.dispatchAll(decodeEvents(

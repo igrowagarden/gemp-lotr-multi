@@ -108,6 +108,25 @@ body {
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
 /* ------------------------------------------------------------------ bands */
+/* The boundary between two rows drags to resize them: a hairline that
+   brightens into a handle on hover, with a hit area three times its height.
+   Net height stays 5px -- the stack's own gap -- so inserting one does not
+   push the rows apart. While a drag is live the band height TRANSITION is
+   off, or the rows would chase the pointer on a 240ms delay. */
+.banddivider {
+  flex: none; height: 9px; margin: -7px 0; z-index: 8;
+  cursor: row-resize; position: relative; touch-action: none;
+}
+.banddivider::after {
+  content: ""; position: absolute; left: 10%; right: 10%; top: 4px;
+  height: 1px; background: var(--rule-2);
+}
+.banddivider:hover::after, .board-stack.is-resizing .banddivider::after {
+  height: 3px; top: 3px; background: var(--brass);
+}
+.board-stack.is-resizing .band { transition: none; }
+.board-stack.is-resizing { cursor: row-resize; }
+
 .band {
   min-height: 0; position: relative; overflow: hidden;
   display: flex; flex-direction: column; gap: 3px;
