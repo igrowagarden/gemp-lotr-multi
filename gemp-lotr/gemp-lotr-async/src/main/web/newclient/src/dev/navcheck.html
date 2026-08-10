@@ -35,9 +35,9 @@ ok("ArrowRight moves to another seat", afterRight && afterRight !== start,
 key("ArrowLeft");
 ok("ArrowLeft comes back", board.focusId === start, `${afterRight} -> ${board.focusId}`);
 
-document.querySelector(".navarrow.next").click();
-ok("the on-screen arrow moves it too", board.focusId !== start,
-   `${start} -> ${board.focusId}`);
+// The on-screen edge arrows are GONE by playtest ruling: arrow keys and the
+// seat chips are the navigation. Their absence is the assertion now.
+ok("no edge arrows render", document.querySelector(".navarrow") == null);
 
 // wrap all the way round and land where we started
 const seen = new Set([board.focusId]);
@@ -58,8 +58,7 @@ store.dispatchAll(decodeEvents(fixture.skirmish()));
 const during = board.focusId;
 key("ArrowRight");
 ok("keys are ignored during a skirmish", board.focusId === during);
-ok("and the arrows are visibly disabled",
-   [...document.querySelectorAll(".navarrow")].every((a) => a.disabled));
+ok("and no arrows exist to disagree", document.querySelector(".navarrow") == null);
 
 store.dispatchAll(decodeEvents(fixture.endSkirmish()));
 key("ArrowRight");

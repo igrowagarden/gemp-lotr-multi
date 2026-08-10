@@ -32,7 +32,9 @@ const el = (doc, tag, cls, text) => {
 export function createBoard(root, store, options = {}) {
   const doc = root.ownerDocument;
   let focusId = options.focusId ?? null;
-  let filter = "auto";
+  // "all" by playtest ruling -- the auto side-filter hid cards people went
+  // looking for; whoever wants the filtered view is one click away.
+  let filter = "all";
   let following = true;
   let onDefect = options.onDefect ?? (() => {});
   const onAnswer = options.onAnswer ?? null;
@@ -237,8 +239,11 @@ export function createBoard(root, store, options = {}) {
       if (id === state.viewerId) chip.classList.add("mine");
       if (id === focusId) chip.classList.add("on");
       if (isWaitingOn(state, id)) chip.classList.add("deciding");
+      // Every seat says its ROLE -- the viewer's included; their chip is
+      // already marked by the brass name, and "you" told them nothing about
+      // which side they are playing this turn.
       chip.appendChild(el(doc, "span", "nm",
-        id + (id === state.viewerId ? " — you" : isFp ? " — Free Peoples" : "")));
+        `${id} — ${isFp ? "Free Peoples" : "Shadow"}`));
       const vitals = el(doc, "span", "vitals");
       vitals.appendChild(el(doc, "i", null, `minions ${minionsOf(state, id).length}`));
       vitals.appendChild(el(doc, "i", null, `hand ${handSize(state, id)}`));
@@ -635,17 +640,9 @@ export function createBoard(root, store, options = {}) {
     }
     root.appendChild(rail);
 
-    // Edge arrows. Suspended during a skirmish, which draws every seat -- they
-    // go visibly dead rather than silently doing nothing.
+    // The edge arrows are GONE by playtest ruling -- the arrow keys and the
+    // seat chips cover navigation, and the buttons only ate board space.
     const skirmishing = state.skirmish != null;
-    for (const [cls, delta, glyph] of [["prev", -1, "‹"], ["next", 1, "›"]]) {
-      const arrow = el(doc, "button", "navarrow " + cls, glyph);
-      arrow.type = "button";
-      arrow.disabled = skirmishing || focusable(state).length < 2;
-      arrow.setAttribute("aria-label", delta < 0 ? "Previous seat" : "Next seat");
-      arrow.addEventListener("click", () => step(delta));
-      root.appendChild(arrow);
-    }
     // The top-centre position chip ("1 / 4") is GONE by playtest ruling; the
     // seat strip already shows which opponent is focused. The skirmish state
     // keeps its one useful message, folded into the poschip slot only then.
