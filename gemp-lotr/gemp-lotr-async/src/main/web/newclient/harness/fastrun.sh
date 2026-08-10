@@ -61,7 +61,10 @@ fi
 
 run_page() {   # run_page <name> <path> [cdnflag] -> RESULT line or empty
   local name="$1" path="$2" cdn="${3:-}"
-  timeout 60 "$CHROME" --headless --disable-gpu ${cdn:+"$CDN"} \
+  # --window-size: headless defaults to 800x600, where the geometry suites
+  # measure DEGENERATE layouts -- assigncheck's fightbox rendered 2px-wide
+  # cards there and its overlap assertion judged noise, not the design.
+  timeout 60 "$CHROME" --headless --disable-gpu --window-size=1500,950 ${cdn:+"$CDN"} \
     --user-data-dir="$TMP/cr_$name" \
     --dump-dom --virtual-time-budget=20000 "$BASE/$path" 2>/dev/null \
     | sed -e 's/<[^>]*>//g' | grep -E "^RESULT:" | head -1

@@ -70,6 +70,31 @@ ok("holding the companion and its minion together",
 ok("stacked VERTICALLY: companion in the top row, minion beneath",
    !!box()?.querySelector(`.fightbox-fp .card[data-card-id="${compId}"]`) &&
    !!box()?.querySelector(`.fightbox-sh .card[data-card-id="${minionId}"]`));
+
+// Attachments stay TUCKED inside the box. The cardgroup overlap is in cqh,
+// and the box's half-height sub-rows must be size containers, or the margin
+// resolves against the full fights row and exceeds the card width -- the
+// host slid left and riders jutted out right in the playtest.
+store.dispatchAll(decodeEvents(
+  `<events><ge type="PCIP" cardId="880" blueprintId="1_299" zone="ATTACHED" participantId="carol" targetCardId="${compId}" targetType="attached"/>` +
+  `<ge type="PCIP" cardId="881" blueprintId="1_92" zone="ATTACHED" participantId="carol" targetCardId="${compId}" targetType="attached"/></events>`));
+settle();
+{
+  const g = box()?.querySelector(".fightbox-fp .cardgroup");
+  ok("riders group with their host inside the box", !!g);
+  const cardsIn = g ? [...g.querySelectorAll(".card")] : [];
+  const w = cardsIn[0]?.getBoundingClientRect().width ?? 0;
+  const m = cardsIn.length > 1 ? parseFloat(getComputedStyle(cardsIn[1]).marginLeft) : 0;
+  ok("a rider's overlap stays inside the card width -- tucked, not scattered",
+     cardsIn.length === 3 && m < 0 && -m < w,
+     `margin ${m.toFixed(1)} vs width ${w.toFixed(1)} over ${cardsIn.length} cards`);
+  const lefts = cardsIn.map((c) => c.getBoundingClientRect().left);
+  ok("and the host stays rightmost, riders peeking left in order",
+     lefts.every((v, i) => i === 0 || v > lefts[i - 1]), lefts.map((v) => v.toFixed(0)).join(","));
+}
+store.dispatchAll(decodeEvents(
+  `<events><ge type="MCIP" cardId="880" blueprintId="1_299" zone="DISCARD" participantId="carol"/>` +
+  `<ge type="MCIP" cardId="881" blueprintId="1_92" zone="DISCARD" participantId="carol"/></events>`));
 ok("and both have left their home rows",
    boardEl.querySelector(`[data-band="minions"] .card[data-card-id="${minionId}"]`) == null &&
    boardEl.querySelector(`[data-band="focusFree"] .card[data-card-id="${compId}"]`) == null);

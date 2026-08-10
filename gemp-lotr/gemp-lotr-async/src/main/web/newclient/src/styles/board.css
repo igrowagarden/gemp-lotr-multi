@@ -396,6 +396,14 @@ body {
 .fightbox-fp, .fightbox-sh {
   display: flex; gap: 4px; justify-content: safe center; flex: 1; min-height: 0;
 }
+/* The cardgroup overlap is in cqh against the FIGHTS ROW, but cards inside a
+   box are only HALF that tall -- so the row-scaled -59cqh margin exceeded
+   the card width, sliding the host left and jutting the riders out right
+   ("the cards spread apart towards the right"). Half-scale it here; the
+   +4px absorbs the box's padding and gap. Containment cannot fix this: a
+   size container needs a definite inline size and the box is content-sized
+   (tried; the cards collapsed to 2px). */
+.fightbox .cardgroup > .card + .card { margin-left: calc(-29.5cqh + 4px); }
 .fightbox:hover { border-color: var(--brass); }
 
 /* The skirmish reads vertically: Free Peoples row over the minions row,
