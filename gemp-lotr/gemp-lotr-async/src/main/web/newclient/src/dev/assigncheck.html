@@ -67,6 +67,9 @@ ok("a confirmed assignment renders as one boxed fight", !!box());
 ok("holding the companion and its minion together",
    !!box()?.querySelector(`.card[data-card-id="${compId}"]`) &&
    !!box()?.querySelector(`.card[data-card-id="${minionId}"]`));
+ok("stacked VERTICALLY: companion in the top row, minion beneath",
+   !!box()?.querySelector(`.fightbox-fp .card[data-card-id="${compId}"]`) &&
+   !!box()?.querySelector(`.fightbox-sh .card[data-card-id="${minionId}"]`));
 ok("and both have left their home rows",
    boardEl.querySelector(`[data-band="minions"] .card[data-card-id="${minionId}"]`) == null &&
    boardEl.querySelector(`[data-band="focusFree"] .card[data-card-id="${compId}"]`) == null);

@@ -424,13 +424,19 @@ export function createBoard(root, store, options = {}) {
       const row = el(doc, "div", "row fightsrow");
       const placed = new Set();
       for (const comp of comps) {
+        // The box stacks VERTICALLY, the same orientation the skirmish view
+        // resolves in: the companion on top, the minions fighting it beneath.
         const box = el(doc, "div", "fightbox");
+        const fpRow = el(doc, "div", "fightbox-fp");
+        const shRow = el(doc, "div", "fightbox-sh");
         const { node: compNode, root: compRoot } = mount(comp);
-        box.appendChild(compRoot);
+        fpRow.appendChild(compRoot);
         for (const m of byComp.get(comp.cardId) ?? []) {
           placed.add(m.cardId);
-          box.appendChild(mount(m).root);
+          shRow.appendChild(mount(m).root);
         }
+        box.appendChild(fpRow);
+        box.appendChild(shRow);
         box.addEventListener("click", (e) => {
           if (e.target.closest(".card")) return;   // cards answer for themselves
           compNode.click();
