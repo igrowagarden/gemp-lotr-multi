@@ -373,7 +373,7 @@ body {
 /* A confirmed assignment: companion and its minions boxed as ONE fight.
    Clicking anywhere in the box picks the fight (it forwards to the
    companion), so resolving a skirmish does not demand pixel precision. */
-.fightsrow { gap: 14px; justify-content: center; }
+.fightsrow { gap: 14px; justify-content: safe center; }
 .fightbox {
   display: flex; flex-direction: column; gap: 4px; align-items: center;
   height: 100%; min-width: 0; min-height: 0;
@@ -382,17 +382,18 @@ body {
   cursor: pointer;
 }
 .fightbox-fp, .fightbox-sh {
-  display: flex; gap: 4px; justify-content: center; flex: 1; min-height: 0;
+  display: flex; gap: 4px; justify-content: safe center; flex: 1; min-height: 0;
 }
 .fightbox:hover { border-color: var(--brass); }
 
 /* The skirmish reads vertically: Free Peoples row over the minions row,
    both centred, so the fight is two facing lines rather than one long mix. */
 .fight {
-  display: flex; flex-direction: column; align-items: center;
+  display: flex; flex-direction: column; align-items: safe center;
   justify-content: center; gap: 10px; flex: 1; min-height: 0;
+  min-width: 0; width: 100%;
 }
-.fight .fightrow { display: flex; justify-content: center; gap: 10px; flex: 1; min-height: 0; }
+.fight .fightrow { display: flex; justify-content: safe center; gap: 10px; flex: 1; min-height: 0; width: 100%; }
 
 /* ------------------------------------------------------------- flyouts */
 .board { position: relative; }
