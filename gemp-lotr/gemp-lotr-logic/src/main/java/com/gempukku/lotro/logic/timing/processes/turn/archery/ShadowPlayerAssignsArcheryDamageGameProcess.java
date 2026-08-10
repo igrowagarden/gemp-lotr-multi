@@ -27,10 +27,15 @@ public class ShadowPlayerAssignsArcheryDamageGameProcess implements GameProcess 
         if (game.getGameState().getPlayerOrder().isEliminated(_playerId))
             return;
         if (_woundsToAssign > 0) {
+            // ANY minion in play, not only the assigner's own -- RULED in the
+            // five-player playtest, per the Council's "doled out by the primary
+            // shadow player TO OTHER MINIONS". Upstream scoped this to
+            // Filters.owner(_playerId), which at three-plus seats walled every
+            // other seat's minions off from the fellowship's archery. At two
+            // players the owner filter was the identity, so nothing changes.
             Filter filter =
                     Filters.and(
                             CardType.MINION,
-                            Filters.owner(_playerId),
                             new Filter() {
                                 @Override
                                 public boolean accepts(LotroGame game, PhysicalCard physicalCard) {

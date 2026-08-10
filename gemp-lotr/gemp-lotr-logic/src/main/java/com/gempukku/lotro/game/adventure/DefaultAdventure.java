@@ -17,7 +17,7 @@ import com.gempukku.lotro.logic.timing.processes.GameProcess;
 import com.gempukku.lotro.logic.timing.processes.pregame.BiddingGameProcess;
 import com.gempukku.lotro.logic.timing.processes.pregame.MappingPreBidGameProcess;
 import com.gempukku.lotro.logic.timing.processes.turn.ShadowPhasesGameProcess;
-import com.gempukku.lotro.logic.timing.processes.turn.archery.FellowshipPlayerChoosesShadowPlayerToAssignDamageToGameProcess;
+import com.gempukku.lotro.logic.timing.processes.turn.archery.LeadShadowAssignsFellowshipArcheryGameProcess;
 import com.gempukku.lotro.logic.timing.processes.turn.assign.ShadowPlayersAssignTheirMinionsGameProcess;
 import com.gempukku.lotro.logic.timing.processes.turn.regroup.DiscardAllMinionsGameProcess;
 import com.gempukku.lotro.logic.timing.processes.turn.regroup.PlayerReconcilesGameProcess;
@@ -66,7 +66,7 @@ public class DefaultAdventure implements Adventure {
 
     @Override
     public GameProcess getAfterFellowshipArcheryGameProcess(int fellowshipArcheryTotal, GameProcess followingProcess) {
-        return new FellowshipPlayerChoosesShadowPlayerToAssignDamageToGameProcess(fellowshipArcheryTotal, followingProcess);
+        return new LeadShadowAssignsFellowshipArcheryGameProcess(fellowshipArcheryTotal, followingProcess);
     }
 
     @Override
