@@ -90,6 +90,35 @@ store.dispatchAll(decodeEvents(`<events><ge type="RA" cardId="${compId}"/></even
 const cleared = [...minionRow().children].every((n) => !n.style.left && !n.dataset.assignedTo);
 ok("removing the assignment clears the offset", cleared);
 
+// A retracted band FORCE-SHOWS while a decision makes its cards eligible --
+// the rail shipped and immediately made assignment unclickable by hiding the
+// minions row ("skirmish selection isn't working at all"). An offer must
+// never be invisible.
+{
+  const tab = document.querySelector('.railtab[data-band="minions"]');
+  ok("the minions row has a rail tab", !!tab);
+  tab?.click();
+  ok("clicking it retracts the row",
+     document.querySelector('[data-band="minions"].band') == null);
+
+  const someMinion = minionId;
+  store.dispatchAll(decodeEvents(
+    `<events><ge type="D" id="4" decisionType="ASSIGN_MINIONS" text="Assign minions" participantId="asdf">` +
+    `<parameter name="freeCharacters" value="${compId}"/>` +
+    `<parameter name="minions" value="${someMinion}"/>` +
+    `</ge></events>`));
+  const shown = document.querySelector('[data-band="minions"].band') != null;
+  const clickable = document.querySelector(
+    `[data-band="minions"] .card[data-card-id="${someMinion}"].is-eligible`) != null;
+  ok("an assignment decision FORCE-SHOWS the retracted minions row", shown);
+  ok("and its minion is eligible to click", clickable);
+
+  store.dispatchAll(decodeEvents(`<events><ge type="D" id="4"/></events>`));
+  ok("the retraction resumes once the decision resolves",
+     document.querySelector('[data-band="minions"].band') == null);
+  document.querySelector('.railtab[data-band="minions"]')?.click();  // restore
+}
+
 const r = document.createElement("div");
 r.id = "result"; r.className = fail === 0 ? "pass" : "fail";
 r.textContent = fail === 0 ? `RESULT: ALL PASS (${pass})` : `RESULT: ${fail} FAILED of ${pass + fail}`;

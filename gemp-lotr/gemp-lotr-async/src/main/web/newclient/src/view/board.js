@@ -547,13 +547,31 @@ export function createBoard(root, store, options = {}) {
     }
     const ctx = { ...bandContext(state, focusId), viewerId: state.viewerId, fpId: fpId(state) };
     // Which bands are hidden right now: the player's retractions plus any
-    // autoHide ruling they have not overridden. Computed before the split so
-    // the completeness detector can be told these drops are deliberate.
+    // autoHide ruling they have not overridden.
     const specs = displayFor(ctx);
     ctx.hidden = new Set(specs.filter((b) =>
       bandOverride.get(b.id) === "hide" ||
       (b.autoHide && bandOverride.get(b.id) !== "show")).map((b) => b.id));
     const split = assignBands(allCards(state), ctx);
+
+    // AN OFFER MUST NEVER BE INVISIBLE -- the site-path lesson, re-learned
+    // the day the rail shipped: a retracted minions row made the assignment
+    // decision unclickable ("skirmish selection isn't working at all"). Any
+    // band holding a card the current decision makes eligible is force-shown
+    // while that decision stands; the retraction resumes when it resolves.
+    if (state.decision && ctx.hidden.size) {
+      const d = state.decision;
+      const p = d.parameters ?? {};
+      const eligibleIds = new Set([
+        ...(p.cardId ?? []), ...(p.freeCharacters ?? []), ...(p.minions ?? [])
+      ].map(Number));
+      if (eligibleIds.size) {
+        for (const id of [...ctx.hidden]) {
+          const cards = split.byBand.get(id) ?? [];
+          if (cards.some((c) => eligibleIds.has(c.cardId))) ctx.hidden.delete(id);
+        }
+      }
+    }
 
     // `onParent` was computed from the start and never used, so every attached
     // card -- the One Ring included -- was simply not drawn. Group them by host
@@ -631,6 +649,7 @@ export function createBoard(root, store, options = {}) {
       const tab = el(doc, "button", "railtab" + (hiddenNow ? " off" : ""),
                      RAIL_NAMES[spec.id] ?? spec.id);
       tab.type = "button";
+      tab.dataset.band = spec.id;
       tab.title = hiddenNow ? "Show this row" : "Hide this row";
       tab.addEventListener("click", () => {
         bandOverride.set(spec.id, hiddenNow ? "show" : "hide");
