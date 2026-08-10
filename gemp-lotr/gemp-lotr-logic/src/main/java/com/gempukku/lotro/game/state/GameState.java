@@ -1090,7 +1090,8 @@ public class GameState {
     }
 
     public LotroDeck getLotroDeck(String playerId) {
-        return _lotroDecks.get(playerId);
+        // Null before initPreGame -- several test scenarios never call it.
+        return _lotroDecks == null ? null : _lotroDecks.get(playerId);
     }
 
     public List<? extends PhysicalCard> getHand(String playerId) {

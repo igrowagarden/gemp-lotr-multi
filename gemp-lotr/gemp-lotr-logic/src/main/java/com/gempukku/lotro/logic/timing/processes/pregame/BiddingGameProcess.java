@@ -25,7 +25,34 @@ public class BiddingGameProcess implements GameProcess {
         for (String player : _players) {
             final String decidingPlayer = player;
             int minimumBid = game.getModifiersQuerying().getMinimumBid(game, decidingPlayer);
+            // The bid is ADVISED, not capped. A player bid 10 in the
+            // five-player playtest and was corrupted before the game began,
+            // and the first fix was a hard cap at printed resistance - 1 --
+            // which IndividualCardAtTest.garradrielCorruptionAtStart
+            // immediately refuted: Galadriel (9_14) prints resistance 3 and
+            // GAINS resistance per spotted Elven companion, so bidding past
+            // her printed number is a real archetype the official rules
+            // permit. The decision therefore CARRIES the printed resistance
+            // (from the pregame deck -- GameState.init has not run at bid
+            // time) and the client warns loudly when a bid would corrupt;
+            // the choice stays the player's.
+            Integer printedResistance = null;
+            try {
+                var deck = game.getGameState().getLotroDeck(decidingPlayer);
+                if (deck != null && deck.getRingBearer() != null) {
+                    int printed = game.getLotroCardBlueprintLibrary()
+                            .getLotroCardBlueprint(deck.getRingBearer()).getResistance();
+                    if (printed > 0) printedResistance = printed;
+                }
+            } catch (Exception exp) {
+                // No deck, no library, unknown blueprint: no advisory.
+            }
+            final Integer resistanceParam = printedResistance;
             game.getUserFeedback().sendAwaitingDecision(decidingPlayer, new IntegerAwaitingDecision(1, "Choose a number of burdens to bid", minimumBid) {
+                {
+                    if (resistanceParam != null)
+                        setParam("ringBearerResistance", String.valueOf(resistanceParam));
+                }
                 @Override
                 public void decisionMade(String result) throws DecisionResultInvalidException {
                     try {

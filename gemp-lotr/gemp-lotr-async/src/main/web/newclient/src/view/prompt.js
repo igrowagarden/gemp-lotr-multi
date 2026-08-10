@@ -144,8 +144,25 @@ export function renderPrompt(doc, state, picked, onAnswer, opts = {}) {
     // bids "just went to zero" as bots chattered. The draft lives in
     // `opts.draft`, owned by the board and reset per decision like `picked`.
     input.value = opts.draft?.value ?? String(start);
+    // A bid that would corrupt the ring-bearer WARNS, live, but stays legal:
+    // the first playtest fix was a hard cap, and Galadriel (resistance 3,
+    // +1 per spotted Elven companion) refuted it -- over-bidding is a real
+    // archetype. The engine sends the printed resistance on the decision.
+    const resistance = parseInt(p.ringBearerResistance?.[0] ?? "", 10);
+    const corruptWarn = Number.isNaN(resistance) ? null
+      : el(doc, "span", "pwarn bidwarn", "");
+    const updateCorruptWarn = () => {
+      if (!corruptWarn) return;
+      const v = parseInt(input.value, 10);
+      const bad = !Number.isNaN(v) && v >= resistance;
+      corruptWarn.textContent = bad
+        ? `⚠ ${v} burdens would CORRUPT your ring-bearer (resistance ${resistance}) — only card effects could save them`
+        : "";
+      corruptWarn.style.display = bad ? "" : "none";
+    };
     input.addEventListener("input", () => {
       if (opts.draft) opts.draft.value = input.value;
+      updateCorruptWarn();
     });
     // `b` is declared below; the listener only runs after render completes.
     input.addEventListener("keydown", (e) => {
@@ -156,6 +173,10 @@ export function renderPrompt(doc, state, picked, onAnswer, opts = {}) {
     b.type = "button";
     b.addEventListener("click", () => send(input.value, b));
     actions.appendChild(b);
+    if (corruptWarn) {
+      actions.appendChild(corruptWarn);
+      updateCorruptWarn();
+    }
   } else if (isAssignment(d)) {
     const assigned = picked.assignedCount;
     actions.appendChild(el(doc, "span", "pnote",

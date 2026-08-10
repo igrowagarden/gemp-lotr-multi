@@ -291,6 +291,34 @@ const byLabel = (el, t) => buttons(el).find((b) => b.textContent === t);
      sent.length === 1 && sent[0][1] === "4", JSON.stringify(sent));
 }
 
+// ---------------------------------------------- the corruption bid warning
+{
+  // The engine sends the ring-bearer's printed resistance on the bid; a bid
+  // at or past it WARNS, live, but stays sendable -- Galadriel (resistance
+  // 3, +1 per spotted Elven companion) makes over-bidding a real archetype,
+  // so a hard cap was wrong and was refuted by the engine's own test.
+  const bid = dec("INTEGER", "number",
+    { parameters: { min: ["0"], ringBearerResistance: ["10"] } });
+  const s = renderPrompt(document, state({ decision: bid }), createSelection(),
+                         onAnswer, { draft: {} });
+  const input = s.querySelector("input");
+  const warnEl = () => s.querySelector(".bidwarn");
+  ok("a safe bid shows no corruption warning",
+     warnEl() != null && warnEl().style.display === "none");
+  input.value = "10";
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  ok("a bid at resistance warns of corruption, live",
+     warnEl().style.display !== "none" && warnEl().textContent.includes("CORRUPT"));
+  sent = [];
+  buttons(s).find((b) => b.textContent === "Accept").click();
+  ok("but the bid is still SENDABLE -- warned, not capped",
+     sent.length === 1 && sent[0][1] === "10", JSON.stringify(sent));
+  input.value = "4";
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  ok("dropping below resistance clears the warning",
+     warnEl().style.display === "none");
+}
+
 // -------------------------------------------------------- the typed draft
 {
   // Repaints arrive constantly in a five-player game, and each one rebuilds
