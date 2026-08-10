@@ -119,11 +119,17 @@ export function createBoard(root, store, options = {}) {
       const move = (e) => {
         if (!dragging && Math.abs(e.clientX - startX) < DRAG_THRESHOLD) return;
         if (!dragging) { dragging = true; node.classList.add("is-dragging"); }
-        // Where it would land: the first sibling whose midpoint is past us.
+        // Where it would land: the first sibling past the pointer. LINE-AWARE,
+        // not X-only -- a row that wraps stacks its lines, and comparing X
+        // alone made a card on line two "before" everything on line one to
+        // its right. A sibling is past us if its whole box is on a LOWER
+        // line, or it shares our line and its midpoint is right of us. On a
+        // single-line row this degenerates to the old midpoint rule.
         const others = [...row.children].filter((n) => n !== node);
         const after = others.find((n) => {
           const r = n.getBoundingClientRect();
-          return e.clientX < r.left + r.width / 2;
+          if (r.top > e.clientY) return true;
+          return e.clientY <= r.bottom && e.clientX < r.left + r.width / 2;
         });
         row.insertBefore(node, after ?? null);
       };
@@ -750,7 +756,13 @@ export function createBoard(root, store, options = {}) {
     if (keepPrompt) {
       const t = promptNode.querySelector(".ptimer");
       const secs = state.clocks[state.viewerId];
-      if (t && secs != null) t.textContent = formatClock(secs);
+      // Server truth re-syncs the prompt's local countdown (data-left) as
+      // well as the text -- events only arrive when the hold releases, and
+      // when they do, the server's clock wins.
+      if (t && secs != null) {
+        t.textContent = formatClock(secs);
+        t.dataset.left = String(secs);
+      }
     } else {
       promptNode = renderPrompt(doc, state, picked, onAnswer, { popup, draft });
       promptFor = state.decision ?? null;

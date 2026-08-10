@@ -410,5 +410,53 @@ const byLabel = (el, t) => buttons(el).find((b) => b.textContent === t);
   ok("no clock, no timer element", s.querySelector(".ptimer") == null);
 }
 
+// -------------------------- the clock TICKS while the transport holds
+// A decision for the viewer freezes the event stream (net/transport.js), so
+// the server clock stops updating at exactly the moment it starts to matter.
+// The prompt ticks it down locally; the board's keepPrompt refresh writes
+// server truth into data-left whenever real events arrive, and the tick
+// carries on from there.
+{
+  const ticks = [];
+  const fake = { setInterval: (fn) => { ticks.push(fn); return 7; },
+                 clearInterval: () => {} };
+  const s = renderPrompt(document,
+    state({ decision: dec("MULTIPLE_CHOICE", "button"), clocks: { me: 65 } }),
+    createSelection(), onAnswer, fake);
+  document.body.appendChild(s);          // the tick self-stops if disconnected
+  const t = s.querySelector(".ptimer");
+  ok("a decision for the viewer starts a local countdown",
+     ticks.length === 1 && t?.dataset.left === "65");
+  ticks[0]?.(); ticks[0]?.();
+  ok("each tick counts one second down without any event",
+     t?.textContent === "1:03", t?.textContent);
+  t.dataset.left = "10";                 // the board's server-truth refresh
+  ticks[0]?.();
+  ok("a server clock update re-syncs the countdown",
+     t?.textContent === "0:09", t?.textContent);
+  s.remove();
+
+  const other = renderPrompt(document,
+    state({ decision: dec("MULTIPLE_CHOICE", "button", { forPlayer: "bob" }),
+            waitingOn: ["bob"], clocks: { me: 65 } }),
+    createSelection(), onAnswer, fake);
+  ok("somebody else's decision ticks nothing",
+     ticks.length === 1 && other.querySelector(".ptimer") == null);
+}
+
+// ------------------------------------------------- retold engine wording
+{
+  const s = strip(state({ decision:
+    dec("CARD_ACTION_CHOICE", "cards", { text: "Optional responses" }) }));
+  ok("the trigger prompt says what you can DO, not the engine's term",
+     s.querySelector(".ptext")?.textContent.includes(
+       "click it to trigger it, or Pass"),
+     s.querySelector(".ptext")?.textContent);
+  const plain = strip(state({ decision:
+    dec("CARD_ACTION_CHOICE", "cards", { text: "Choose action to play or Pass" }) }));
+  ok("wording not in the table passes through verbatim",
+     plain.querySelector(".ptext")?.textContent === "You: Choose action to play or Pass");
+}
+
 report.result();
 </script></body></html>

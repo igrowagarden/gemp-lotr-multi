@@ -113,6 +113,43 @@ tap("pointerup", box.left + 7);
 target.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 ok("a small movement is still a click, not a reorder", clicked === 1, `${clicked} click(s)`);
 
+// ---- reordering across WRAPPED lines ---------------------------------------
+// A row that wraps stacks its lines, and the insertion point must honour the
+// LINE first and X second. The old X-only midpoint rule made a card dropped
+// at the end of line two land before everything on line one to its right --
+// the recorded "drag math is line-blind" limitation, now a fixed behaviour.
+{
+  // Re-query: the repaint a few lines up REBUILT the band, so the `row`
+  // captured before it is a detached node whose rects are all zero -- one
+  // phantom "line". Then finish any FLIP in flight: an animating card's
+  // rect is its ANIMATED position, not where it will land.
+  const wrow = boardEl.querySelector('[data-band="minions"] .row');
+  for (const n of wrow.querySelectorAll(".card")) {
+    for (const a of n.getAnimations?.() ?? []) a.finish();
+  }
+  const wids = () => [...wrow.children].map((n) => Number(n.dataset.cardId));
+  const cards0 = wids();
+  wrow.style.flexWrap = "wrap";
+  const w = wrow.children[0].getBoundingClientRect().width;
+  wrow.style.maxWidth = `${Math.ceil(2 * w + 12)}px`;
+  const lines = new Set([...wrow.children].map((n) => Math.round(n.getBoundingClientRect().top)));
+  ok("the row actually wrapped for this test", lines.size >= 2, `${lines.size} line(s)`);
+  const a = wrow.children[0];
+  const last = wrow.children[wrow.children.length - 1];
+  const lr = last.getBoundingClientRect();
+  const ar = a.getBoundingClientRect();
+  const drag = (type, x, y) => a.dispatchEvent(
+    new PointerEvent(type, { pointerId: 3, clientX: x, clientY: y,
+                             button: 0, bubbles: true }));
+  drag("pointerdown", ar.left + 5, ar.top + 5);
+  drag("pointermove", lr.right + 4, lr.top + 5);
+  drag("pointerup", lr.right + 4, lr.top + 5);
+  ok("a drop at the end of the last line lands at the END",
+     wids()[wids().length - 1] === cards0[0],
+     `${cards0.join(",")} -> ${wids().join(",")}`);
+  wrow.style.flexWrap = ""; wrow.style.maxWidth = "";
+}
+
 // ---- attachments ride on their host ---------------------------------------
 
 // zone="ATTACHED" with a targetCardId. assignBands separated these from the

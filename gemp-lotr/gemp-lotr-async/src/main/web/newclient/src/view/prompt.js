@@ -40,6 +40,18 @@ const el = (doc, tag, cls, text) => {
   return node;
 };
 
+/**
+ * Engine wording that names a mechanism instead of an action, retold as what
+ * the player can actually DO. "Optional responses" is the engine's term for
+ * "a card of yours may trigger now" -- the playtest read it and asked what it
+ * meant. Presentation only: the ANSWER format is untouched, and any text not
+ * in this table passes through verbatim.
+ */
+const RETOLD = new Map([
+  ["Optional responses",
+   "A card of yours may respond — click it to trigger it, or Pass"]
+]);
+
 export function renderPrompt(doc, state, picked, onAnswer, opts = {}) {
   const strip = el(doc, "div", "prompt");
   const d = state.decision;
@@ -49,7 +61,7 @@ export function renderPrompt(doc, state, picked, onAnswer, opts = {}) {
 
   const waiting = state.waitingOn.filter((p) => p !== state.viewerId);
   strip.appendChild(el(doc, "span", "ptext",
-    yours ? `You: ${d.text ?? d.decisionType}`
+    yours ? `You: ${RETOLD.get(d.text) ?? d.text ?? d.decisionType}`
           : waiting.length ? `Waiting for ${waiting.join(", ")}`
           : "Waiting…"));
 
@@ -299,6 +311,29 @@ export function renderPrompt(doc, state, picked, onAnswer, opts = {}) {
   }
 
   const seconds = state.clocks[state.viewerId];
-  if (seconds != null) strip.appendChild(el(doc, "span", "ptimer", formatClock(seconds)));
+  if (seconds != null) {
+    const timer = el(doc, "span", "ptimer", formatClock(seconds));
+    strip.appendChild(timer);
+    // While a decision waits on the viewer the transport HOLDS: no events, no
+    // repaints -- so the clock froze at exactly the moment it started to
+    // matter. Tick it down locally. The countdown state lives in
+    // `data-left`, which the board's keepPrompt refresh OVERWRITES whenever
+    // real events deliver the server's clock, so the local tick only ever
+    // covers the gap and server truth re-syncs it. The interval clears
+    // itself when the node leaves the document (next decision, next paint
+    // shape) rather than trusting anyone to remember it.
+    if (state.decision && !state.spectating &&
+        state.decision.forPlayer === state.viewerId) {
+      timer.dataset.left = String(seconds);
+      const every = opts.setInterval ?? ((fn, ms) => setInterval(fn, ms));
+      const stop = opts.clearInterval ?? ((id) => clearInterval(id));
+      const id = every(() => {
+        if (!timer.isConnected) { stop(id); return; }
+        const left = Math.max(0, (parseInt(timer.dataset.left, 10) || 0) - 1);
+        timer.dataset.left = String(left);
+        timer.textContent = formatClock(left);
+      }, 1000);
+    }
+  }
   return strip;
 }
