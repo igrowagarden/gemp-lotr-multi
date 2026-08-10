@@ -6,12 +6,11 @@
 <body><div id="board"></div><div id="out"></div>
 <script type="module">
 /**
- * An assigned minion lines up under the companion it will fight.
- *
- * Assignment is the step BEFORE the skirmish starts, so the skirmish band has
- * not gathered the two sides yet -- the minion is in the shared band and the
- * companion in the contested one, at different card widths. The pairing is
- * measured, so this checks the measurement rather than the intent.
+ * A confirmed assignment merges into ONE boxed fight, away from the home
+ * rows, and the whole box is a click target for choosing which skirmish to
+ * resolve -- the playtest's ruling, replacing the old under-the-companion
+ * offset alignment for CONFIRMED pairings. (Pre-confirm picks still align in
+ * place; view/board.js alignAssignments.)
  */
 import { createStore } from "../state/store.js";
 import { decodeEvents } from "../net/protocol.js";
@@ -56,39 +55,48 @@ ok("the fixture gives us something to pair", minionsBefore.length >= 2 && comps.
 // implementation has to reorder rather than nudge.
 const minionId = minionsBefore[minionsBefore.length - 1].dataset.cardId;
 const compId = comps[0].dataset.cardId;
-const drift0 = Math.abs(centre(minionsBefore[minionsBefore.length - 1]) - centre(comps[0]));
 
 store.dispatchAll(decodeEvents(
   `<events><ge type="AA" cardId="${compId}" otherCardIds="${minionId}"/></events>`));
 
-const minionNode = boardEl.querySelector(`[data-band="minions"] .card[data-card-id="${minionId}"]`);
-const compNode = boardEl.querySelector(`[data-band="focusFree"] .card[data-card-id="${compId}"]`);
-ok("the assigned minion is still drawn", !!minionNode && !!compNode);
+// A CONFIRMED pairing merges into a boxed fight (playtest ruling: "a thin box
+// should be drawn around them and they should be moved away from the
+// fellowship"), leaving the home rows.
+const box = () => boardEl.querySelector('[data-band="fights"] .fightbox');
+ok("a confirmed assignment renders as one boxed fight", !!box());
+ok("holding the companion and its minion together",
+   !!box()?.querySelector(`.card[data-card-id="${compId}"]`) &&
+   !!box()?.querySelector(`.card[data-card-id="${minionId}"]`));
+ok("and both have left their home rows",
+   boardEl.querySelector(`[data-band="minions"] .card[data-card-id="${minionId}"]`) == null &&
+   boardEl.querySelector(`[data-band="focusFree"] .card[data-card-id="${compId}"]`) == null);
 
-const drift = Math.abs(centre(minionNode) - centre(compNode));
-ok("it lines up vertically with its companion", drift < 2,
-   `${drift.toFixed(1)}px off centre (was ${drift0.toFixed(1)}px)`);
-ok("and it is marked as paired", minionNode.classList.contains("is-assigned"));
-
-// A second minion on the same companion cannot also be centred; it must sit
-// beside the first rather than on top of it.
+// A second minion joins the SAME box rather than opening another.
 const other = [...minionRow().children].find((n) => n.dataset.cardId !== minionId);
 store.dispatchAll(decodeEvents(
   `<events><ge type="AA" cardId="${compId}" otherCardIds="${minionId},${other.dataset.cardId}"/></events>`));
+ok("two minions on one companion share one box",
+   boardEl.querySelectorAll('[data-band="fights"] .fightbox').length === 1 &&
+   box().querySelectorAll('.card[data-card-id]').length === 3);
 
-settle();
-const rects = [...minionRow().children]
-  .filter((n) => n.dataset.assignedTo)
-  .map((n) => n.getBoundingClientRect())
-  .sort((a, b) => a.left - b.left);
-const overlap = rects.some((r, i) => i > 0 && r.left < rects[i - 1].right - 0.5);
-ok("two minions on one companion do not overlap", rects.length === 2 && !overlap,
-   `${rects.length} paired`);
+// Clicking ANYWHERE in the box picks the fight: with a selection decision
+// naming the companion, a click on the box padding chooses it.
+store.dispatchAll(decodeEvents(
+  `<events><ge type="D" id="6" decisionType="CARD_SELECTION" text="Choose skirmish to resolve" participantId="asdf">` +
+  `<parameter name="cardId" value="${compId}"/>` +
+  `<parameter name="min" value="1"/><parameter name="max" value="1"/>` +
+  `</ge></events>`));
+box().click();
+ok("clicking the box (not a card) selects the fight's companion",
+   !!boardEl.querySelector(`.card[data-card-id="${compId}"].is-chosen`));
+store.dispatchAll(decodeEvents(`<events><ge type="D" id="6"/></events>`));
 
-// Unassigning puts it back.
+// Unassigning dissolves the box and puts everyone home.
 store.dispatchAll(decodeEvents(`<events><ge type="RA" cardId="${compId}"/></events>`));
-const cleared = [...minionRow().children].every((n) => !n.style.left && !n.dataset.assignedTo);
-ok("removing the assignment clears the offset", cleared);
+ok("removing the assignment dissolves the fight",
+   box() == null &&
+   boardEl.querySelector(`[data-band="minions"] .card[data-card-id="${minionId}"]`) != null &&
+   boardEl.querySelector(`[data-band="focusFree"] .card[data-card-id="${compId}"]`) != null);
 
 // A retracted band FORCE-SHOWS while a decision makes its cards eligible --
 // the rail shipped and immediately made assignment unclickable by hiding the

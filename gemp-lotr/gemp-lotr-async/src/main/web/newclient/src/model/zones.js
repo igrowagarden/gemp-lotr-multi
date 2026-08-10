@@ -108,6 +108,22 @@ export const BANDS = Object.freeze([
     holds: (card, ctx) => ctx.skirmishing && (card.inSkirmish === true || card.assignedTo != null)
   },
   {
+    // A CONFIRMED assignment: the companion and the minions committed against
+    // it merge into one boxed fight, out of their home rows -- the skirmish
+    // view forming as assignments land (playtest ruling). Pre-confirm picks
+    // stay in their rows, and the skirmish band outranks this while one
+    // actually resolves. `fightComps` is the set of companion ids with
+    // assignments, provided by the board from state.assignments.
+    id: "fights",
+    density: "board",
+    shared: true,
+    ownerTag: true,
+    filterable: false,
+    holds: (card, ctx) => !ctx.skirmishing &&
+      (card.assignedTo != null ||
+       (ctx.fightComps != null && ctx.fightComps.has(card.cardId)))
+  },
+  {
     id: "selfFree",
     density: "board",
     shared: false,

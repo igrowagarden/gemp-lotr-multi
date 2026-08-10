@@ -399,6 +399,55 @@ export function createBoard(root, store, options = {}) {
       return node;
     };
 
+    if (spec.id === "fights") {
+      // Each confirmed assignment is ONE box -- the companion, then the
+      // minions committed against it -- clickable ANYWHERE: the box forwards
+      // to the companion, so choosing which skirmish to resolve does not
+      // demand pixel precision on a single card (playtest ruling).
+      const byComp = new Map();
+      const comps = [];
+      for (const card of cards) {
+        if (card.assignedTo != null) {
+          if (!byComp.has(card.assignedTo)) byComp.set(card.assignedTo, []);
+          byComp.get(card.assignedTo).push(card);
+        } else comps.push(card);
+      }
+      const mount = (card) => {
+        const node = drawCard(card);
+        const riders = attachedBy?.get(card.cardId);
+        if (!riders?.length) return { node, root: node };
+        const group = el(doc, "div", "cardgroup");
+        for (const rider of riders) group.appendChild(drawCard(rider));
+        group.appendChild(node);
+        return { node, root: group };
+      };
+      const row = el(doc, "div", "row fightsrow");
+      const placed = new Set();
+      for (const comp of comps) {
+        const box = el(doc, "div", "fightbox");
+        const { node: compNode, root: compRoot } = mount(comp);
+        box.appendChild(compRoot);
+        for (const m of byComp.get(comp.cardId) ?? []) {
+          placed.add(m.cardId);
+          box.appendChild(mount(m).root);
+        }
+        box.addEventListener("click", (e) => {
+          if (e.target.closest(".card")) return;   // cards answer for themselves
+          compNode.click();
+        });
+        row.appendChild(box);
+      }
+      // A minion whose companion this band does not hold still renders,
+      // rather than vanishing into a bookkeeping gap.
+      for (const card of cards) {
+        if (card.assignedTo != null && !placed.has(card.cardId)) {
+          row.appendChild(mount(card).root);
+        }
+      }
+      band.appendChild(row);
+      return band;
+    }
+
     if (spec.id === "skirmish") {
       // THE FIGHT READS VERTICALLY (playtest ruling): the Free Peoples side
       // centred on top, the minions fighting it centred directly beneath --
@@ -545,7 +594,10 @@ export function createBoard(root, store, options = {}) {
       popup.hidden = false;
       delete draft.value;
     }
-    const ctx = { ...bandContext(state, focusId), viewerId: state.viewerId, fpId: fpId(state) };
+    const ctx = { ...bandContext(state, focusId), viewerId: state.viewerId, fpId: fpId(state),
+                  // Companions with CONFIRMED assignments: they and their
+                  // minions merge into the boxed fights band.
+                  fightComps: new Set(Object.keys(state.assignments ?? {}).map(Number)) };
     // Which bands are hidden right now: the player's retractions plus any
     // autoHide ruling they have not overridden.
     const specs = displayFor(ctx);
@@ -639,7 +691,7 @@ export function createBoard(root, store, options = {}) {
     const rail = el(doc, "div", "bandrail");
     const RAIL_NAMES = {
       focusSupport: "opp support", focusFree: "opp fellowship",
-      skirmish: "skirmish", minions: "minions",
+      skirmish: "skirmish", fights: "skirmishes", minions: "minions",
       selfFree: "your fellowship", selfSupport: "your support", hand: "hand"
     };
     for (const spec of specs) {

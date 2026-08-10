@@ -171,6 +171,26 @@ ok("but an unexplained drop still is -- the detector can still see",
    undrawn(new Map([["skirmish", [{ cardId: 20 }]]]),
            { ...skShadowCtx, skirmishing: false }).length === 1);
 
+group("a confirmed assignment merges into the fights band");
+// The companion (via ctx.fightComps, from state.assignments) and every
+// minion carrying assignedTo leave their home rows for one boxed fight;
+// while a skirmish actually resolves, the skirmish band still outranks.
+const fightCards = [
+  { cardId: 60, zone: "FREE_CHARACTERS", owner: "carol" },
+  { cardId: 61, zone: "SHADOW_CHARACTERS", owner: "dave", assignedTo: 60 },
+  { cardId: 62, zone: "SHADOW_CHARACTERS", owner: "qwer" }
+];
+const fightCtx = { ...playing, fightComps: new Set([60]) };
+const fsplit = assignBands(fightCards, fightCtx);
+eq("companion and its minion leave their rows for the fight",
+   fsplit.byBand.get("fights").map((c) => c.cardId), [60, 61]);
+eq("an unassigned minion stays in the minions band",
+   fsplit.byBand.get("minions").map((c) => c.cardId), [62]);
+eq("while a skirmish resolves, the skirmish band outranks the fight",
+   assignBands(fightCards, { ...fightCtx, skirmishing: true })
+     .byBand.get("skirmish").map((c) => c.cardId), [61]);
+ok("the fights board stays complete", checkComplete(fightCards, fightCtx).ok);
+
 group("skirmish outranks ownership");
 const inSkirmish = [
   { cardId: 20, zone: "SHADOW_CHARACTERS", owner: "dave", inSkirmish: true },

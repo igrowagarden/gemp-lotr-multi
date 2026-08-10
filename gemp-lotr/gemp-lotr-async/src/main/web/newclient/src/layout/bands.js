@@ -40,6 +40,13 @@ export const DISPLAY = Object.freeze([
                     : ctx.filter === "shadow"
   },
   {
+    // Confirmed assignments, one boxed fight per pairing; absent until they
+    // exist. Sits where the skirmish will: above the minions still unassigned.
+    id: "fights", weight: 13, collapsed: 0, ownerTag: true,
+    label: (ctx, n) => "Assigned skirmishes · click a fight to resolve it",
+    tone: "shared"
+  },
+  {
     id: "minions", weight: 14, collapsed: 20, ownerTag: true,
     label: (ctx, n, seats) =>
       n ? `Minions in play · ${n} from ${seats} seats · never filtered`
