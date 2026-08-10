@@ -128,14 +128,31 @@ def answer(decision, repeats=1):
             lo = 0
         if lo <= 0:
             # In --play mode, BUILD a starting fellowship rather than opening
-            # every game as a lone ring-bearer: keep picking a random
-            # selectable companion, mostly, until DONE or nothing affordable.
-            # The selectable flags are the engine's own budget verdict.
+            # every game as a lone ring-bearer. The choice is ONE simultaneous
+            # multi-select now (SimultaneousStartingFellowshipChoiceGameProcess):
+            # answer with a random subset whose summed costs fit the budget,
+            # using the twilightCost / budgetRemaining params the decision
+            # carries. Picks play in answer order; over-budget picks would be
+            # skipped by the executor, so the bot stays inside the budget.
             if PLAY and kind == "ARBITRARY_CARDS" and "Starting fellowship" in (decision.get("text") or ""):
                 sel = p.get("selectable", [])
-                picks = ["temp%d" % i for i, s in enumerate(sel) if s == "true"]
-                if picks and random.random() < 0.8:
-                    return random.choice(picks)
+                costs = p.get("twilightCost", [])
+                try:
+                    budget = int(p.get("budgetRemaining", ["4"])[0])
+                except ValueError:
+                    budget = 4
+                order = [i for i, s in enumerate(sel) if s == "true"]
+                random.shuffle(order)
+                picks, spent = [], 0
+                for i in order:
+                    try:
+                        cost = int(costs[i]) if i < len(costs) else 99
+                    except ValueError:
+                        cost = 99
+                    if spent + cost <= budget and random.random() < 0.8:
+                        picks.append("temp%d" % i)
+                        spent += cost
+                return ",".join(picks)
             return ""                                # decline
         ids = p.get("cardId", [])
         if not ids:

@@ -17,25 +17,73 @@ import java.util.*;
 import static org.junit.Assert.*;
 
 public class TimingAtTest extends AbstractAtTest {
+    /**
+     * Companion with this blueprint stands in play. Checked by ZONE, not by
+     * Filters.countActive -- between the pregame pseudo-turns no player's
+     * cards are "affecting the game", so countActive reads 0 even for a
+     * companion standing in FREE_CHARACTERS. And not by deck-absence alone:
+     * the starting-hand draw runs right after the fellowship, so a SKIPPED
+     * companion leaves the deck too -- into the hand.
+     */
+    private boolean companionInPlay(final String blueprintId) {
+        for (PhysicalCard card : _game.getGameState().getDeck(P1))
+            if (card.getBlueprintId().equals(blueprintId))
+                return false;   // still in the deck: not played
+        for (PhysicalCard card : _game.getGameState().getHand(P1))
+            if (card.getBlueprintId().equals(blueprintId))
+                return false;   // drawn after being skipped: not played
+        return true;
+    }
+
+    /** Answer a player's open starting-fellowship selection with these blueprints, in order. */
+    private void chooseStartingFellowship(String player, String... blueprints) throws DecisionResultInvalidException {
+        AwaitingDecision decision = _userFeedback.getAwaitingDecision(player);
+        List<String> ids = new ArrayList<>();
+        for (String bp : blueprints)
+            ids.add(getArbitraryCardId(decision, bp));
+        playerDecided(player, String.join(",", ids));
+    }
+
+    @Test
+    public void startingFellowshipChoicesAreSimultaneous() throws DecisionResultInvalidException {
+        // The playtest ruling this flow exists for: every seat picks at once.
+        // Both players hold an OPEN starting-fellowship decision before either
+        // has answered -- the old chain asked one seat at a time. Both decks
+        // need a companion, or the seat without one is (rightly) never asked.
+        Map<String, Collection<String>> extraCards = new HashMap<>();
+        extraCards.put(P1, Arrays.asList("1_50"));
+        extraCards.put(P2, Arrays.asList("1_13"));
+        initializeSimplestGame(extraCards);
+
+        AwaitingDecision p1 = _userFeedback.getAwaitingDecision(P1);
+        AwaitingDecision p2 = _userFeedback.getAwaitingDecision(P2);
+        assertNotNull(p1);
+        assertNotNull(p2);
+        assertEquals(AwaitingDecisionType.ARBITRARY_CARDS, p1.getDecisionType());
+        assertEquals(AwaitingDecisionType.ARBITRARY_CARDS, p2.getDecisionType());
+        assertTrue(p1.getText().startsWith("Starting fellowship"));
+        assertTrue(p2.getText().startsWith("Starting fellowship"));
+    }
+
     @Test
     public void playStartingFellowshipWithDiscount() throws DecisionResultInvalidException {
         Map<String, Collection<String>> extraCards = new HashMap<>();
         extraCards.put(P1, Arrays.asList("7_88", "6_121"));
         initializeSimplestGame(extraCards);
 
-        // Play first character
-        AwaitingDecision firstCharacterDecision = _userFeedback.getAwaitingDecision(P1);
-        assertEquals(AwaitingDecisionType.ARBITRARY_CARDS, firstCharacterDecision.getDecisionType());
-        validateContents(new String[]{"7_88", "6_121"}, ((String[]) firstCharacterDecision.getDecisionParameters().get("blueprintId")));
+        // One multi-select decision holds the whole build; picks EXECUTE in
+        // the order picked, so 6_121 plays after 7_88 and under its discount.
+        AwaitingDecision characterDecision = _userFeedback.getAwaitingDecision(P1);
+        assertEquals(AwaitingDecisionType.ARBITRARY_CARDS, characterDecision.getDecisionType());
+        validateContents(new String[]{"7_88", "6_121"}, ((String[]) characterDecision.getDecisionParameters().get("blueprintId")));
 
-        playerDecided(P1, getArbitraryCardId(firstCharacterDecision, "7_88"));
+        chooseStartingFellowship(P1, "7_88", "6_121");
+        if (_userFeedback.getAwaitingDecision(P2) != null
+                && _userFeedback.getAwaitingDecision(P2).getText().startsWith("Starting fellowship"))
+            playerDecided(P2, "");
 
-        // Play second character with discount
-        AwaitingDecision secondCharacterDecision = _userFeedback.getAwaitingDecision(P1);
-        assertEquals(AwaitingDecisionType.ARBITRARY_CARDS, secondCharacterDecision.getDecisionType());
-        validateContents(new String[]{"6_121"}, ((String[]) secondCharacterDecision.getDecisionParameters().get("blueprintId")));
-
-        playerDecided(P1, getArbitraryCardId(secondCharacterDecision, "6_121"));
+        assertTrue(companionInPlay("7_88"));
+        assertTrue(companionInPlay("6_121"));
     }
 
     @Test
@@ -44,19 +92,17 @@ public class TimingAtTest extends AbstractAtTest {
         extraCards.put(P1, Arrays.asList("4_265", "4_267"));
         initializeSimplestGame(extraCards);
 
-        // Play first character
-        AwaitingDecision firstCharacterDecision = _userFeedback.getAwaitingDecision(P1);
-        assertEquals(AwaitingDecisionType.ARBITRARY_CARDS, firstCharacterDecision.getDecisionType());
-        validateContents(new String[]{"4_265", "4_267"}, (firstCharacterDecision.getDecisionParameters().get("blueprintId")));
+        AwaitingDecision characterDecision = _userFeedback.getAwaitingDecision(P1);
+        assertEquals(AwaitingDecisionType.ARBITRARY_CARDS, characterDecision.getDecisionType());
+        validateContents(new String[]{"4_265", "4_267"}, (characterDecision.getDecisionParameters().get("blueprintId")));
 
-        playerDecided(P1, getArbitraryCardId(firstCharacterDecision, "4_265"));
+        chooseStartingFellowship(P1, "4_265", "4_267");
+        if (_userFeedback.getAwaitingDecision(P2) != null
+                && _userFeedback.getAwaitingDecision(P2).getText().startsWith("Starting fellowship"))
+            playerDecided(P2, "");
 
-        // Play second character with discount
-        AwaitingDecision secondCharacterDecision = _userFeedback.getAwaitingDecision(P1);
-        assertEquals(AwaitingDecisionType.ARBITRARY_CARDS, secondCharacterDecision.getDecisionType());
-        validateContents(new String[]{"4_267"}, ( secondCharacterDecision.getDecisionParameters().get("blueprintId")));
-
-        playerDecided(P1, getArbitraryCardId(secondCharacterDecision, "4_267"));
+        assertTrue(companionInPlay("4_265"));
+        assertTrue(companionInPlay("4_267"));
     }
 
     @Test
@@ -65,39 +111,48 @@ public class TimingAtTest extends AbstractAtTest {
         extraCards.put(P1, Arrays.asList("1_50", "1_48"));
         initializeSimplestGame(extraCards);
 
-        // Play first character. The whole deck's companions are SHOWN -- the
-        // five-player playtest asked for priced-out characters to grey rather
-        // than vanish -- but only the playable one is selectable: 1_48 needs an
-        // Elf spotted, and there is none yet.
-        AwaitingDecision firstCharacterDecision = _userFeedback.getAwaitingDecision(P1);
-        assertEquals(AwaitingDecisionType.ARBITRARY_CARDS, firstCharacterDecision.getDecisionType());
-        validateContents(new String[]{"1_50", "1_48"}, ((String[]) firstCharacterDecision.getDecisionParameters().get("blueprintId")));
-        Map<String, String> selectableByBlueprint = new HashMap<>();
-        String[] shownBlueprints = (String[]) firstCharacterDecision.getDecisionParameters().get("blueprintId");
-        String[] shownSelectable = (String[]) firstCharacterDecision.getDecisionParameters().get("selectable");
-        for (int i = 0; i < shownBlueprints.length; i++)
-            selectableByBlueprint.put(shownBlueprints[i], shownSelectable[i]);
-        assertEquals("true", selectableByBlueprint.get("1_50"));
-        assertEquals("false", selectableByBlueprint.get("1_48"));
+        // EVERY companion is shown AND selectable in the simultaneous choice
+        // -- 1_48 needs an Elf spotted and none is in play yet, but picking
+        // 1_50 first meets it at execution time, so legality cannot be judged
+        // here. The executor is the enforcement.
+        AwaitingDecision characterDecision = _userFeedback.getAwaitingDecision(P1);
+        assertEquals(AwaitingDecisionType.ARBITRARY_CARDS, characterDecision.getDecisionType());
+        validateContents(new String[]{"1_50", "1_48"}, ((String[]) characterDecision.getDecisionParameters().get("blueprintId")));
+        for (String selectable : (String[]) characterDecision.getDecisionParameters().get("selectable"))
+            assertEquals("true", selectable);
 
-        // The decision carries each shown companion's current twilight cost and
-        // the unspent budget (base 4 in EVERY format -- the limit is hardcoded
-        // in PlayerPlaysStartingFellowshipGameProcess and only card modifiers
-        // move it), so a client can grey out live what a growing selection
-        // prices out before anything is sent.
-        String[] shownCosts = (String[]) firstCharacterDecision.getDecisionParameters().get("twilightCost");
-        assertEquals(shownBlueprints.length, shownCosts.length);
-        assertEquals("4", ((String[]) firstCharacterDecision.getDecisionParameters().get("budgetRemaining"))[0]);
+        // The decision carries each shown companion's current twilight cost
+        // and the budget (base 4 in EVERY format -- the limit is hardcoded in
+        // the pregame processes and only card modifiers move it), so a client
+        // can grey out live what a growing selection prices out.
+        String[] shownCosts = (String[]) characterDecision.getDecisionParameters().get("twilightCost");
+        assertEquals(2, shownCosts.length);
+        assertEquals("4", ((String[]) characterDecision.getDecisionParameters().get("budgetRemaining"))[0]);
 
-        playerDecided(P1, getArbitraryCardId(firstCharacterDecision, "1_50"));
+        chooseStartingFellowship(P1, "1_50", "1_48");
+        if (_userFeedback.getAwaitingDecision(P2) != null
+                && _userFeedback.getAwaitingDecision(P2).getText().startsWith("Starting fellowship"))
+            playerDecided(P2, "");
 
-        // Play second character with spot requirement -- now legal, and the
-        // only companion left in the deck.
-        AwaitingDecision secondCharacterDecision = _userFeedback.getAwaitingDecision(P1);
-        assertEquals(AwaitingDecisionType.ARBITRARY_CARDS, secondCharacterDecision.getDecisionType());
-        validateContents(new String[]{"1_48"}, ((String[]) secondCharacterDecision.getDecisionParameters().get("blueprintId")));
+        assertTrue(companionInPlay("1_50"));
+        assertTrue(companionInPlay("1_48"));
+    }
 
-        playerDecided(P1, getArbitraryCardId(secondCharacterDecision, "1_48"));
+    @Test
+    public void startingFellowshipSpotRequirementRespectsPickOrder() throws DecisionResultInvalidException {
+        // Picked the other way round, 1_48 comes up while no Elf is spotted:
+        // it is SKIPPED (with a message, never silently) and 1_50 still plays.
+        Map<String, Collection<String>> extraCards = new HashMap<>();
+        extraCards.put(P1, Arrays.asList("1_50", "1_48"));
+        initializeSimplestGame(extraCards);
+
+        chooseStartingFellowship(P1, "1_48", "1_50");
+        if (_userFeedback.getAwaitingDecision(P2) != null
+                && _userFeedback.getAwaitingDecision(P2).getText().startsWith("Starting fellowship"))
+            playerDecided(P2, "");
+
+        assertTrue(companionInPlay("1_50"));
+        assertFalse(companionInPlay("1_48"));
     }
 
     @Test

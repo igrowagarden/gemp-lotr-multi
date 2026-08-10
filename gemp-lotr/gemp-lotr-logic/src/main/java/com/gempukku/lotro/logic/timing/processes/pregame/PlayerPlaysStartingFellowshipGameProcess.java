@@ -1,107 +1,69 @@
 package com.gempukku.lotro.logic.timing.processes.pregame;
 
-import com.gempukku.lotro.common.CardType;
-import com.gempukku.lotro.filters.Filter;
 import com.gempukku.lotro.filters.Filters;
 import com.gempukku.lotro.game.PhysicalCard;
 import com.gempukku.lotro.game.state.LotroGame;
+import com.gempukku.lotro.logic.GameUtils;
 import com.gempukku.lotro.logic.PlayUtils;
-import com.gempukku.lotro.logic.decisions.ArbitraryCardsSelectionDecision;
-import com.gempukku.lotro.logic.decisions.AwaitingDecision;
-import com.gempukku.lotro.logic.decisions.DecisionResultInvalidException;
 import com.gempukku.lotro.logic.timing.Action;
 import com.gempukku.lotro.logic.timing.processes.GameProcess;
 import com.gempukku.lotro.logic.timing.results.FinishedPlayingFellowshipResult;
 
-import java.util.Collection;
-import java.util.LinkedList;
-import java.util.List;
+import java.util.Deque;
 
+/**
+ * Plays one player's PRE-CHOSEN starting fellowship inside their pseudo-turn,
+ * one card per process step, with no decisions at all -- the choosing already
+ * happened, simultaneously for every seat, in
+ * {@link SimultaneousStartingFellowshipChoiceGameProcess}.
+ *
+ * Each card still goes through the real play action, so costs are paid from
+ * the player's own pool, discounts and play requirements are re-checked at
+ * the moment of play, and triggered responses fire as they always did. A
+ * pick that is NOT playable when its turn comes -- the budget ran out under
+ * a cost that rose, or a requirement failed -- is SKIPPED WITH A MESSAGE,
+ * never silently: the playtest's rule is that nothing may quietly drop.
+ * (The choice decision already refused any selection whose summed shown
+ * costs exceed the budget, so a skip here is rare and means the state moved
+ * between choosing and playing.)
+ */
 public class PlayerPlaysStartingFellowshipGameProcess implements GameProcess {
     private final String _playerId;
+    private final Deque<PhysicalCard> _remaining;
 
     private final GameProcess _followingGameProcess;
     private GameProcess _nextProcess;
 
-    public PlayerPlaysStartingFellowshipGameProcess(String playerId, GameProcess followingGameProcess) {
+    public PlayerPlaysStartingFellowshipGameProcess(String playerId, Deque<PhysicalCard> remaining,
+                                                    GameProcess followingGameProcess) {
         _playerId = playerId;
+        _remaining = remaining;
         _followingGameProcess = followingGameProcess;
     }
 
     @Override
     public void process(LotroGame game) {
-        Collection<PhysicalCard> possibleCharacters = getPossibleCharacters(game, _playerId);
-        if (possibleCharacters.isEmpty()) {
-            game.getActionsEnvironment().emitEffectResult(new FinishedPlayingFellowshipResult(_playerId));
-            _nextProcess = _followingGameProcess;
-        } else
-            game.getUserFeedback().sendAwaitingDecision(_playerId,
-                    createChooseNextCharacterDecision(game, _playerId, getAllCompanions(game, _playerId), possibleCharacters));
-    }
-
-    /**
-     * Every companion in the deck, playable or not. Shown so the player can see
-     * what the remaining twilight budget has priced out -- the decision greys
-     * them rather than removing them (selectable stays the affordable subset,
-     * and getSelectedCardsByResponse refuses anything outside it). Requested in
-     * the five-player playtest, but two-player behaviour changes identically.
-     */
-    private Collection<PhysicalCard> getAllCompanions(final LotroGame game, final String playerId) {
-        return Filters.filter(game, game.getGameState().getDeck(playerId), CardType.COMPANION);
-    }
-
-    private Collection<PhysicalCard> getPossibleCharacters(final LotroGame game, final String playerId) {
-        return Filters.filter(game, game.getGameState().getDeck(playerId),
-                CardType.COMPANION,
-                new Filter() {
-                    @Override
-                    public boolean accepts(LotroGame game, PhysicalCard physicalCard) {
-                        int twilightCost = game.getModifiersQuerying().getTwilightCostToPlay(game, physicalCard, null, 0, false);
-                        int startingFellowshipLimit = 4 + game.getModifiersQuerying().getStartingFellowshipCostModifier(game, playerId);
-                        return game.getGameState().getTwilightPool() + twilightCost <= startingFellowshipLimit
-                                && PlayUtils.checkPlayRequirements(game, physicalCard, Filters.any, 0, 0, false, false, true);
-                    }
-                });
-    }
-
-    private AwaitingDecision createChooseNextCharacterDecision(final LotroGame game, final String playerId, final Collection<PhysicalCard> allCompanions, final Collection<PhysicalCard> possibleCharacters) {
-        // Each shown companion's CURRENT twilight cost, and the budget still
-        // unspent, so a client can grey out live what a growing selection
-        // prices out BEFORE anything is sent -- the playtest picked four
-        // companions the budget could never fit and watched them silently
-        // drop. Extra parameters on the same decision; a client that ignores
-        // them behaves exactly as before, and the selectable set remains the
-        // engine's only word on what an answer may name.
-        final List<PhysicalCard> shown = new LinkedList<>(allCompanions);
-        final int limit = 4 + game.getModifiersQuerying().getStartingFellowshipCostModifier(game, playerId);
-        final int remaining = Math.max(0, limit - game.getGameState().getTwilightPool());
-        final String[] costs = new String[shown.size()];
-        int costIndex = 0;
-        for (PhysicalCard shownCard : shown)
-            costs[costIndex++] = String.valueOf(
-                    game.getModifiersQuerying().getTwilightCostToPlay(game, shownCard, null, 0, false));
-        return new ArbitraryCardsSelectionDecision(1, "Starting fellowship - Choose next character or press DONE",
-                shown, new LinkedList<>(possibleCharacters), 0, 1) {
-            {
-                setParam("twilightCost", costs);
-                setParam("budgetRemaining", String.valueOf(remaining));
+        while (!_remaining.isEmpty()) {
+            PhysicalCard card = _remaining.removeFirst();
+            if (playable(game, card)) {
+                Action playCardAction = PlayUtils.getPlayCardAction(game, card, 0, Filters.any, false);
+                game.getActionsEnvironment().addActionToStack(playCardAction);
+                _nextProcess = new PlayerPlaysStartingFellowshipGameProcess(_playerId, _remaining, _followingGameProcess);
+                return;
             }
-            @Override
-            public void decisionMade(String result) throws DecisionResultInvalidException {
-                List<PhysicalCard> selectedCharacters = getSelectedCardsByResponse(result);
-                if (selectedCharacters.size() == 0) {
-                    game.getActionsEnvironment().emitEffectResult(new FinishedPlayingFellowshipResult(_playerId));
-                    _nextProcess = _followingGameProcess;
-                } else {
-                    PhysicalCard selectedPhysicalCard = selectedCharacters.get(0);
-                    Action playCardAction = PlayUtils.getPlayCardAction(game, selectedPhysicalCard, 0, Filters.any, false);
-                    game.getActionsEnvironment().addActionToStack(playCardAction);
-                    _nextProcess = new PlayerPlaysStartingFellowshipGameProcess(_playerId, _followingGameProcess);
-                }
-            }
-        };
+            game.getGameState().sendMessage(_playerId + " could not play " + GameUtils.getFullName(card)
+                    + " - the starting fellowship budget no longer covers it, so it was skipped");
+        }
+        game.getActionsEnvironment().emitEffectResult(new FinishedPlayingFellowshipResult(_playerId));
+        _nextProcess = _followingGameProcess;
     }
 
+    private boolean playable(LotroGame game, PhysicalCard card) {
+        int twilightCost = game.getModifiersQuerying().getTwilightCostToPlay(game, card, null, 0, false);
+        int startingFellowshipLimit = 4 + game.getModifiersQuerying().getStartingFellowshipCostModifier(game, _playerId);
+        return game.getGameState().getTwilightPool() + twilightCost <= startingFellowshipLimit
+                && PlayUtils.checkPlayRequirements(game, card, Filters.any, 0, 0, false, false, true);
+    }
 
     @Override
     public GameProcess getNextProcess() {

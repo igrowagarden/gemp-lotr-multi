@@ -80,6 +80,11 @@ public class Card_V1_019_Tests
 		//scn.StartGame();
 		assertTrue(scn.FreepsDecisionAvailable("Starting fellowship"));
 		scn.FreepsChooseCard(aragorn);
+		// The choice is simultaneous now; Aragorn only actually PLAYS once
+		// every seat has answered, so close the Shadow selection first --
+		// without this the assertion below passes vacuously, before any play.
+		if (scn.ShadowDecisionAvailable("Starting fellowship"))
+			scn.ShadowChoose("");
 		assertFalse(scn.FreepsHasOptionalTriggerAvailable());
 	}
 

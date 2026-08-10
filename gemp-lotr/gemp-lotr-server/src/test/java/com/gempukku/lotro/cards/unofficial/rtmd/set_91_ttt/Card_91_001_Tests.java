@@ -1,6 +1,7 @@
 package com.gempukku.lotro.cards.unofficial.rtmd.set_91_ttt;
 
 import com.gempukku.lotro.common.CardType;
+import com.gempukku.lotro.common.Zone;
 import com.gempukku.lotro.framework.VirtualTableScenario;
 import com.gempukku.lotro.game.CardNotFoundException;
 import com.gempukku.lotro.logic.decisions.DecisionResultInvalidException;
@@ -9,6 +10,7 @@ import org.junit.Test;
 import java.util.HashMap;
 
 import static com.gempukku.lotro.framework.Assertions.assertInPlay;
+import static com.gempukku.lotro.framework.Assertions.assertNotInZone;
 import static org.junit.Assert.*;
 
 public class Card_91_001_Tests
@@ -73,52 +75,31 @@ public class Card_91_001_Tests
 	}
 
 	@Test
-	public void CanSelect5TwilightWorthWithModifier() throws DecisionResultInvalidException, CardNotFoundException {
+	public void CanPlay5TwilightWorthWithModifier() throws DecisionResultInvalidException, CardNotFoundException {
 		// 91_1: "Your starting companions may have a total twilight cost of 6 instead of 4."
-		// With the modifier, Gimli (2) + Boromir (3) = 5 should be selectable.
+		// The choice is ONE simultaneous multi-select now; the executor plays
+		// the picks in order and enforces the budget. Gimli (2) + Boromir (3)
+		// + Merry (1) = 6 fits the raised limit.
 
 		var scn = GetFreepsScenario();
 
-		var elessar = scn.GetFreepsCard("elessar");
 		var gimli = scn.GetFreepsCard("gimli");
 		var boromir = scn.GetFreepsCard("boromir");
 		var merry = scn.GetFreepsCard("merry");
 
-		// Starting fellowship decision should be available
 		assertTrue(scn.FreepsDecisionAvailable("Starting fellowship"));
+		scn.FreepsChooseCards(gimli, boromir, merry);
+		if (scn.ShadowDecisionAvailable("Starting fellowship"))
+			scn.ShadowChoose("");
 
-		assertTrue(scn.FreepsHasCardChoiceAvailable(elessar, gimli, boromir, merry));
-
-		// Select Gimli (cost 2), total = 2
-		scn.FreepsChooseCard(gimli);
-
-		// Boromir (cost 3) should still be available since 2 + 3 = 5 <= 6
-		assertTrue(scn.FreepsDecisionAvailable("Starting fellowship"));
-		assertTrue(scn.FreepsHasCardChoiceAvailable(boromir, merry));
-		assertTrue(scn.FreepsHasCardChoiceNotAvailable(elessar));
-		scn.FreepsChooseCard(boromir);
-
-		// Merry (cost 1) still available
-		assertTrue(scn.FreepsDecisionAvailable("Starting fellowship"));
-		assertTrue(scn.FreepsHasCardChoiceAvailable(merry));
-		scn.FreepsChooseCard(merry);
-
-		// Done selecting, finish starting fellowship
-		assertFalse(scn.FreepsDecisionAvailable("Starting fellowship"));
-		scn.ShadowDecided("");
-
-		// Now finish game setup
 		scn.StartGame(true, false);
-
-		// Both companions should be in play
 		assertInPlay(gimli, boromir, merry);
 	}
 
 	@Test
-	public void CanSelect6TwilightWorthWithModifier() throws DecisionResultInvalidException, CardNotFoundException {
-		// 91_1: With the modifier, Gimli (2) + Legolas (2) + Boromir (3) would be 7,
-		// which exceeds 6. After selecting Gimli + Legolas (4 total), Boromir (3) should
-		// NOT be available because 4 + 3 = 7 > 6.
+	public void CannotExceed6TwilightWithModifier() throws DecisionResultInvalidException, CardNotFoundException {
+		// 91_1: Gimli (2) + Legolas (2) + Boromir (3) = 7 exceeds 6. The
+		// executor plays the first two and SKIPS Boromir with a message.
 
 		var scn = GetFreepsScenario();
 
@@ -127,24 +108,18 @@ public class Card_91_001_Tests
 		var boromir = scn.GetFreepsCard("boromir");
 
 		assertTrue(scn.FreepsDecisionAvailable("Starting fellowship"));
+		scn.FreepsChooseCards(gimli, legolas, boromir);
+		if (scn.ShadowDecisionAvailable("Starting fellowship"))
+			scn.ShadowChoose("");
 
-		// Select Gimli (2) + Legolas (2) = 4
-		scn.FreepsChooseCard(gimli);
-		scn.FreepsChooseCard(legolas);
-
-		// Boromir (3) should NOT be available since 4 + 3 = 7 > 6
-		assertTrue(scn.FreepsDecisionAvailable("Starting fellowship"));
-		assertFalse(scn.FreepsHasCardChoiceAvailable(boromir));
-
-		// Done
-		scn.FreepsChoose("");
-		scn.StartGame(true, false);
+		assertInPlay(gimli, legolas);
+		assertNotInZone(Zone.FREE_CHARACTERS, boromir);
 	}
 
 	@Test
-	public void CannotSelect5TwilightWorthWithoutModifier() throws DecisionResultInvalidException, CardNotFoundException {
-		// Without the modifier, Gimli (2) + Boromir (3) = 5 exceeds the normal limit of 4.
-		// After selecting Gimli (2), Boromir (3) should NOT be available.
+	public void CannotPlay5TwilightWorthWithoutModifier() throws DecisionResultInvalidException, CardNotFoundException {
+		// Without the modifier, Gimli (2) + Boromir (3) = 5 exceeds the normal
+		// limit of 4: Boromir is skipped at execution.
 
 		var scn = GetNoModScenario();
 
@@ -152,80 +127,49 @@ public class Card_91_001_Tests
 		var boromir = scn.GetFreepsCard("boromir");
 
 		assertTrue(scn.FreepsDecisionAvailable("Starting fellowship"));
+		scn.FreepsChooseCards(gimli, boromir);
+		if (scn.ShadowDecisionAvailable("Starting fellowship"))
+			scn.ShadowChoose("");
 
-		// Select Gimli (cost 2), total = 2
-		scn.FreepsChooseCard(gimli);
-
-		// Boromir (cost 3) should NOT be available since 2 + 3 = 5 > 4
-		assertTrue(scn.FreepsDecisionAvailable("Starting fellowship"));
-		assertFalse(scn.FreepsHasCardChoiceAvailable(boromir));
+		assertInPlay(gimli);
+		assertNotInZone(Zone.FREE_CHARACTERS, boromir);
 	}
 
 	@Test
 	public void ShadowCopyDoesNotAffectFreeps() throws DecisionResultInvalidException, CardNotFoundException {
-		// 91_1: "Your starting companions" — Shadow's copy should not affect the FP
-		// player's starting fellowship limit.
+		// 91_1: "Your starting companions" -- Shadow's copy must not raise the
+		// FP player's limit: Gimli (2) + Boromir (3) = 5 > 4, Boromir skipped.
 
 		var scn = GetShadowScenario();
 
 		var gimli = scn.GetFreepsCard("gimli");
 		var boromir = scn.GetFreepsCard("boromir");
-		var merry = scn.GetFreepsCard("merry");
-		var elessar = scn.GetFreepsCard("elessar");
 
 		assertTrue(scn.FreepsDecisionAvailable("Starting fellowship"));
-		assertTrue(scn.FreepsHasCardChoiceAvailable(boromir, gimli, merry));
-		assertTrue(scn.FreepsHasCardChoiceNotAvailable(elessar));
+		scn.FreepsChooseCards(gimli, boromir);
+		if (scn.ShadowDecisionAvailable("Starting fellowship"))
+			scn.ShadowChoose("");
 
-		// Select Gimli (cost 2)
-		scn.FreepsChooseCard(gimli);
-		assertTrue(scn.FreepsDecisionAvailable("Starting fellowship"));
-
-		// Without FP having the modifier, Boromir (3) should NOT be available: 2+3=5 > 4
-		assertFalse(scn.FreepsHasCardChoiceAvailable(boromir));
+		assertInPlay(gimli);
+		assertNotInZone(Zone.FREE_CHARACTERS, boromir);
 	}
 
 	@Test
 	public void ShadowCopyWorks() throws DecisionResultInvalidException, CardNotFoundException {
-		// 91_1: "Your starting companions may have a total twilight cost of 6 instead of 4."
-		// With the modifier, Gimli (2) + Boromir (3) = 5 should be selectable.
+		// 91_1 on the Shadow side: their own starting companions get the raised
+		// limit of 6. Both selections are open SIMULTANEOUSLY.
 
 		var scn = GetShadowScenario();
 
-		var elessar = scn.GetShadowCard("elessar");
 		var gimli = scn.GetShadowCard("gimli");
 		var boromir = scn.GetShadowCard("boromir");
 		var merry = scn.GetShadowCard("merry");
 
-		scn.FreepsDecided("");
-
-		// Starting fellowship decision should be available
 		assertTrue(scn.ShadowDecisionAvailable("Starting fellowship"));
+		scn.FreepsChoose("");
+		scn.ShadowChooseCards(gimli, boromir, merry);
 
-		assertTrue(scn.ShadowHasCardChoiceAvailable(elessar, gimli, boromir, merry));
-
-		// Select Gimli (cost 2), total = 2
-		scn.ShadowChooseCard(gimli);
-
-		// Boromir (cost 3) should still be available since 2 + 3 = 5 <= 6
-		assertTrue(scn.ShadowDecisionAvailable("Starting fellowship"));
-		assertTrue(scn.ShadowHasCardChoiceAvailable(boromir, merry));
-		assertTrue(scn.ShadowHasCardChoiceNotAvailable(elessar));
-		scn.ShadowChooseCard(boromir);
-
-		// Merry (cost 1) still available
-		assertTrue(scn.ShadowDecisionAvailable("Starting fellowship"));
-		assertTrue(scn.ShadowHasCardChoiceAvailable(merry));
-		scn.ShadowChooseCard(merry);
-
-		// Done selecting, finish starting fellowship
-		assertFalse(scn.ShadowDecisionAvailable("Starting fellowship"));
-
-
-		// Now finish game setup
 		scn.StartGame(true, false);
-
-		// Both companions should be in play
 		assertInPlay(gimli, boromir, merry);
 	}
 }

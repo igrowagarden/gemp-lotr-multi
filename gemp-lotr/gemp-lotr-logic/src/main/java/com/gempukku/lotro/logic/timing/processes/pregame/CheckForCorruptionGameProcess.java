@@ -31,7 +31,10 @@ public class CheckForCorruptionGameProcess implements GameProcess {
             game.getGameState().stopAffectingCardsForCurrentPlayer();
         }
 
-        _nextProcess = new PlayStartingFellowshipGameProcess(game.getGameState().getPlayerOrder().getClockwisePlayOrder(_firstPlayer, false), _firstPlayer);
+        // Everyone CHOOSES simultaneously (playtest ruling), then the
+        // pseudo-turn chain inside plays the stored picks in seating order.
+        _nextProcess = new SimultaneousStartingFellowshipChoiceGameProcess(
+                game.getGameState().getPlayerOrder().getClockwisePlayOrder(_firstPlayer, false), _firstPlayer);
     }
 
     @Override

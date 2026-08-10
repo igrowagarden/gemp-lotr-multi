@@ -138,8 +138,8 @@ public class Card_13_137_Tests
 		//scn.StartGame();
 
 		scn.FreepsPassCurrentPhaseAction();
-		scn.ShadowChooseCardBPFromSelection(theoden);
-		scn.ShadowChooseCardBPFromSelection(theodred);
+		// One simultaneous multi-select per seat now; both picks in one answer.
+		scn.ShadowChooseCardBPFromSelection(theoden, theodred);
 
 		scn.SkipMulligans();
 
@@ -167,8 +167,8 @@ public class Card_13_137_Tests
 
 		scn.FreepsPassCurrentPhaseAction();
 
-		scn.ShadowChooseCardBPFromSelection(eviltheoden);
-		scn.ShadowChooseCardBPFromSelection(eviltheodred);
+		// One simultaneous multi-select per seat now; both picks in one answer.
+		scn.ShadowChooseCardBPFromSelection(eviltheoden, eviltheodred);
 
 		scn.SkipMulligans();
 		scn.SkipToSite(2);

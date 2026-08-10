@@ -345,8 +345,24 @@ public class IndividualCardAtTest extends AbstractAtTest {
 
         initializeGameWithDecks(decks);
 
+        // The simultaneous choice OFFERS every companion in the deck -- an
+        // extra Frodo included -- because legality depends on play order and
+        // is judged by the executor. Picking him must leave him unplayed.
         AwaitingDecision decision = _userFeedback.getAwaitingDecision(P1);
-        assertEquals(AwaitingDecisionType.MULTIPLE_CHOICE, decision.getDecisionType());
+        assertEquals(AwaitingDecisionType.ARBITRARY_CARDS, decision.getDecisionType());
+        playerDecided(P1, getArbitraryCardId(decision, "4_301"));
+        if (_userFeedback.getAwaitingDecision(P2) != null
+                && _userFeedback.getAwaitingDecision(P2).getText().startsWith("Starting fellowship"))
+            playerDecided(P2, "");
+
+        boolean stillUnplayed = false;
+        for (PhysicalCard card : _game.getGameState().getDeck(P1))
+            if (card.getBlueprintId().equals("4_301")) stillUnplayed = true;
+        for (PhysicalCard card : _game.getGameState().getHand(P1))
+            if (card.getBlueprintId().equals("4_301")) stillUnplayed = true;
+        assertTrue("the second Frodo must be skipped, not played", stillUnplayed);
+        assertEquals(AwaitingDecisionType.MULTIPLE_CHOICE,
+                _userFeedback.getAwaitingDecision(P1).getDecisionType());
     }
 
     @Test
@@ -967,9 +983,11 @@ public class IndividualCardAtTest extends AbstractAtTest {
         // Seating choice
         playerDecided(P1, "0");
 
-        // Play starting fellowship
+        // Play starting fellowship -- ONE simultaneous multi-select per seat.
         playerDecided(P1, "temp0");
-        playerDecided(P1, "temp0");
+        if (_userFeedback.getAwaitingDecision(P2) != null
+                && _userFeedback.getAwaitingDecision(P2).getText().startsWith("Starting fellowship"))
+            playerDecided(P2, "");
 
         assertTrue(_userFeedback.getAwaitingDecision(P1).getText().startsWith("Do you wish to mulligan"));
     }

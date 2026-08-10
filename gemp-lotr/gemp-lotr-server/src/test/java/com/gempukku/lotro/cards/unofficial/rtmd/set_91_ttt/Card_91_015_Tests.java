@@ -1,6 +1,8 @@
 package com.gempukku.lotro.cards.unofficial.rtmd.set_91_ttt;
 
 import com.gempukku.lotro.common.CardType;
+import com.gempukku.lotro.common.Zone;
+import com.gempukku.lotro.framework.Assertions;
 import com.gempukku.lotro.framework.VirtualTableScenario;
 import com.gempukku.lotro.game.CardNotFoundException;
 import com.gempukku.lotro.logic.decisions.DecisionResultInvalidException;
@@ -86,9 +88,13 @@ public class Card_91_015_Tests
 
 
 	@Test
-	public void FreepsCannotSelectManInStartingFellowship() throws DecisionResultInvalidException, CardNotFoundException {
+	public void FreepsCannotStartManInStartingFellowship() throws DecisionResultInvalidException, CardNotFoundException {
 		// 91_15: "You may not play Men."
-		// Man companions should not be selectable during starting fellowship.
+		// The starting-fellowship choice is one simultaneous multi-select now
+		// (SimultaneousStartingFellowshipChoiceGameProcess) and every
+		// companion is offered -- legality is judged by the EXECUTOR, which
+		// plays each pick through the real play requirements. A prohibited
+		// Man companion is skipped with a message; the Elf plays.
 
 		var scn = GetFreepsScenario();
 
@@ -96,11 +102,12 @@ public class Card_91_015_Tests
 		var legolas = scn.GetFreepsCard("legolas");
 
 		assertTrue(scn.FreepsDecisionAvailable("Starting fellowship"));
+		scn.FreepsChooseCards(aragorn, legolas);
+		if (scn.ShadowDecisionAvailable("Starting fellowship"))
+			scn.ShadowChoose("");
 
-		// Aragorn (Man) should NOT be available for starting fellowship
-		assertFalse(scn.FreepsHasCardChoiceAvailable(aragorn));
-		// Legolas (Elf) should be available
-		assertTrue(scn.FreepsHasCardChoiceAvailable(legolas));
+		Assertions.assertInZone(Zone.FREE_CHARACTERS, legolas);
+		Assertions.assertNotInZone(Zone.FREE_CHARACTERS, aragorn);
 	}
 
 	@Test
