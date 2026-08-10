@@ -695,14 +695,20 @@ body {
 .pnote { font-family: var(--mono); font-size: 9px; color: var(--ink-3); }
 
 /* piles and zoom */
+/* Big and high-contrast (playtest: "you can't see their pop out icons...
+   make the icons high contrast and bigger, there's tons of space"). */
 .pilebtn {
-  position: absolute; top: 2px; right: 3px; width: 13px; height: 13px; padding: 0;
+  position: absolute; top: 2px; right: 3px; width: 20px; height: 20px; padding: 0;
   display: grid; place-items: center; cursor: pointer;
-  font-family: var(--mono); font-size: 9px; line-height: 1;
-  color: var(--ink-3); background: transparent;
-  border: 1px solid var(--rule-2); border-radius: 2px;
+  font-family: var(--mono); font-size: 13px; line-height: 1;
+  color: var(--ink); background: var(--surface);
+  border: 1px solid var(--ink-3); border-radius: 3px;
 }
 .pilebtn:hover { color: var(--brass); border-color: var(--brass); }
+/* The Free Peoples chip is inverse-highlighted -- light ground -- which made
+   the dark-theme buttons vanish into it. Dark glyph on the light chip. */
+.seat.fp .pilebtn { color: var(--ground); background: transparent; border-color: var(--ground); }
+.seat.fp .pilebtn:hover { color: var(--free); background: var(--ground); border-color: var(--ground); }
 
 .flyout--piles { left: 6px; top: 22%; width: 300px; height: 220px; }
 /* No docked tab, so a shut piles window leaves nothing behind at all rather
@@ -756,7 +762,7 @@ body {
 .zoom { overflow: hidden; }
 .zoom .z-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
 
-.seatbtns { position: absolute; top: 2px; right: 3px; display: flex; gap: 2px; }
+.seatbtns { position: absolute; top: 2px; right: 3px; display: flex; gap: 4px; }
 .seatbtns .pilebtn { position: static; }
 
 /* Seat carousel arrows.

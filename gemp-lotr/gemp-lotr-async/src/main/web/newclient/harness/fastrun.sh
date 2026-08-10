@@ -64,7 +64,10 @@ run_page() {   # run_page <name> <path> [cdnflag] -> RESULT line or empty
   # --window-size: headless defaults to 800x600, where the geometry suites
   # measure DEGENERATE layouts -- assigncheck's fightbox rendered 2px-wide
   # cards there and its overlap assertion judged noise, not the design.
-  timeout 60 "$CHROME" --headless --disable-gpu --window-size=1500,950 ${cdn:+"$CDN"} \
+  # --disable-popup-blocking: headless blocks window.open without a user
+  # gesture, and detachcheck's whole subject is a popped-out window.
+  timeout 60 "$CHROME" --headless --disable-gpu --window-size=1500,950 \
+    --disable-popup-blocking ${cdn:+"$CDN"} \
     --user-data-dir="$TMP/cr_$name" \
     --dump-dom --virtual-time-budget=20000 "$BASE/$path" 2>/dev/null \
     | sed -e 's/<[^>]*>//g' | grep -E "^RESULT:" | head -1
@@ -79,6 +82,7 @@ attachcheck|dev/attachcheck.html|
 autopasscheck|dev/autopasscheck.html|
 cardstatecheck|dev/cardstatecheck.html|
 chatcheck|dev/chatcheck.html|
+detachcheck|dev/detachcheck.html|block
 flipcheck|dev/flipcheck.html|
 navcheck|dev/navcheck.html|
 pathcheck|dev/pathcheck.html|

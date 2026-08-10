@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>detached window check</title>
+<link rel="stylesheet" href="../styles/board.css">
+<style>body{font-family:ui-monospace,Consolas,monospace;font-size:13px;padding:10px}
+.pass{color:#6E9B7A}.fail{color:#FF5240}</style></head>
+<body><div id="out"></div>
+<script type="module">
+/**
+ * A seat detached into its own window is a second VIEW: one store, one
+ * connection, read-only. The playtest asked for it to stop being a lesser
+ * one: the hover zoom and the draggable row boundaries work there too, and
+ * the window paints the moment it opens rather than on the next event.
+ */
+import { createStore } from "../state/store.js";
+import { decodeEvents } from "../net/protocol.js";
+import { createDetacher } from "../view/detach.js";
+import * as fixture from "./fixture.js";
+
+const out = document.getElementById("out");
+let pass = 0, fail = 0;
+const ok = (l, c, d) => { const e = document.createElement("div");
+  e.className = c ? "pass" : "fail";
+  e.textContent = (c ? "PASS  " : "FAIL  ") + l + (c || !d ? "" : "  -> " + d);
+  out.appendChild(e); c ? pass++ : fail++; };
+
+const store = createStore("asdf");
+store.dispatchAll(decodeEvents(fixture.setup()));
+store.dispatchAll(decodeEvents(fixture.shadowPhase()));
+
+const notes = [];
+const detacher = createDetacher(store, { onNote: (t) => notes.push(t) });
+
+const opened = detacher.detach("carol");
+ok("detach opens a window", opened === true, notes.join(" | "));
+const win = window.open("", "gemp-seat-carol");   // same name -> same window
+const doc = win?.document;
+const seat = doc?.getElementById("seat");
+ok("the window has a seat root", !!seat);
+
+// The window paints IMMEDIATELY -- it used to stay blank until the next
+// store event, which during a quiet moment was a long time to show nothing.
+const bands = () => [...(seat?.querySelectorAll(".band") ?? [])];
+ok("it painted on open, without waiting for an event", bands().length === 3,
+   `${bands().length} bands`);
+ok("with cards in them",
+   (seat?.querySelectorAll(".card[data-card-id]").length ?? 0) > 0,
+   `${seat?.querySelectorAll(".card[data-card-id]").length} cards`);
+
+// The hover zoom, same module as the main board, hosted on the BODY so a
+// repaint of #seat cannot kill it.
+const zoom = doc?.querySelector("body > .zoom");
+ok("the window has its own hover zoom", !!zoom);
+{
+  const card = seat?.querySelector(".card[data-card-id]");
+  card?.dispatchEvent(new win.MouseEvent("mouseover", { bubbles: true }));
+  ok("hovering a card turns the preview on", zoom?.classList.contains("on"));
+  doc?.body.dispatchEvent(new win.MouseEvent("mouseleave"));
+}
+
+// The row boundaries DRAG, exactly as on the main board: the pair trades
+// weight, and the dragged heights survive a repaint.
+{
+  const dividers = seat?.querySelectorAll(".banddivider") ?? [];
+  ok("a divider sits between each pair of bands", dividers.length === 2,
+     String(dividers.length));
+  const div = dividers[0];
+  const above = div?.previousElementSibling, below = div?.nextElementSibling;
+  const wA0 = parseFloat(win.getComputedStyle(above).flexGrow);
+  const wB0 = parseFloat(win.getComputedStyle(below).flexGrow);
+  div?.dispatchEvent(new win.PointerEvent("pointerdown",
+    { button: 0, clientY: 200, bubbles: true }));
+  doc?.dispatchEvent(new win.PointerEvent("pointermove",
+    { clientY: 260, bubbles: true }));
+  const wA1 = parseFloat(above.style.flexGrow), wB1 = parseFloat(below.style.flexGrow);
+  ok("dragging down grows the band above and shrinks the one below",
+     wA1 > wA0 && wB1 < wB0, `${wA0}->${wA1} / ${wB0}->${wB1}`);
+  ok("the pair trades weight, nothing else moves",
+     Math.abs((wA1 + wB1) - (wA0 + wB0)) < 0.001, `${wA0 + wB0} -> ${wA1 + wB1}`);
+  doc?.dispatchEvent(new win.PointerEvent("pointerup", { bubbles: true }));
+
+  store.dispatchAll(decodeEvents(`<events><ge type="TP" count="9"/></events>`));
+  const again = seat?.querySelector(`.band[data-band="${above.dataset.band}"]`);
+  ok("the dragged height survives a repaint",
+     Math.abs(parseFloat(win.getComputedStyle(again).flexGrow) - wA1) < 0.001,
+     `${win.getComputedStyle(again).flexGrow} vs ${wA1}`);
+  ok("and the zoom survived that repaint too",
+     !!doc?.querySelector("body > .zoom"));
+}
+
+ok("the detacher knows the seat is out", detacher.isDetached("carol") === true);
+detacher.detach("carol");                       // toggles: second call closes
+ok("detaching again closes the window", win.closed === true ||
+   detacher.isDetached("carol") === false);
+detacher.closeAll();
+
+const r = document.createElement("div");
+r.id = "result"; r.className = fail === 0 ? "pass" : "fail";
+r.textContent = fail === 0 ? `RESULT: ALL PASS (${pass})` : `RESULT: ${fail} FAILED of ${pass + fail}`;
+document.body.appendChild(r);
+</script></body></html>

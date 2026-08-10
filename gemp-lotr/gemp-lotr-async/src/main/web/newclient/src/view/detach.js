@@ -23,6 +23,7 @@
  */
 
 import { renderCard } from "./card.js";
+import { createZoom } from "./piles.js";
 import { minionsOf, handSize, threats, clockOf, formatClock, pileSize }
   from "../state/reduce.js";
 
@@ -53,7 +54,52 @@ function copyStyles(from, to) {
   if (theme) to.documentElement.setAttribute("data-theme", theme);
 }
 
-function paint(win, playerId, state) {
+/**
+ * The boundary between two of the window's bands drags to resize them --
+ * the same feature the main board's rows have, because the ruling was
+ * "adjustable at all times", not "adjustable on the big board". Weights
+ * live in the per-window map so they survive every repaint; the move/up
+ * listeners are on the CHILD window's document and look the bands up fresh
+ * per move, since a store event mid-drag rebuilds everything.
+ */
+function makeDivider(doc, weights, aboveId, belowId) {
+  const divider = el(doc, "div", "banddivider");
+  divider.title = "Drag to resize the rows above and below";
+  divider.addEventListener("pointerdown", (down) => {
+    if (down.button !== 0) return;
+    down.preventDefault();
+    const find = (id) => doc.querySelector(`#seat .band[data-band="${id}"]`);
+    const a = find(aboveId), b = find(belowId);
+    if (!a || !b) return;
+    const hA = a.getBoundingClientRect().height;
+    const hB = b.getBoundingClientRect().height;
+    const win = doc.defaultView;
+    const pair = parseFloat(win.getComputedStyle(a).flexGrow) +
+                 parseFloat(win.getComputedStyle(b).flexGrow);
+    if (!(pair > 0) || !(hA + hB > 0)) return;
+    doc.getElementById("seat")?.classList.add("is-resizing");
+    const move = (e) => {
+      const frac = Math.min(0.9, Math.max(0.1,
+        (hA + e.clientY - down.clientY) / (hA + hB)));
+      const wA = pair * frac;
+      weights.set(aboveId, wA);
+      weights.set(belowId, pair - wA);
+      const na = find(aboveId), nb = find(belowId);
+      if (na) na.style.flexGrow = String(wA);
+      if (nb) nb.style.flexGrow = String(pair - wA);
+    };
+    const up = () => {
+      doc.getElementById("seat")?.classList.remove("is-resizing");
+      doc.removeEventListener("pointermove", move);
+      doc.removeEventListener("pointerup", up);
+    };
+    doc.addEventListener("pointermove", move);
+    doc.addEventListener("pointerup", up);
+  });
+  return divider;
+}
+
+function paint(win, playerId, state, weights) {
   const doc = win.document;
   const root = doc.getElementById("seat");
   if (!root) return;
@@ -74,8 +120,13 @@ function paint(win, playerId, state) {
   root.appendChild(vitals);
 
   const cards = Object.values(state.cards).filter((c) => c.owner === playerId);
-  const band = (title, list, tone) => {
+  let prev = null;
+  const band = (id, title, list, tone, defaultWeight) => {
+    if (prev) root.appendChild(makeDivider(doc, weights, prev, id));
+    prev = id;
     const box = el(doc, "div", `band band--${tone}`);
+    box.dataset.band = id;
+    box.style.flexGrow = String(weights.get(id) ?? defaultWeight);
     box.appendChild(el(doc, "span", "band-label", `${title} · ${list.length}`));
     if (!list.length) {
       box.appendChild(el(doc, "span", "band-empty", "Nothing in play."));
@@ -87,9 +138,9 @@ function paint(win, playerId, state) {
     root.appendChild(box);
   };
 
-  band("Free characters", cards.filter((c) => c.zone === "FREE_CHARACTERS"), "free");
-  band("Minions", minionsOf(state, playerId), "shadow");
-  band("Support area", cards.filter((c) => c.zone === "SUPPORT"), "plain");
+  band("free", "Free characters", cards.filter((c) => c.zone === "FREE_CHARACTERS"), "free", 1);
+  band("minions", "Minions", minionsOf(state, playerId), "shadow", 1);
+  band("support", "Support area", cards.filter((c) => c.zone === "SUPPORT"), "plain", 0.6);
 }
 
 /**
@@ -120,13 +171,20 @@ export function createDetacher(store, { onNote = () => {} } = {}) {
       copyStyles(document, win.document);
       const extra = win.document.createElement("style");
       extra.textContent =
-        "body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--body)}" +
+        "body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--body);position:relative}" +
         "#seat{box-sizing:border-box;height:100vh;padding:10px;display:flex;flex-direction:column;gap:8px}" +
         ".d-who{font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--brass)}" +
         ".d-vitals{display:flex;gap:10px;font-family:var(--mono);font-size:10px;color:var(--ink-3)}" +
-        "#seat .band{flex:1}#seat .band:last-child{flex:.6}";
+        // Bands size by flex weight, set inline per band so a dragged divider
+        // sticks; kill the height transition while a drag is live, exactly as
+        // the main board does.
+        "#seat.is-resizing .band{transition:none}#seat.is-resizing{cursor:row-resize}";
       win.document.head.appendChild(extra);
       win.document.body.innerHTML = '<div id="seat"></div>';
+      // The hover preview, same module the main board uses. Hosted on the
+      // BODY, not #seat -- every repaint wipes #seat, and the zoom node has
+      // to outlive that or the preview dies on the first store event.
+      createZoom(win.document.body);
     } catch (err) {
       // A sandboxed popup can be handed back with an opaque origin: the window
       // exists but its document is unreachable. Say so rather than looking dead.
@@ -135,10 +193,18 @@ export function createDetacher(store, { onNote = () => {} } = {}) {
       return false;
     }
 
+    // Dragged band heights for THIS window, band id -> flex weight. Lives
+    // beside the subscription so it survives every repaint and dies with the
+    // window.
+    const weights = new Map();
     const unsubscribe = store.subscribe((state) => {
       if (win.closed) return;
-      try { paint(win, playerId, state); } catch (ignored) { /* window went away */ }
+      try { paint(win, playerId, state, weights); } catch (ignored) { /* window went away */ }
     });
+
+    // Paint NOW rather than on the next store event -- a detach during a
+    // quiet moment used to open a blank window until something happened.
+    try { paint(win, playerId, store.getState(), weights); } catch (ignored) {}
 
     win.addEventListener("pagehide", () => {
       unsubscribe();
