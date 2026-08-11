@@ -571,7 +571,7 @@
 				phase: shadow
 				cost: {
 					type: exert
-					select: choose(culture(orc),minion)
+					select: choose(your,culture(orc),minion)
 					count: 3
 				}
 				requires: {

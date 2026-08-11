@@ -17,7 +17,7 @@
 			type: event
 			cost: {
 				type: exert
-				select: choose(enduring,culture(wraith),minion)
+				select: choose(your,enduring,culture(wraith),minion)
 				times: 2
 				memorize: exertedMinion
 			},

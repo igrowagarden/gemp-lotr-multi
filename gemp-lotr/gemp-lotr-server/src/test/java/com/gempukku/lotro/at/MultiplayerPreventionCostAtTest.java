@@ -117,13 +117,9 @@ public class MultiplayerPreventionCostAtTest {
                 scn.DecisionAvailable(accepter, "prevent"));
         scn.ChooseOption(accepter, "Yes");
 
-        assertNotNull("the opponent who accepted should be the one asked to pay; pending: "
-                + Pending(scn), scn.userFeedback().getAwaitingDecision(accepter));
-        assertNull("the opponent who declined should not be asked to pay; pending: "
-                + Pending(scn), scn.userFeedback().getAwaitingDecision(decliner));
-
-        scn.ChooseCards(accepter, acceptersMinion);
-
+        // With the cost scoped to `your` (ruled 2026-08-10), the accepter's
+        // only minion is the only candidate and the choice auto-resolves --
+        // no ChooseCards decision appears.
         assertEquals("the accepting player's own minion carries the cost",
                 2, scn.GetWoundsOn(acceptersMinion));
         assertEquals("the declining player's minion is untouched",
@@ -131,26 +127,19 @@ public class MultiplayerPreventionCostAtTest {
     }
 
     /**
-     * Every opponent is offered the prevention when only ONE of them has a
-     * minion, because `select: choose(minion)` is not scoped to the payer.
+     * An opponent with no minion of their own is NOT offered the prevention.
      *
-     * This test started life asserting the opposite -- that an opponent with no
-     * minion could not pay, so `areCostsPlayable` reading the wrong seat's board
-     * would suppress the offer entirely. It failed, and the failure is the
-     * finding: with an unscoped selection there is no such thing as an opponent
-     * who cannot pay, as long as ANY minion is on the table. A player with no
-     * minions of their own is offered the prevention and can pay it by exerting
-     * somebody else's.
-     *
-     * Whether that is right is a rules question this project cannot settle from
-     * the source. The card says "an opponent may exert A MINION twice", with no
-     * "his or her" -- and at two players every minion belongs to the only
-     * opponent, so the text never had to disambiguate. Left as it is, and
-     * pinned by this test, rather than guessed at -- so that a future ruling has
-     * something concrete to change.
+     * An earlier version of this test pinned the OPPOSITE: with the cost
+     * unscoped, every opponent could "afford" it by exerting somebody else's
+     * minion, so everyone was offered it. That was left in place deliberately,
+     * "so that a future ruling has something concrete to change" -- and the
+     * ruling came (2026-08-10, the card audit): a cost cannot be paid with
+     * another player's card. The cost is now `choose(your,minion)`, and
+     * PreventableEffectAppender's affordability check therefore skips the
+     * seat that owns nothing -- the same mechanism 5_89 uses.
      */
     @Test
-    public void everyOpponentIsOfferedIt_becauseTheCostIsNotScopedToThePayer() throws Exception {
+    public void anOpponentWithNoMinionOfTheirOwnIsNotOffered() throws Exception {
         var scn = ThreeSeats();
         scn.MoveCompanionsToTable(scn.GetCardFor(P1, "smeagol"));
         scn.MoveCardsToHand(scn.GetCardFor(P1, "beBackSoon"));
@@ -166,11 +155,11 @@ public class MultiplayerPreventionCostAtTest {
         scn.PassUntilDecision(P1, "Maneuver action");
         scn.PlayerDecided(P1, scn.GetCardActionId(P1, scn.GetCardFor(P1, "beBackSoon")));
 
-        assertTrue("the first opponent is offered it even owning no minion; pending: "
-                + Pending(scn), scn.DecisionAvailable(withoutAMinion, "prevent"));
-        scn.ChooseOption(withoutAMinion, "No");
-
-        assertTrue("and so is the opponent who does own one; pending: " + Pending(scn),
-                scn.DecisionAvailable(withAMinion, "prevent"));
+        assertTrue("the opponent who owns a minion is offered it; pending: "
+                + Pending(scn), scn.DecisionAvailable(withAMinion, "prevent"));
+        assertFalse("the opponent with no minion of their own cannot pay and"
+                        + " must not be asked -- being asked was the pre-ruling"
+                        + " behaviour; pending: " + Pending(scn),
+                scn.DecisionAvailable(withoutAMinion, "prevent"));
     }
 }

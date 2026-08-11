@@ -263,7 +263,7 @@
 			}
 			cost: {
 				type: exert
-				select: choose(culture(isengard),minion)
+				select: choose(your,culture(isengard),minion)
 			}
 			effect: [
 				{

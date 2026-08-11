@@ -169,7 +169,7 @@
 			}
 			cost: {
 				type: exert
-				select: choose(culture(isengard),minion)
+				select: choose(your,culture(isengard),minion)
 			}
 			effect: {
 				type: discard
@@ -208,7 +208,7 @@
 			type: event
 			cost: {
 				type: exert
-				select: choose(culture(isengard),minion)
+				select: choose(your,culture(isengard),minion)
 			}
 			effect: {
 				type: choice
@@ -638,7 +638,7 @@
 				type: extraCost
 				cost: {
 					type: exert
-					select: choose(culture(isengard),minion)
+					select: choose(your,culture(isengard),minion)
 				}
 			}
 			{
@@ -698,7 +698,7 @@
 				type: extraCost
 				cost: {
 					type: exert
-					select: choose(culture(isengard),minion)
+					select: choose(your,culture(isengard),minion)
 				}
 			}
 			{
@@ -754,7 +754,7 @@
 			type: event
 			cost: {
 				type: exert
-				select: choose(culture(isengard),minion)
+				select: choose(your,culture(isengard),minion)
 			}
 			effect: {
 				type: discard
@@ -844,7 +844,7 @@
 				type: extraCost
 				cost: {
 					type: exert
-					select: choose(culture(isengard),minion)
+					select: choose(your,culture(isengard),minion)
 				}
 			}
 			{
@@ -963,7 +963,7 @@
 				type: extraCost
 				cost: {
 					type: exert
-					select: choose(culture(isengard),minion)
+					select: choose(your,culture(isengard),minion)
 				}
 			}
 			{

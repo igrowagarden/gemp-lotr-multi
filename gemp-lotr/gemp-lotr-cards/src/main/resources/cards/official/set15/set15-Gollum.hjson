@@ -170,7 +170,7 @@
 			type: event
 			cost: {
 				type: discard
-				select: choose(culture(gollum),minion)
+				select: choose(your,culture(gollum),minion)
 			}
 			effect: [
 				{
@@ -775,7 +775,7 @@
 			type: event
 			cost: {
 				type: discard
-				select: choose(culture(gollum),minion)
+				select: choose(your,culture(gollum),minion)
 			}
 			effect: [
 				{

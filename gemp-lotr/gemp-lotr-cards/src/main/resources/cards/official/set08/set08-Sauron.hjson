@@ -20,7 +20,7 @@
 				cost: [
 					{
 						type: discard
-						select: choose(culture(sauron),minion)
+						select: choose(your,culture(sauron),minion)
 					}
 					{
 						type: spot

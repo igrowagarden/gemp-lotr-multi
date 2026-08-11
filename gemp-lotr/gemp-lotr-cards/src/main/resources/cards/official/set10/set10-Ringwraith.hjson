@@ -246,7 +246,7 @@
 			type: event
 			cost: {
 				type: heal
-				select: choose(enduring,culture(wraith),minion)
+				select: choose(your,enduring,culture(wraith),minion)
 			},
 			effect: [
 				{

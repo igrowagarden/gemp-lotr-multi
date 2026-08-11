@@ -893,7 +893,7 @@
 				}
 				cost: {
 					type: exert
-					select: choose(another,culture(sauron),minion)
+					select: choose(your,another,culture(sauron),minion)
 					times: 2
 				}
 				effect: [
@@ -1047,11 +1047,11 @@
 					effects: [
 						{
 							type: exert
-							select: choose(urukHai)
+							select: choose(your,urukHai)
 						}
 						{
 							type: discard
-							select: choose(culture(sauron),minion)
+							select: choose(your,culture(sauron),minion)
 						}
 					]
 				}

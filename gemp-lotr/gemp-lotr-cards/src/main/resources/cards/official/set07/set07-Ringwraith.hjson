@@ -2163,7 +2163,7 @@
 				phase: skirmish
 				cost: {
 					type: discard
-					select: choose(culture(wraith),minion)
+					select: choose(your,culture(wraith),minion)
 				}
 				effect: {
 					type: modifyStrength

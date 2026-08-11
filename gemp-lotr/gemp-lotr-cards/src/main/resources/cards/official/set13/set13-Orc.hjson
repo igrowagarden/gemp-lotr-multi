@@ -636,7 +636,7 @@
 					}
 					{
 						type: spot
-						select: choose(another,culture(orc),minion)
+						select: choose(your,another,culture(orc),minion)
 						memorize: spottedMinion
 					}
 				]

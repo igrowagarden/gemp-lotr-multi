@@ -1126,7 +1126,7 @@
 			type: event
 			cost: {
 				type: exert
-				select: choose(culture(moria),minion)
+				select: choose(your,culture(moria),minion)
 			}
 			effect: {
 				type: addTwilight

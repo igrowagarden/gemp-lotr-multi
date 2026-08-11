@@ -339,7 +339,7 @@
 						// first Shadow player however many were offered.
 						type: discard
 						player: you
-						select: choose(minion)
+						select: choose(your,minion)
 					}
 					effect: {
 						type: discard

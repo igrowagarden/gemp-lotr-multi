@@ -29,7 +29,7 @@
 						// Shadow player. See 5_20 for the mechanism.
 						type: exert
 						player: you
-						select: choose(minion)
+						select: choose(your,minion)
 						times: 2
 					}
 					effect: {

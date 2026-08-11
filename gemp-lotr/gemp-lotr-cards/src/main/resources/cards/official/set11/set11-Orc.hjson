@@ -88,7 +88,7 @@
 				phase: skirmish
 				cost: {
 					type: exert
-					select: choose(another,culture(orc),minion)
+					select: choose(your,another,culture(orc),minion)
 				}
 				effect: {
 					type: modifyStrength
@@ -1573,7 +1573,7 @@
 				type: extraCost
 				cost: {
 					type: exert
-					select: choose(culture(orc),minion)
+					select: choose(your,culture(orc),minion)
 				}
 			}
 			{

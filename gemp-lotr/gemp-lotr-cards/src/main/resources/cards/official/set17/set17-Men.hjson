@@ -815,7 +815,7 @@
 					}
 					{
 						type: discard
-						select: choose(culture(men),minion,maxTwilight(2))
+						select: choose(your,culture(men),minion,maxTwilight(2))
 					}
 				]
 				effect: {
@@ -1394,7 +1394,7 @@
 				}
 				cost: {
 					type: discard
-					select: choose(culture(men),minion)
+					select: choose(your,culture(men),minion)
 					count: any
 					memorize: discardedMinions
 				}

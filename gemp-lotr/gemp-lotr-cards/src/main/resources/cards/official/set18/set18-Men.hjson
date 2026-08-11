@@ -524,7 +524,7 @@
 			type: event
 			cost: {
 				type: exert
-				select: choose(culture(men),minion)
+				select: choose(your,culture(men),minion)
 			}
 			effect: [
 				{

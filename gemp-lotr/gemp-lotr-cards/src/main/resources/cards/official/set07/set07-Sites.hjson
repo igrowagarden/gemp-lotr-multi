@@ -1069,7 +1069,7 @@
 				phase: shadow
 				cost: {
 					type: exert
-					select: choose(minion)
+					select: choose(your,minion)
 					count: 2
 				}
 				requires: {
@@ -1114,7 +1114,7 @@
 				phase: shadow
 				cost: {
 					type: exert
-					select: choose(minion)
+					select: choose(your,minion)
 				}
 				requires: {
 					type: canSpot
