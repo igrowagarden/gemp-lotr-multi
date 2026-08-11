@@ -719,18 +719,30 @@
 			]
 			effect: [
 				{
+					type: chooseActiveCards
+					text: Choose a minion to discard
+					select: choose(minion)
+					memorize: chosenMinion
+				}
+				{
+					// "That minion's owner may..." -- the preventer is the
+					// owner of the chosen minion, not a fixed seat. And a cost
+					// cannot be paid with another player's card (ruled), so
+					// the strength penalty lands on the preventer's own
+					// minions: the cost runs in the candidate's own context,
+					// where `your` is the preventer. Identical at two players.
 					type: Preventable
-					player: Shadow
-					text: Would you like to make each minion strength -2 to prevent discarding minion?
+					player: ownerFromMemory(chosenMinion)
+					text: Would you like to make each of your minions strength -2 to prevent discarding the chosen minion?
 					cost: {
 						type: modifyStrength
-						select: all(minion)
+						select: all(your,minion)
 						amount: -2
 						until: endOfTurn
 					}
 					effect: {
 						type: discard
-						select: choose(minion)
+						select: memory(chosenMinion)
 					}
 				}
 			]

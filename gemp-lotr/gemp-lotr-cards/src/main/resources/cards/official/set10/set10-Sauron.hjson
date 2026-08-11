@@ -1230,8 +1230,11 @@
 		effects: {
 			type: event
 			cost: {
+				// A cost cannot be paid with another player's card (ruled);
+				// unscoped, this could exert a minion a different Shadow
+				// player controls. Identical at two players.
 				type: exert
-				select: choose(culture(sauron),minion)
+				select: choose(your,culture(sauron),minion)
 			},
 			effect: [
 				{

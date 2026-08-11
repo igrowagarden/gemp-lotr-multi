@@ -945,8 +945,12 @@
 				phase: skirmish
 				cost: [
 					{
+						// "a Free Peoples player's site": at 3+ seats
+						// not(your) also matched other Shadow players' path
+						// sites and let this steal a fellow Shadow player's
+						// site. Identical at two players.
 						type: spot
-						select: choose(not(your),site,zone(adventure path))
+						select: choose(ownedByFreePeoplesPlayer,site,zone(adventure path))
 						memorize: spottedSite
 					}
 					{

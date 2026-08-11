@@ -594,8 +594,15 @@
 			},
 			effect: [
 				{
+					// "choose a Shadow player" -- every opponent is a Shadow
+					// player while this side's fellowship is active.
+					// Auto-resolves at two players.
+					type: ChooseOpponent
+					memorize: targetPlayer
+				}
+				{
 					type: wound
-					select: all(minion,not(race(memory(chosenMinion))))
+					select: all(minion,not(race(memory(chosenMinion))),ownedByPlayerFromMemory(targetPlayer))
 				}
 			]
 		}

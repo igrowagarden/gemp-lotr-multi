@@ -158,8 +158,13 @@
 					memorizeFPCharacter: chosenCompanion
 					preventText: Would you like to discard an artifact to prevent the assignment of {chosenCompanion} to {self}?
 					preventCost: {
+						// A cost cannot be paid with another player's card
+						// (ruled): the preventer is the Free Peoples player,
+						// and unscoped this reached Shadow players' artifacts.
+						// The prevent cost is evaluated in the preventer's own
+						// context, so `your` is the Free Peoples player here.
 						type: discard
-						select: choose(artifact)
+						select: choose(your,artifact)
 					}
 				}
 			}

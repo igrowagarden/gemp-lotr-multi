@@ -264,9 +264,17 @@
 			type: event
 			effect: [
 				{
+					// Hoisted above the mill: `deck: fromMemory(...)` is
+					// resolved during the playability check, so the choice
+					// must already be in memory by then (same placement as
+					// Duality 13_47). Auto-resolves at two players.
+					type: ChooseOpponent
+					memorize: opponent
+				}
+				{
 					type: discardTopCardsFromDeck
 					forced: true
-					deck: free people
+					deck: fromMemory(opponent)
 					memorize: discardedCard
 				}
 				{

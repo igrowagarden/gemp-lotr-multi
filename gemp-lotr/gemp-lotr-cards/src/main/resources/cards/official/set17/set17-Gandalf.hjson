@@ -524,8 +524,18 @@
 				}
 				effect: [
 					{
+						// "choose an opponent to name either Free Peoples or
+						// Shadow": the OPPONENT names. Without a player field
+						// chooseYesOrNo defaulted to the card's owner, which
+						// was wrong even at two players. Auto-resolves at two
+						// players; only the answerer changes.
+						type: ChooseOpponent
+						memorize: namer
+					}
+					{
 						type: chooseYesOrNo
-						text: Choose Free Peoples cards?
+						player: fromMemory(namer)
+						text: Name Free Peoples? (No names Shadow)
 						memorize: chosenFP
 					}
 					{
