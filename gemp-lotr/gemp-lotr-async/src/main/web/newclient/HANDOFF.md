@@ -10,6 +10,62 @@ behaviour.
 
 ## Start here
 
+### PLAYTEST SESSION 2 (2026-08-09/10) — current state
+
+The live playtest continued at five seats (human seat `igrowgarden`, glacial
+timer; the full workflow and standing rulings live in the assistant's memory
+file `gemp-playtest-workflow.md` and in `gemp_multiplayer/HANDOFF.md`). Each
+change below was verified (fastrun + diffrun, engine work also mvn full
+suite + livediffrun) and deployed with a fresh game. All committed; last
+client commit `aecdfd5b2`, engine commit `41bd6264e`.
+
+- **Simultaneous starting fellowships** (engine): every seat now picks its
+  whole fellowship AT ONCE — one multi-select ARBITRARY_CARDS decision per
+  player (`SimultaneousStartingFellowshipChoiceGameProcess`), executed
+  in pick order by the old pseudo-turn chain with no further decisions;
+  illegal-when-reached picks are skipped WITH a message. Every companion is
+  selectable (legality depends on play order — discounts, spot
+  requirements); the client's twilightCost/budgetRemaining greying is
+  advisory and the executor is the enforcement. THE WINDOW BRACKETING IS
+  LOAD-BEARING — see the engine commit and `gemp_multiplayer/HANDOFF.md`
+  before touching the pregame processes: pausing outside the first player's
+  affecting window duplicates modifier hooks (87 failures), and "fixing"
+  hook idempotence breaks v3-set out-of-turn cards instead (10 failures).
+  Full suite is at the exact baseline: 5982, 0 failures, 15 Mockito errors.
+- **Fight boxes**: riders tuck via a half-scale overlap override
+  (`.fightbox .cardgroup` margin), NOT container-type (a size container
+  needs a definite inline size; the content-sized box collapsed to 2px).
+- **Draggable row boundaries**: `.banddivider` between adjacent
+  card-bearing bands, on the MAIN BOARD and in every pop-out window; drags
+  trade flex weight within the pair; weights session-scoped
+  (`bandWeight`), listeners on the document because repaints replace the
+  nodes mid-drag.
+- **Pop-out windows**: hover zoom (same `createZoom`, hosted on the child
+  BODY so #seat repaints can't kill it), paint-on-open, dividers. New
+  suite `dev/detachcheck.html` (13) opens a REAL child window — fastrun
+  now passes `--disable-popup-blocking` for it, and runs at
+  `--window-size=1500,950` because 800x600 made geometry suites judge
+  degenerate layouts (assigncheck measured 2px cards).
+- **Local decision countdown**: the prompt clock ticks in `data-left`
+  while the transport holds; board's keepPrompt refresh re-syncs server
+  truth. promptcheck 77.
+- **Line-aware reorder drag** on wrapped rows (line first, X second);
+  cardstatecheck 20 with a real-wrap regression case.
+- **"Optional responses" retold** in the prompt (`RETOLD` map,
+  prompt.js): says what the player can DO; unknown texts verbatim.
+- **The "Before the game" panel is GONE by ruling** (view/pregame.js, its
+  CSS, pregamecheck deleted; PRE_GAME_SETUP decoding stays for metaSites).
+- **Seat-chip icons** 20px high-contrast, inverse variant on the FP chip.
+- **Links MUST carry `login=` and no `/src/`**:
+  `.../newclient/live.html?gameId=N&participantId=X&login=X&password=qwer`
+  — without `login=` the client silently leans on a browser cookie and a
+  player without one gets a dead board ("you broke the game" — it wasn't).
+- Open asks: louder "held minion" indicator during assignment (awaiting
+  ruling); optional fixed-pixel cap for rider slivers at large sizes.
+- Measured and closed: the engine never accepted a minion in two
+  skirmishes (recordings show one AA per pairing); the reported
+  double-assignment was pre-confirm display flicker while re-pairing.
+
 ### THE FIRST HUMAN PLAYTEST (2026-08-09, five seats) — what it found
 
 The project-level "next thing" happened: a human played at five seats, and

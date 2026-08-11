@@ -150,9 +150,11 @@ the store, the net client it needs, and the views, then connects callbacks:
 - `actionmenu.js` — the per-card menu when one card offers several actions.
 - `animate.js` — FLIP animation; measures before, animates after, so the
   renderer stays a pure function of state.
-- `alerts.js`, `effects.js`, `cardinfo.js`, `pregame.js`, `settings.js` —
+- `alerts.js`, `effects.js`, `cardinfo.js`, `settings.js` —
   tab-title/sound alerts, the three feedback-only events, the modifier
-  panel, the pre-game seat display, and the settings flyout.
+  panel, and the settings flyout. (There was a `pregame.js` seat display;
+  the playtest ruled the panel out and it was deleted whole — the
+  PRE_GAME_SETUP decoding survives in `net/protocol.js` for metaSites.)
 
 ## The rules that keep it working
 
