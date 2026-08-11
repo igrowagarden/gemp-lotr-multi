@@ -249,6 +249,10 @@
 						until: endOfTurn
 					}
 					{
+						// CORRECT AS WRITTEN -- do not sweep this one. Ruled
+						// 2026-08-10: a 2p-era "the Shadow player may..." benefit
+						// goes to the PRIMARY Shadow player at 3+ seats (the
+						// archery convention), which is what this resolves to.
 						type: optional
 						player: shadowPlayer
 						text: Would you like to take up to 2 Shadow cards into hand from discard?
