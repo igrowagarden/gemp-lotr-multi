@@ -203,7 +203,7 @@
 					{
 						type: RemoveCultureTokens
 						culture: isengard
-						select: choose(machine)
+						select: choose(your,machine)
 					}
 					{
 						type: exert

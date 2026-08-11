@@ -394,7 +394,7 @@
 				{
 					type: playCardFromStacked
 					select: choose(culture(men),minion)
-					on: culture(men),possession
+					on: your,culture(men),possession
 				}
 			]
 		}
@@ -760,7 +760,7 @@
 					{
 						type: discardStackedCards
 						select: choose(minion)
-						on: culture(men),possession
+						on: your,culture(men),possession
 						count: any
 						memorize: discardedMinions
 					}
@@ -877,7 +877,7 @@
 					effect: {
 						type: playCardFromStacked
 						select: choose(culture(men),minion)
-						on: culture(men),possession
+						on: your,culture(men),possession
 					}
 				}
 			}
@@ -988,7 +988,7 @@
 				effect: {
 					type: playCardFromStacked
 					select: choose(minion)
-					on: culture(men),possession
+					on: your,culture(men),possession
 				}
 			}
 		]

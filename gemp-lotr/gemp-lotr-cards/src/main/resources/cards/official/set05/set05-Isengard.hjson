@@ -104,7 +104,7 @@
 				cost: [
 					{
 						type: RemoveCultureTokens
-						select: choose(machine)
+						select: choose(your,machine)
 						culture: isengard
 						count: 3
 					}
@@ -167,7 +167,7 @@
 				cost: [
 					{
 						type: RemoveCultureTokens
-						select: choose(machine)
+						select: choose(your,machine)
 						culture: isengard
 						count: 4
 					}
@@ -231,7 +231,7 @@
 				cost: [
 					{
 						type: RemoveCultureTokens
-						select: choose(machine)
+						select: choose(your,machine)
 						culture: isengard
 						count: 5
 					}
@@ -933,7 +933,7 @@
 				effect: {
 					type: AddCultureTokens
 					culture: isengard
-					select: choose(machine)
+					select: choose(your,machine)
 				}
 			}
 			{
@@ -991,7 +991,7 @@
 				}
 				effect: {
 					type: AddCultureTokens
-					select: choose(machine)
+					select: choose(your,machine)
 					culture: isengard
 				}
 			}
@@ -1034,7 +1034,7 @@
 				}
 				effect: {
 					type: AddCultureTokens
-					select: choose(machine)
+					select: choose(your,machine)
 					culture: isengard
 				}
 			}

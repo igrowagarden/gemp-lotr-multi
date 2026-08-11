@@ -335,6 +335,12 @@
 		keywords: Battleground
 		effects: [
 			{
+				// CORRECT AS WRITTEN -- do not sweep this one. Ruled
+				// 2026-08-10: "more companions than minions" counts ALL
+				// minions at 3+ seats, because every minion in play opposes
+				// the one active fellowship (measured by
+				// MultiplayerTurnHandoverAtTest). The global count below is
+				// the ruled behaviour.
 				type: modifier
 				modifier: {
 					type: modifyStrength

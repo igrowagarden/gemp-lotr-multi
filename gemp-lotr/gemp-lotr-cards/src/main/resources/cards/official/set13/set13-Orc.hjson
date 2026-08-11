@@ -205,7 +205,7 @@
 				phase: regroup
 				cost: {
 					type: spot
-					select: choose(culture(orc),lurker,minion)
+					select: choose(your,culture(orc),lurker,minion)
 					memorize: spottedMinion
 				}
 				effect: {
